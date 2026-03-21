@@ -1,0 +1,283 @@
+Project: Local-first Flutter Timetable App
+Workspace: d:\zzzzz\timetable
+Last updated: 2026-03-21
+
+Overview
+This project is a local-first Flutter course timetable app.
+The original implementation explored an absolute-position timetable based on Stack + Positioned, then later pivoted to a more stable flow layout based on PageView + ListView.
+The current UI no longer uses absolute-position rendering for the main timetable view.
+
+Current Product Direction
+The app currently focuses on:
+- Local storage via SharedPreferences
+- Global app state via Provider
+- Manual course creation and editing
+- Day view and week view timetable browsing
+- Import framework for future academic-system scraping through WebView
+
+Core Tech Stack
+- Flutter
+- provider
+- shared_preferences
+- webview_flutter
+
+Global Architecture
+- main.dart
+  - Calls WidgetsFlutterBinding.ensureInitialized()
+  - Awaits SharedPreferences.getInstance() before runApp()
+  - Registers Provider state at app root
+  - Uses a custom AppScrollBehavior so Flutter Web supports mouse drag on PageView and scrollables
+- MainScaffold
+  - BottomNavigationBar with Timetable and Settings
+- Providers
+  - CourseProvider: course list + currentWeek + persistence
+  - SettingsProvider: timetable schedule settings + persistence + generated time slots
+
+Important Historical Context
+There were several architecture phases:
+1. Initial data layer setup with Course model and CourseProvider
+2. App scaffold and persistent settings
+3. Absolute-position timetable rendering using Stack + Positioned
+4. Short-card overflow fixes and detail sheet interaction
+5. Week-based filtering, edit mode, and schedule slot generation
+6. Period-based timetable generation with realistic campus break rules
+7. Pivot away from absolute-position layout to PageView + ListView
+8. Web drag support and WebView import skeleton
+
+Only the latest architecture matters for future work unless we intentionally revert.
+
+Current Data Model
+File: lib/models/course.dart
+
+Course fields currently:
+- name: String
+- location: String
+- teacher: String
+- weekday: int
+- weeks: List<int>
+- startPeriod: int
+- endPeriod: int
+- colorValue: int
+
+Compatibility behavior in Course.fromJson:
+- Missing teacher -> ''
+- Missing weeks -> [1]
+- Missing startPeriod -> 1
+- Missing endPeriod -> 2
+- Missing weekday -> 1
+- Missing location -> ''
+- Missing colorValue -> 0xFF7C9AF2
+- Missing name -> 'Untitled Course'
+
+This compatibility exists because old local cache formats changed multiple times during development.
+
+Course State Management
+File: lib/providers/course_provider.dart
+
+CourseProvider currently supports:
+- Loading persisted courses from SharedPreferences
+- Falling back to mock data if there is no saved data
+- addCourse()
+- addCourses() for batch import
+- updateCourse()
+- removeCourse()
+- currentWeek state
+- setCurrentWeek()
+
+Persistence format:
+- SharedPreferences string list
+- Each course serialized as JSON string
+
+Mock data currently includes:
+- Advanced Math
+- Data Structures
+
+Settings / Schedule Engine
+File: lib/providers/settings_provider.dart
+
+SettingsProvider currently stores:
+- pixelsPerMinute
+- classDuration
+- shortBreak
+- bigBreak
+- morningStartTime
+- morningClasses
+- afternoonStartTime
+- afternoonClasses
+- eveningStartTime
+- eveningClasses
+
+generateTimeSlots() currently:
+- Builds morning, afternoon, evening periods
+- Uses realistic campus rules
+- Morning and afternoon: bigBreak after the 2nd class in that session
+- Evening: only shortBreak
+- Default schedule:
+  - classDuration = 45
+  - shortBreak = 5
+  - bigBreak = 15
+  - morningStartTime = 08:00, morningClasses = 5
+  - afternoonStartTime = 14:00, afternoonClasses = 5
+  - eveningStartTime = 19:00, eveningClasses = 3
+
+UI: Main Timetable
+File: lib/screens/timetable_page.dart
+
+Current timetable architecture:
+- AppBar with mode switch:
+  - Day View
+  - Week View
+- Jump-to-week popup in AppBar
+- Import button in AppBar
+- Add-course button in AppBar
+
+DayViewWidget
+- Uses PageView.builder with 7 pages for Monday to Sunday
+- Filters courses by:
+  - selected weekday
+  - current week
+- Sorts by startPeriod
+- Uses ListView for course cards
+- Has top title showing:
+  - current week
+  - current weekday
+- Has a horizontal weekday quick selector built with ChoiceChip
+- ChoiceChip click animates PageView to target day
+- PageView onPageChanged updates the highlighted weekday chip
+
+WeekViewWidget
+- Uses PageView.builder with 20 pages for week 1 to week 20
+- onPageChanged updates provider.currentWeek
+- AppBar jump-week popup also animates the week PageController
+- Each page shows a vertical list grouped by weekdays
+- Empty weekdays currently show "No courses today."
+
+Course card content in list layout:
+- Course name
+- Teacher and location
+- Period range
+
+Course detail bottom sheet:
+- Shows teacher
+- location
+- periods
+- weekday
+- weeks
+- Edit button
+- Delete button
+
+Manual Add / Edit Course
+File: lib/screens/add_course_page.dart
+
+Current form fields:
+- Course name
+- Location
+- Teacher
+- Weekday dropdown
+- Teaching weeks FilterChip multi-select
+- Start period dropdown
+- End period dropdown
+- Color selector
+
+Validation currently includes:
+- Course name required
+- Location required
+- At least one week required
+- Period config must exist in settings
+- End period must be >= start period
+
+Edit mode:
+- The page accepts existingCourse
+- All fields are prefilled
+- Save updates the original course via CourseProvider.updateCourse()
+
+Settings UI
+Files:
+- lib/screens/settings_page.dart
+- lib/screens/schedule_settings_page.dart
+
+Current behavior:
+- SettingsPage is now intentionally minimal
+- It only exposes an entry tile to ScheduleSettingsPage
+- ScheduleSettingsPage contains all detailed schedule configuration
+
+Web Import Skeleton
+File: lib/screens/import_course_page.dart
+
+Current implementation:
+- Uses webview_flutter
+- Creates a WebViewController
+- Enables unrestricted JavaScript
+- Loads placeholder URL: https://www.baidu.com
+- Adds JavaScript channel named CourseDataChannel
+- Provides a floating action button to inject mock JS
+- Injected JS currently:
+  - logs to console
+  - posts a mock JSON payload back through CourseDataChannel
+- The received payload is parsed and imported via CourseProvider.addCourses()
+- After success:
+  - shows success SnackBar
+  - returns to previous page
+
+Important Note About WebView
+- The current WebView page is a scaffold for Android/mobile-focused real import later
+- Flutter Web may have WebView limitations or cross-origin issues in development
+- The import logic is intentionally mock-based for now
+- The real future work is to replace the injected mock JS with DOM scraping for the actual academic system
+
+Current Web / Desktop Interaction Fix
+File: lib/main.dart
+
+Custom AppScrollBehavior allows:
+- touch drag
+- mouse drag
+
+This was added because Flutter Web does not drag PageView with a mouse by default.
+
+What Has Been Completed
+- Root provider setup
+- SharedPreferences async initialization before runApp
+- Local persistence for settings and courses
+- Manual add course flow
+- Edit course flow
+- Delete course flow
+- Current week state
+- Day view with swipe between weekdays
+- Week view with swipe between weeks
+- AppBar week jump action with PageController animation
+- Day view weekday quick chip selector with PageView animation
+- Teacher field added to course model and form
+- WebView import skeleton and batch-import support
+
+What Is No Longer The Active Main Architecture
+- Stack + Positioned absolute timetable rendering
+- pixelsPerMinute-driven visible card layout in the main timetable page
+
+Some supporting schedule-generation code still exists in SettingsProvider because:
+- period count and schedule rules still drive the selectable period range
+- future features may still need generated slot timing
+
+Current Known Caveats / Risks
+- webview_flutter was added in pubspec.yaml, but command-line validation was not executed here because this environment previously had Flutter CLI timeout issues
+- ImportCoursePage mock injected string was kept simple, but real scraping is not implemented yet
+- Because the data model changed many times during development, any future migration should keep backward compatibility in Course.fromJson
+- DayViewWidget currently initializes the selected day from DateTime.now().weekday once when the page state is created
+- If a new conversation continues from here, verify whether the user wants the current PageView/ListView architecture to remain, because this was an intentional pivot away from the absolute-position timetable
+
+Recommended Next Steps
+1. Run flutter pub get locally after the webview_flutter addition if not already done
+2. Test WebView page on Android, not just Web
+3. Replace mock injected JS in ImportCoursePage with real academic-system DOM extraction
+4. Consider import deduplication rules in CourseProvider.addCourses()
+5. Consider teacher/location optional validation strategy
+6. Optionally add search, filters, or course color editing UX improvements
+
+If Continuing In A New Chat
+Tell the assistant:
+- This project already uses Provider + SharedPreferences
+- The main timetable page is now PageView/ListView based, not absolute-position based
+- Course model already includes teacher, weeks, weekday, startPeriod, endPeriod, colorValue
+- There is already a WebView import skeleton in ImportCoursePage with CourseDataChannel and mock JS injection
+- Current week and week-page jump are already linked
+- Day view already has weekday chips linked to PageView
+
