@@ -140,38 +140,25 @@ class _TimetablePageState extends State<TimetablePage> {
       1,
       settingsProvider.totalWeeks,
     ).toInt();
-    final dateFormat = DateFormat('MM/dd');
-    final weekStart = settingsProvider.getDateFor(currentWeek, 1);
-    final weekEnd = settingsProvider.getDateFor(currentWeek, 7);
-
     return Scaffold(
       appBar: AppBar(
-        title: _mode == _TimetableMode.day
-            ? Text(settingsProvider.t('day_view'))
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(settingsProvider.t('week_view')),
-                  Text(
-                    '${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.white70,
-                        ),
-                  ),
-                ],
-              ),
+        centerTitle: false,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _WeekJumpButton(
+              currentWeek: currentWeek,
+              totalWeeks: settingsProvider.totalWeeks,
+              onSelected: _jumpToWeek,
+            ),
+            IconButton(
+              onPressed: _jumpToToday,
+              icon: const Icon(Icons.today),
+              tooltip: settingsProvider.t('today'),
+            ),
+          ],
+        ),
         actions: [
-          IconButton(
-            onPressed: _jumpToToday,
-            icon: const Icon(Icons.today),
-            tooltip: settingsProvider.t('today'),
-          ),
-          _WeekJumpButton(
-            currentWeek: currentWeek,
-            totalWeeks: settingsProvider.totalWeeks,
-            onSelected: _jumpToWeek,
-          ),
           IconButton(
             onPressed: () async {
               await Navigator.of(context).push(

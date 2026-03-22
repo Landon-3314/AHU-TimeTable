@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/course_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/main_scaffold.dart';
+import 'services/auto_mute_service.dart';
 import 'services/notification_service.dart';
 
 Future<void> main() async {
@@ -57,22 +58,29 @@ class _MainAppState extends State<MainApp> {
       sharedPreferences: widget.sharedPreferences,
     );
 
-    _courseProvider.initializeRealDate(
-      week: _settingsProvider.currentRealWeek,
-      weekday: _settingsProvider.currentRealWeekday,
-    );
-
     Future<void> refreshReminders() {
-      return NotificationService.instance.refreshAllReminders(
-        courses: _courseProvider.courses.toList(),
-        events: _courseProvider.events.toList(),
-        settings: _settingsProvider,
-      );
+      final courses = _courseProvider.courses.toList();
+
+      return Future.wait([
+        NotificationService.instance.refreshAllReminders(
+          courses: courses,
+          events: _courseProvider.events.toList(),
+          settings: _settingsProvider,
+        ),
+        AutoMuteService.instance.scheduleMuteTasks(
+          courses,
+          _settingsProvider,
+        ),
+      ]).then((_) {});
     }
 
     _settingsProvider.bindReminderScheduler(refreshReminders);
     _courseProvider.bindReminderScheduler(refreshReminders);
 
+    _courseProvider.initializeRealDate(
+      week: _settingsProvider.currentRealWeek,
+      weekday: _settingsProvider.currentRealWeekday,
+    );
     unawaited(refreshReminders());
   }
 

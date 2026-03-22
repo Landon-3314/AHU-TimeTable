@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -26,6 +28,12 @@ class NotificationService {
   static const MethodChannel _timeZoneChannel = MethodChannel('app.timezone');
 
   bool _initialized = false;
+  static const DarwinNotificationDetails _darwinNotificationDetails =
+      DarwinNotificationDetails(
+    presentAlert: true,
+    presentBadge: true,
+    presentSound: true,
+  );
 
   Future<void> initialize() async {
     if (_initialized) {
@@ -37,6 +45,11 @@ class NotificationService {
 
     const initializationSettings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+      ),
     );
 
     await _plugin.initialize(settings: initializationSettings);
@@ -46,6 +59,14 @@ class NotificationService {
     await androidPlugin?.createNotificationChannel(_courseReminderChannel);
     await androidPlugin?.requestNotificationsPermission();
     await androidPlugin?.requestExactAlarmsPermission();
+
+    final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    await iosPlugin?.requestPermissions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
 
     _initialized = true;
   }
@@ -77,6 +98,7 @@ class NotificationService {
     await _plugin.cancelAll();
     await _scheduleCourseReminders(courses, settings);
     await _scheduleEventReminders(events, settings.reminderAdvanceMinutes);
+    await _scheduleIosManualSilentReminders(courses, settings);
   }
 
   Future<void> _scheduleCourseReminders(
@@ -125,6 +147,7 @@ class NotificationService {
               importance: Importance.max,
               priority: Priority.high,
             ),
+            iOS: _darwinNotificationDetails,
           ),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
@@ -168,9 +191,61 @@ class NotificationService {
             importance: Importance.max,
             priority: Priority.high,
           ),
+          iOS: _darwinNotificationDetails,
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
+    }
+  }
+
+  Future<void> _scheduleIosManualSilentReminders(
+    List<Course> courses,
+    SettingsProvider settings,
+  ) async {
+    if (!Platform.isIOS || !settings.autoMuteEnabled) {
+      return;
+    }
+
+    final leadMinutes = settings.reminderAdvanceMinutes.clamp(0, 60).toInt();
+    final slots = settings.timeSlots;
+    final now = DateTime.now();
+
+    for (final course in courses) {
+      for (final week in course.weeks) {
+        final classStartTime = _buildClassStartTime(
+          course: course,
+          week: week,
+          settings: settings,
+          slots: slots,
+        );
+
+        if (classStartTime == null) {
+          continue;
+        }
+
+        final scheduledTime = classStartTime.subtract(
+          Duration(minutes: leadMinutes),
+        );
+        if (!scheduledTime.isAfter(now)) {
+          continue;
+        }
+
+        await _plugin.zonedSchedule(
+          id: _iosMuteFallbackNotificationIdFor(course, week),
+          title: '即将上课',
+          body: '即将上课，请检查并手动将手机调至静音',
+          scheduledDate: tz.TZDateTime.from(scheduledTime, tz.local),
+          notificationDetails: const NotificationDetails(
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+              interruptionLevel: InterruptionLevel.timeSensitive,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+      }
     }
   }
 
@@ -213,6 +288,19 @@ class NotificationService {
     return (Object.hash(event.id, event.dateTime.toIso8601String()) &
             0x7fffffff) ^
         0x10000000;
+  }
+
+  int _iosMuteFallbackNotificationIdFor(Course course, int week) {
+    return (Object.hash(
+              course.name,
+              course.weekday,
+              course.startPeriod,
+              course.endPeriod,
+              week,
+              'ios-mute',
+            ) &
+            0x7fffffff) ^
+        0x20000000;
   }
 
   String _formatHourMinute(DateTime value) {

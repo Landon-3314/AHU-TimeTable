@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/auto_mute_service.dart';
 import 'schedule_settings_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -98,6 +101,18 @@ class SettingsPage extends StatelessWidget {
                 subtitle: Text(_reminderLabel(provider)),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _pickReminderAdvance(context, provider),
+              ),
+              const Divider(height: 1),
+              SwitchListTile(
+                secondary: const Icon(Icons.phone_android_outlined),
+                title: Text(provider.t('auto_mute')),
+                subtitle: Text(provider.t('auto_mute_subtitle')),
+                value: provider.autoMuteEnabled,
+                onChanged: (value) => _toggleAutoMute(
+                  context,
+                  provider,
+                  value,
+                ),
               ),
             ],
           ),
@@ -194,7 +209,7 @@ class SettingsPage extends StatelessWidget {
       context: context,
       showDragHandle: true,
       builder: (sheetContext) {
-        final options = <int>[5, 10, 15, 30];
+        final options = <int>[0, 5, 10, 15, 30];
         return SafeArea(
           child: ListView(
             shrinkWrap: true,
@@ -218,6 +233,43 @@ class SettingsPage extends StatelessWidget {
     if (selectedValue != null) {
       await provider.updateReminderAdvanceMinutes(selectedValue);
     }
+  }
+
+  Future<void> _toggleAutoMute(
+    BuildContext context,
+    SettingsProvider provider,
+    bool value,
+  ) async {
+    if (!value) {
+      await provider.updateAutoMuteEnabled(false);
+      return;
+    }
+
+    if (!Platform.isAndroid) {
+      await provider.updateAutoMuteEnabled(true);
+      return;
+    }
+
+    var hasPermission = await AutoMuteService.instance.hasPermission();
+    if (!hasPermission) {
+      await AutoMuteService.instance.openPermissionSettings();
+      hasPermission = await AutoMuteService.instance.hasPermission();
+    }
+
+    if (!hasPermission) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.t('auto_mute_permission_required')),
+        ),
+      );
+      return;
+    }
+
+    await provider.updateAutoMuteEnabled(true);
   }
 
   Future<void> _confirmClearAllData(
@@ -270,6 +322,9 @@ class SettingsPage extends StatelessWidget {
     int? minutes,
   }) {
     final value = minutes ?? provider.reminderAdvanceMinutes;
+    if (value == 0) {
+      return provider.t('no_reminder');
+    }
     return '${provider.t('advance_prefix')} $value ${provider.t('minutes_suffix')}';
   }
 }

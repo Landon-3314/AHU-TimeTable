@@ -19,6 +19,23 @@ class AppStrings {
       'en': 'Edit daily class periods and time ranges',
     },
     'reminder_time': {'zh': '课前提醒时间', 'en': 'Reminder Advance Time'},
+    'no_reminder': {'zh': '不提醒', 'en': 'None'},
+    'auto_mute': {
+      'zh': '上课自动静音（仅 Android）',
+      'en': 'Auto Mute During Class (Android only)',
+    },
+    'auto_mute_subtitle': {
+      'zh': '上课自动切为震动，下课恢复正常铃声',
+      'en': 'Switch to vibrate during class and restore normal mode after class',
+    },
+    'auto_mute_permission_required': {
+      'zh': '需要勿扰模式权限，请在系统设置中授权后再开启',
+      'en': 'Do Not Disturb access is required. Grant it in system settings first.',
+    },
+    'auto_mute_not_supported': {
+      'zh': '该功能目前仅支持 Android',
+      'en': 'This feature is currently available on Android only.',
+    },
     'clear_browser_cache': {'zh': '清除浏览器缓存', 'en': 'Clear Browser Cache'},
     'clear_browser_cache_subtitle': {
       'zh': '解决教务系统登录失效',
@@ -59,8 +76,6 @@ class AppStrings {
     'today': {'zh': '回到今日', 'en': 'Today'},
     'add_course': {'zh': '添加课程', 'en': 'Add Course'},
     'jump_to_week': {'zh': '跳转周次', 'en': 'Jump to Week'},
-    'week_prefix': {'zh': '第 ', 'en': 'Week '},
-    'week_suffix': {'zh': ' 周', 'en': ''},
     'week_label_format': {'zh': '第 {week} 周', 'en': 'Week {week}'},
     'period_range_format': {
       'zh': '第 {start}-{end} 节',

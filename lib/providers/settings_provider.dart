@@ -37,7 +37,9 @@ class SettingsProvider extends ChangeNotifier {
        _reminderAdvanceMinutes =
            sharedPreferences.getInt(_reminderAdvanceMinutesKey) ??
            _defaultReminderAdvanceMinutes,
-       _languageCode = sharedPreferences.getString(_languageCodeKey) ?? 'zh';
+       _languageCode = sharedPreferences.getString(_languageCodeKey) ?? 'zh',
+       _autoMuteEnabled =
+           sharedPreferences.getBool(_autoMuteEnabledKey) ?? false;
 
   static const String _pixelsPerMinuteKey = 'settings.pixelsPerMinute';
   static const String _classDurationKey = 'settings.classDuration';
@@ -54,6 +56,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _reminderAdvanceMinutesKey =
       'settings.reminderAdvanceMinutes';
   static const String _languageCodeKey = 'settings.languageCode';
+  static const String _autoMuteEnabledKey = 'settings.autoMuteEnabled';
 
   static const double _defaultPixelsPerMinute = 1.2;
   static const int _defaultClassDuration = 45;
@@ -66,7 +69,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _defaultEveningStartTime = '19:00';
   static const int _defaultEveningClasses = 3;
   static const int _defaultTotalWeeks = 20;
-  static const int _defaultReminderAdvanceMinutes = 15;
+  static const int _defaultReminderAdvanceMinutes = 0;
 
   final SharedPreferences _sharedPreferences;
 
@@ -84,6 +87,7 @@ class SettingsProvider extends ChangeNotifier {
   int _totalWeeks;
   int _reminderAdvanceMinutes;
   String _languageCode;
+  bool _autoMuteEnabled;
   Future<void> Function()? _reminderScheduler;
 
   double get pixelsPerMinute => _pixelsPerMinute;
@@ -100,6 +104,7 @@ class SettingsProvider extends ChangeNotifier {
   int get totalWeeks => _totalWeeks;
   int get reminderAdvanceMinutes => _reminderAdvanceMinutes;
   String get languageCode => _languageCode;
+  bool get autoMuteEnabled => _autoMuteEnabled;
   List<TimeSlot> get timeSlots => generateTimeSlots();
   String t(String key) => AppStrings.get(key, _languageCode);
 
@@ -308,6 +313,17 @@ class SettingsProvider extends ChangeNotifier {
     _reminderAdvanceMinutes = safeValue;
     notifyListeners();
     await _sharedPreferences.setInt(_reminderAdvanceMinutesKey, safeValue);
+    await _refreshReminders();
+  }
+
+  Future<void> updateAutoMuteEnabled(bool value) async {
+    if (value == _autoMuteEnabled) {
+      return;
+    }
+
+    _autoMuteEnabled = value;
+    notifyListeners();
+    await _sharedPreferences.setBool(_autoMuteEnabledKey, value);
     await _refreshReminders();
   }
 
