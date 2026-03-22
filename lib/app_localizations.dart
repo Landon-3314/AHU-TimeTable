@@ -5,7 +5,10 @@ class AppStrings {
     'notifications': {'zh': '提醒设置', 'en': 'Notifications'},
     'data_storage': {'zh': '高级与数据管理', 'en': 'Data & Storage'},
     'language': {'zh': '语言 / Language', 'en': 'Language / 语言'},
-    'semester_start_date': {'zh': '第一周开始日期', 'en': 'First Week Start Date'},
+    'semester_start_date': {
+      'zh': '第一周开始日期',
+      'en': 'First Week Start Date',
+    },
     'semester_total_weeks': {'zh': '学期总周数', 'en': 'Total Semester Weeks'},
     'schedule_time_settings': {
       'zh': '作息时间与节次设置',
@@ -16,18 +19,12 @@ class AppStrings {
       'en': 'Edit daily class periods and time ranges',
     },
     'reminder_time': {'zh': '课前提醒时间', 'en': 'Reminder Advance Time'},
-    'clear_browser_cache': {
-      'zh': '清除浏览器缓存',
-      'en': 'Clear Browser Cache',
-    },
+    'clear_browser_cache': {'zh': '清除浏览器缓存', 'en': 'Clear Browser Cache'},
     'clear_browser_cache_subtitle': {
       'zh': '解决教务系统登录失效',
       'en': 'Fix expired academic system login',
     },
-    'clear_all_local_data': {
-      'zh': '清除所有本地数据',
-      'en': 'Clear All Local Data',
-    },
+    'clear_all_local_data': {'zh': '清除所有本地数据', 'en': 'Clear All Local Data'},
     'clear_all_local_data_subtitle': {
       'zh': '清空课程和日程，操作不可恢复',
       'en': 'Delete all courses and events permanently',
@@ -55,12 +52,20 @@ class AppStrings {
     'timetable': {'zh': '课表', 'en': 'Timetable'},
     'day_view': {'zh': '日视图', 'en': 'Day View'},
     'week_view': {'zh': '周视图', 'en': 'Week View'},
-    'import_from_system': {'zh': '导入教务课表', 'en': 'Import from Academic System'},
+    'import_from_system': {
+      'zh': '导入教务课表',
+      'en': 'Import from Academic System',
+    },
     'today': {'zh': '回到今日', 'en': 'Today'},
     'add_course': {'zh': '添加课程', 'en': 'Add Course'},
     'jump_to_week': {'zh': '跳转周次', 'en': 'Jump to Week'},
-    'week_prefix': {'zh': '第', 'en': 'Week '},
-    'week_suffix': {'zh': '周', 'en': ''},
+    'week_prefix': {'zh': '第 ', 'en': 'Week '},
+    'week_suffix': {'zh': ' 周', 'en': ''},
+    'week_label_format': {'zh': '第 {week} 周', 'en': 'Week {week}'},
+    'period_range_format': {
+      'zh': '第 {start}-{end} 节',
+      'en': 'Period {start}-{end}',
+    },
     'no_courses_today': {'zh': '今天没有课程。', 'en': 'No courses today.'},
     'no_courses_for_day': {
       'zh': '本周这一天没有课程或日程。',
@@ -157,6 +162,7 @@ class AppStrings {
     'fri_short': {'zh': '周五', 'en': 'Fri'},
     'sat_short': {'zh': '周六', 'en': 'Sat'},
     'sun_short': {'zh': '周日', 'en': 'Sun'},
+    'event_marker': {'zh': '📌', 'en': '📌'},
     'academic_import': {'zh': '教务课表导入', 'en': 'Academic Timetable Import'},
     'extract_timetable': {'zh': '一键提取课表', 'en': 'Extract Timetable'},
     'extracting': {'zh': '正在提取...', 'en': 'Extracting...'},

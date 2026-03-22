@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -30,17 +30,16 @@ String _weekdayShortLabel(SettingsProvider provider, String key) {
 }
 
 String _weekLabel(SettingsProvider provider, int week) {
-  if (provider.languageCode == 'zh') {
-    return '第 $week 周';
-  }
-  return 'Week $week';
+  return provider
+      .t('week_label_format')
+      .replaceAll('{week}', week.toString());
 }
 
 String _periodRangeLabel(SettingsProvider provider, int start, int end) {
-  if (provider.languageCode == 'zh') {
-    return '第 $start-$end 节';
-  }
-  return 'Period $start-$end';
+  return provider
+      .t('period_range_format')
+      .replaceAll('{start}', start.toString())
+      .replaceAll('{end}', end.toString());
 }
 
 String _formatTimeOfDay(TimeOfDay time) {
@@ -166,9 +165,7 @@ class _TimetablePageState extends State<TimetablePage> {
           IconButton(
             onPressed: _jumpToToday,
             icon: const Icon(Icons.today),
-            tooltip: settingsProvider.t('today') == 'today'
-                ? 'Today'
-                : settingsProvider.t('today'),
+            tooltip: settingsProvider.t('today'),
           ),
           _WeekJumpButton(
             currentWeek: currentWeek,
@@ -256,19 +253,11 @@ class _TimetablePageState extends State<TimetablePage> {
     _isSyncingControllers = true;
     try {
       if (_weekPageController.hasClients) {
-        await _weekPageController.animateToPage(
-          targetWeek - 1,
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-        );
+        _weekPageController.jumpToPage(targetWeek - 1);
       }
 
       if (_dayPageController.hasClients) {
-        await _dayPageController.animateToPage(
-          (targetWeek - 1) * 7 + (targetWeekday - 1),
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-        );
+        _dayPageController.jumpToPage((targetWeek - 1) * 7 + (targetWeekday - 1));
       }
     } finally {
       _isSyncingControllers = false;
@@ -292,19 +281,11 @@ class _TimetablePageState extends State<TimetablePage> {
     _isSyncingControllers = true;
     try {
       if (_weekPageController.hasClients) {
-        await _weekPageController.animateToPage(
-          targetWeek - 1,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
+        _weekPageController.jumpToPage(targetWeek - 1);
       }
 
       if (_dayPageController.hasClients) {
-        await _dayPageController.animateToPage(
-          (targetWeek - 1) * 7 + (targetWeekday - 1),
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
+        _dayPageController.jumpToPage((targetWeek - 1) * 7 + (targetWeekday - 1));
       }
     } finally {
       _isSyncingControllers = false;
@@ -867,7 +848,7 @@ class EventListCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '📌 ${event.name}',
+                      '${provider.t('event_marker')} ${event.name}',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -1221,3 +1202,4 @@ class _DetailRow extends StatelessWidget {
     );
   }
 }
+

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/course.dart';
@@ -649,3 +649,4 @@ class _EventFormState extends State<_EventForm> {
     return '$hour:$minute';
   }
 }
+
