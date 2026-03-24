@@ -45,6 +45,12 @@ class MainActivity : FlutterActivity() {
                 result.success(null)
             }
 
+            "setMode" -> {
+                val mode = call.argument<String>("mode") ?: "normal"
+                AutoMuteScheduler.setMode(this, mode)
+                result.success(null)
+            }
+
             "replaceTasks" -> {
                 val rawTasks = call.argument<List<Map<String, Any?>>>("tasks").orEmpty()
                 val tasks = rawTasks.mapNotNull { map ->

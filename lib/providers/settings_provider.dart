@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_localizations.dart';
 import '../models/time_slot.dart';
+import '../services/auto_mute_service.dart';
 
 class SettingsProvider extends ChangeNotifier {
   SettingsProvider({
@@ -37,6 +40,9 @@ class SettingsProvider extends ChangeNotifier {
        _reminderAdvanceMinutes =
            sharedPreferences.getInt(_reminderAdvanceMinutesKey) ??
            _defaultReminderAdvanceMinutes,
+       _eventReminderAdvanceMinutes =
+           sharedPreferences.getInt(_eventReminderAdvanceMinutesKey) ??
+           _defaultEventReminderAdvanceMinutes,
        _languageCode = sharedPreferences.getString(_languageCodeKey) ?? 'zh',
        _autoMuteEnabled =
            sharedPreferences.getBool(_autoMuteEnabledKey) ?? false;
@@ -55,6 +61,8 @@ class SettingsProvider extends ChangeNotifier {
   static const String _totalWeeksKey = 'settings.totalWeeks';
   static const String _reminderAdvanceMinutesKey =
       'settings.reminderAdvanceMinutes';
+  static const String _eventReminderAdvanceMinutesKey =
+      'settings.eventReminderAdvanceMinutes';
   static const String _languageCodeKey = 'settings.languageCode';
   static const String _autoMuteEnabledKey = 'settings.autoMuteEnabled';
 
@@ -70,6 +78,7 @@ class SettingsProvider extends ChangeNotifier {
   static const int _defaultEveningClasses = 3;
   static const int _defaultTotalWeeks = 20;
   static const int _defaultReminderAdvanceMinutes = 0;
+  static const int _defaultEventReminderAdvanceMinutes = 0;
 
   final SharedPreferences _sharedPreferences;
 
@@ -86,6 +95,7 @@ class SettingsProvider extends ChangeNotifier {
   DateTime _semesterStartDate;
   int _totalWeeks;
   int _reminderAdvanceMinutes;
+  int _eventReminderAdvanceMinutes;
   String _languageCode;
   bool _autoMuteEnabled;
   Future<void> Function()? _reminderScheduler;
@@ -103,6 +113,7 @@ class SettingsProvider extends ChangeNotifier {
   DateTime get semesterStartDate => _semesterStartDate;
   int get totalWeeks => _totalWeeks;
   int get reminderAdvanceMinutes => _reminderAdvanceMinutes;
+  int get eventReminderAdvanceMinutes => _eventReminderAdvanceMinutes;
   String get languageCode => _languageCode;
   bool get autoMuteEnabled => _autoMuteEnabled;
   List<TimeSlot> get timeSlots => generateTimeSlots();
@@ -316,7 +327,28 @@ class SettingsProvider extends ChangeNotifier {
     await _refreshReminders();
   }
 
-  Future<void> updateAutoMuteEnabled(bool value) async {
+  Future<void> updateEventReminderAdvanceMinutes(int value) async {
+    final safeValue = value.clamp(0, 1440).toInt();
+    if (safeValue == _eventReminderAdvanceMinutes) {
+      return;
+    }
+
+    _eventReminderAdvanceMinutes = safeValue;
+    notifyListeners();
+    await _sharedPreferences.setInt(_eventReminderAdvanceMinutesKey, safeValue);
+    await _refreshReminders();
+  }
+
+  Future<void> updateAutoMuteEnabled(
+    bool value, {
+    bool fromUserAction = false,
+  }) async {
+    // Guardrail: only explicit user operations from settings UI
+    // are allowed to mutate the persisted auto-mute preference.
+    if (!fromUserAction) {
+      return;
+    }
+
     if (value == _autoMuteEnabled) {
       return;
     }
@@ -325,6 +357,54 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
     await _sharedPreferences.setBool(_autoMuteEnabledKey, value);
     await _refreshReminders();
+  }
+
+  Future<bool> toggleAutoMuteWithCheck(bool value) async {
+    if (!value) {
+      await updateAutoMuteEnabled(
+        false,
+        fromUserAction: true,
+      );
+      return true;
+    }
+
+    try {
+      if (!Platform.isAndroid) {
+        await updateAutoMuteEnabled(
+          true,
+          fromUserAction: true,
+        );
+        return true;
+      }
+
+      var hasPermission = await AutoMuteService.instance.hasPermission();
+      if (!hasPermission) {
+        await AutoMuteService.instance.openPermissionSettings();
+        hasPermission = await AutoMuteService.instance.hasPermission();
+      }
+
+      if (!hasPermission) {
+        await updateAutoMuteEnabled(
+          false,
+          fromUserAction: true,
+        );
+        return false;
+      }
+
+      await updateAutoMuteEnabled(
+        true,
+        fromUserAction: true,
+      );
+      return true;
+    } catch (error, stackTrace) {
+      print('[SettingsProvider] toggleAutoMuteWithCheck error: $error');
+      print(stackTrace);
+      await updateAutoMuteEnabled(
+        false,
+        fromUserAction: true,
+      );
+      return false;
+    }
   }
 
   int _appendSessionSlots({

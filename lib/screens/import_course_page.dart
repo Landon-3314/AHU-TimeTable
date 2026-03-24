@@ -14,7 +14,7 @@ const String academicLoginUrl =
 const String extractScript = r'''
 (function() {
   try {
-    CourseDataChannel.postMessage("DEBUG: 脚本已启动...");
+    CourseDataChannel.postMessage("DEBUG: Script started...");
 
     function findScheduleTables(doc) {
       if (!doc || !doc.querySelectorAll) {
@@ -51,6 +51,39 @@ const String extractScript = r'''
         .trim();
     }
 
+    function normalizeDetailText(value) {
+      return String(value || '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/[\uFF0C\u3001]/g, ',')
+        .replace(/[~\uFF5E]/g, '-')
+        .replace(/[?？]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function htmlToPlainText(html) {
+      return String(html || '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n\s+\n/g, '\n')
+        .replace(/\n{2,}/g, '\n')
+        .trim();
+    }
+
+    function hasWeekToken(text) {
+      // Support both normal "周" and mojibake variant like "鍛".
+      return /[\u5468\u935b]/.test(String(text || ''));
+    }
+
+    function hasPeriodToken(text) {
+      // Support both normal "节" and mojibake variant like "鑺".
+      return /[\u8282\u947a]/.test(String(text || ''));
+    }
+
     function hashString(source) {
       var hash = 0;
       var text = String(source || '');
@@ -79,7 +112,7 @@ const String extractScript = r'''
       var from = Number(start);
       var to = Number(end == null ? start : end);
       if (!Number.isFinite(from) || !Number.isFinite(to)) {
-        return [1];
+        return [];
       }
 
       var result = [];
@@ -89,43 +122,259 @@ const String extractScript = r'''
       return result;
     }
 
-    function parseWeeks(detailText) {
-      var text = String(detailText || '');
-      var match = text.match(/(\d{1,2})\s*[~-]\s*(\d{1,2})\s*周(?:\((单|双)\))?/);
-      if (!match) {
-        match = text.match(/(\d{1,2})\s*周(?:\((单|双)\))?/);
-      }
+    function extractWeekSpec(detailText) {
+      var text = normalizeDetailText(detailText);
+      return text.match(/\(([\d\s,\-]+)\s*[\u5468\u935b](?:\(([\u5355\u53cc])\))?\)/);
+    }
 
-      if (!match) {
+    function parseWeeksFromParts(rawBody, oddEven) {
+      rawBody = String(rawBody || '').trim();
+      oddEven = String(oddEven || '').trim();
+      if (!rawBody) {
         return [1];
       }
 
-      var start = Number(match[1]);
-      var end = match[2] ? Number(match[2]) : start;
-      var weeks = expandWeeks(start, end);
-      var oddEven = match[3] || '';
+      var seenWeeks = {};
+      var weeks = [];
 
-      if (oddEven === '单') {
-        weeks = weeks.filter(function(week) { return week % 2 === 1; });
-      } else if (oddEven === '双') {
-        weeks = weeks.filter(function(week) { return week % 2 === 0; });
+      rawBody.split(',').forEach(function(part) {
+        var segment = String(part || '').trim();
+        if (!segment) {
+          return;
+        }
+
+        var rangeMatch = segment.match(/^(\d{1,2})\s*[-~]\s*(\d{1,2})$/);
+        if (rangeMatch) {
+          expandWeeks(rangeMatch[1], rangeMatch[2]).forEach(function(week) {
+            if (!seenWeeks[week]) {
+              seenWeeks[week] = true;
+              weeks.push(week);
+            }
+          });
+          return;
+        }
+
+        var singleMatch = segment.match(/^(\d{1,2})$/);
+        if (singleMatch) {
+          var week = Number(singleMatch[1]);
+          if (!seenWeeks[week]) {
+            seenWeeks[week] = true;
+            weeks.push(week);
+          }
+        }
+      });
+
+      weeks.sort(function(a, b) {
+        return a - b;
+      });
+
+      if (oddEven === '\u5355') {
+        weeks = weeks.filter(function(week) {
+          return week % 2 === 1;
+        });
+      } else if (oddEven === '\u53cc') {
+        weeks = weeks.filter(function(week) {
+          return week % 2 === 0;
+        });
       }
 
       return weeks.length > 0 ? weeks : [1];
     }
 
-    function parseLocationAndTeacher(detailText) {
-      var text = String(detailText || '')
-        .replace(/^\s*\(?\d{1,2}(?:\s*[~-]\s*\d{1,2})?\s*周(?:\((?:单|双)\))?\s*/g, '')
-        .replace(/^\s*\(?\d{1,2}(?:\s*[~-]\s*\d{1,2})?\s*节\s*/g, '')
-        .replace(/\d{1,2}\s*[~-]\s*\d{1,2}\s*周(?:\((?:单|双)\))?/g, '')
-        .replace(/\d{1,2}\s*[~-]\s*\d{1,2}\s*节/g, '')
-        .replace(/\d{1,2}\s*周(?:\((?:单|双)\))?/g, '')
+    function parseWeeksRangeText(weeksText) {
+      return parseWeeksFromParts(
+        String(weeksText || '')
+          .replace(/[~\uFF5E]/g, '-')
+          .replace(/\s+/g, ''),
+        '',
+      );
+    }
+
+    function parsePeriodRange(periodText, fallbackStart, fallbackEnd) {
+      var text = String(periodText || '').trim();
+      if (!text) {
+        return {
+          startPeriod: fallbackStart,
+          endPeriod: fallbackEnd,
+        };
+      }
+
+      var rangeMatch = text.match(/^(\d{1,2})\s*[-~]\s*(\d{1,2})$/);
+      if (rangeMatch) {
+        return {
+          startPeriod: Number(rangeMatch[1]),
+          endPeriod: Number(rangeMatch[2]),
+        };
+      }
+
+      var singleMatch = text.match(/^(\d{1,2})$/);
+      if (singleMatch) {
+        var p = Number(singleMatch[1]);
+        return {
+          startPeriod: p,
+          endPeriod: p,
+        };
+      }
+
+      return {
+        startPeriod: fallbackStart,
+        endPeriod: fallbackEnd,
+      };
+    }
+
+    function extractCoursesFromTdHtml(tdHtml, weekday, fallbackStart, fallbackEnd) {
+      if (!tdHtml) {
+        return [];
+      }
+
+      var nameNode = tdHtml.querySelector('.course-name');
+      var name = getCleanText(nameNode).replace(/\s+/g, ' ').trim();
+      if (!name) {
+        return [];
+      }
+
+      var plainText = htmlToPlainText(tdHtml.innerHTML || '');
+      if (!plainText) {
+        return [];
+      }
+
+      // Global extraction for mixed div + bare text-node structures.
+      // Supports:
+      // (1-3,5~18周) (3-5节) 校区 地点 老师
+      // and mojibake variants of 周/节.
+      var regex = /\(([\d,\-~]+)\s*[\u5468\u935b]\)\s*\(([\d\-~]+)\s*[\u8282\u947a]\)\s+(\S+)\s+(\S+)\s+([\u4e00-\u9fa5a-zA-Z\/·]+)/g;
+      var matches = [];
+      var m;
+      while ((m = regex.exec(plainText)) !== null) {
+        matches.push(m);
+      }
+      if (matches.length === 0) {
+        return [];
+      }
+
+      var results = [];
+      var seen = {};
+      matches.forEach(function(match) {
+        var weeks = parseWeeksRangeText(match[1]);
+        var parsedPeriod = parsePeriodRange(match[2], fallbackStart, fallbackEnd);
+        var location = String((match[3] || '') + ' ' + (match[4] || ''))
+          .replace(/\s+/g, ' ')
+          .trim();
+        var teacher = String(match[5] || '').trim();
+
+        var course = {
+          name: name,
+          location: location,
+          teacher: teacher,
+          weekday: weekday,
+          weeks: weeks,
+          startPeriod: parsedPeriod.startPeriod,
+          endPeriod: parsedPeriod.endPeriod,
+          colorValue: pickColor(name),
+        };
+
+        var key = JSON.stringify(course);
+        if (!seen[key]) {
+          seen[key] = true;
+          results.push(course);
+        }
+      });
+
+      return results;
+    }
+
+    function parseWeeks(detailText) {
+      var match = extractWeekSpec(detailText);
+      if (!match) {
+        // Fallback for malformed course structures where week marker may
+        // not be wrapped by complete parentheses.
+        var looseMatch = normalizeDetailText(detailText).match(
+          /(?:\()?\s*([\d\s,\-]+)\s*[\u5468\u935b](?:\(([\u5355\u53cc])\))?(?:\))?/
+        );
+        if (!looseMatch) {
+          return [1];
+        }
+        return parseWeeksFromParts(looseMatch[1], looseMatch[2]);
+      }
+      return parseWeeksFromParts(match[1], match[2]);
+    }
+
+    function extractWeekMarkers(detailText) {
+      var text = normalizeDetailText(detailText);
+      var markers = [];
+      var regex = /(?:\()?\s*([\d\s,\-]+)\s*[\u5468\u935b](?:\(([\u5355\u53cc])\))?(?:\))?/g;
+      var match;
+      while ((match = regex.exec(text)) !== null) {
+        markers.push({
+          index: match.index,
+          rawBody: String(match[1] || '').trim(),
+          oddEven: String(match[2] || '').trim(),
+        });
+      }
+      return markers;
+    }
+
+    function splitDetailSegments(detailText) {
+      var text = normalizeDetailText(detailText);
+      if (!text) {
+        return [];
+      }
+
+      var markers = extractWeekMarkers(text);
+      if (markers.length <= 1) {
+        return [text];
+      }
+
+      var segments = [];
+      for (var i = 0; i < markers.length; i += 1) {
+        var start = markers[i].index;
+        var end = i + 1 < markers.length ? markers[i + 1].index : text.length;
+        var segment = String(text.slice(start, end) || '').trim();
+        if (segment) {
+          segments.push(segment);
+        }
+      }
+      return segments.length > 0 ? segments : [text];
+    }
+
+    function stripTimingFragments(detailText) {
+      return normalizeDetailText(detailText)
+        .replace(/\(([\d\s,\-]+)\s*[\u5468\u935b](?:\((?:[\u5355\u53cc])\))?\)/g, ' ')
+        .replace(/\(\d{1,2}\s*-\s*\d{1,2}\s*[\u8282\u947a]\)/g, ' ')
+        .replace(/\(\d{1,2}\s*[\u8282\u947a]\)/g, ' ')
         .replace(/[()]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
+    }
 
-      var tailMatch = text.match(/(.+?)\s+([^\s()（）]+(?:\/[^\s()（）]+)*)$/);
+    function parseLocationAndTeacher(detailText) {
+      var text = stripTimingFragments(detailText);
+      if (!text) {
+        return {
+          location: '',
+          teacher: '',
+        };
+      }
+
+      var tokens = text.split(/\s+/).filter(function(token) {
+        return !!token;
+      });
+
+      if (tokens.length === 0) {
+        return {
+          location: '',
+          teacher: '',
+        };
+      }
+
+      if (tokens.length === 1) {
+        return {
+          location: tokens[0],
+          teacher: '',
+        };
+      }
+
+      var tailMatch = text.match(/(.+?)\s+([^\s()]+(?:\/[^\s()]+)*)$/);
       if (!tailMatch) {
         return {
           location: text,
@@ -172,37 +421,120 @@ const String extractScript = r'''
       return blocks;
     }
 
+    function isDetailNode(node) {
+      if (!node) {
+        return false;
+      }
+
+      if (node.classList && (
+        node.classList.contains('course-name') ||
+        node.classList.contains('lesson-name')
+      )) {
+        return false;
+      }
+
+      var text = normalizeDetailText(getCleanText(node));
+      return hasWeekToken(text) && hasPeriodToken(text);
+    }
+
     function parseBlock(blockNodes, weekday, startPeriod, endPeriod) {
       var nameNode = blockNodes.find(function(node) {
         return node && node.classList && node.classList.contains('course-name');
       });
 
-      var detailNode = blockNodes.find(function(node) {
-        return node &&
-          (!node.classList || !node.classList.contains('course-name')) &&
-          (!node.classList || !node.classList.contains('lesson-name')) &&
-          /周|节|\d+\s*[~-]\s*\d+/.test(getCleanText(node));
+      var detailNodes = blockNodes.filter(function(node) {
+        return isDetailNode(node);
       });
 
       var name = getCleanText(nameNode).replace(/\s+/g, ' ').trim();
-      var detailText = getCleanText(detailNode).replace(/\s+/g, ' ').trim();
-      var parsedTail = parseLocationAndTeacher(detailText);
-      var weeks = parseWeeks(detailText);
 
       if (!name) {
-        return null;
+        return [];
       }
 
-      return {
-        name: name,
-        location: parsedTail.location || '',
-        teacher: parsedTail.teacher || '',
-        weekday: weekday,
-        weeks: weeks,
-        startPeriod: startPeriod,
-        endPeriod: endPeriod,
-        colorValue: pickColor(name),
-      };
+      var detailText = '';
+      if (detailNodes.length > 0) {
+        detailText = normalizeDetailText(
+          detailNodes.map(function(node) {
+            return getCleanText(node);
+          }).join('\n')
+        );
+      }
+
+      if (!detailText) {
+        var fallbackText = normalizeDetailText(
+          blockNodes
+            .filter(function(node) {
+              return node &&
+                (!node.classList || !node.classList.contains('course-name')) &&
+                (!node.classList || !node.classList.contains('lesson-name'));
+            })
+            .map(function(node) {
+              return getCleanText(node);
+            })
+            .join('\n')
+        );
+        detailText = fallbackText;
+      }
+
+      if (!detailText) {
+        detailText = normalizeDetailText(
+          blockNodes.map(function(node) {
+            return getCleanText(node);
+          }).join('\n')
+        );
+      }
+
+      if (!hasWeekToken(detailText)) {
+        var wholeText = normalizeDetailText(
+          blockNodes.map(function(node) {
+            return getCleanText(node);
+          }).join(' ')
+        );
+        if (hasWeekToken(wholeText)) {
+          detailText = wholeText;
+        }
+      }
+
+      var detailSegments = splitDetailSegments(detailText);
+      var results = [];
+      var seenInBlock = {};
+
+      detailSegments.forEach(function(segment) {
+        var parsedTail = parseLocationAndTeacher(segment);
+        var weeks = parseWeeks(segment);
+        var course = {
+          name: name,
+          location: parsedTail.location || '',
+          teacher: parsedTail.teacher || '',
+          weekday: weekday,
+          weeks: weeks,
+          startPeriod: startPeriod,
+          endPeriod: endPeriod,
+          colorValue: pickColor(name),
+        };
+
+        var key = JSON.stringify(course);
+        if (!seenInBlock[key]) {
+          seenInBlock[key] = true;
+          results.push(course);
+        }
+      });
+
+      if (results.length === 0) {
+        results.push({
+          name: name,
+          location: '',
+          teacher: '',
+          weekday: weekday,
+          weeks: [1],
+          startPeriod: startPeriod,
+          endPeriod: endPeriod,
+          colorValue: pickColor(name),
+        });
+      }
+
+      return results;
     }
 
     var tables = findScheduleTables(document);
@@ -215,7 +547,7 @@ const String extractScript = r'''
           var iframeTables = findScheduleTables(iframeDoc);
           if (iframeTables && iframeTables.length > 0) {
             tables = iframeTables;
-            CourseDataChannel.postMessage("DEBUG: 已在 iframe 中定位到课表。");
+            CourseDataChannel.postMessage("DEBUG: Found timetable inside iframe.");
             break;
           }
         } catch (iframeError) {
@@ -225,11 +557,13 @@ const String extractScript = r'''
     }
 
     if (!tables || tables.length === 0) {
-      CourseDataChannel.postMessage("DEBUG: 主页面与 iframe 中均未找到 table.Wjkc / table.courseTable。当前网址: " + window.location.href);
+      CourseDataChannel.postMessage(
+        "DEBUG: No timetable table found in main document or iframe. URL: " + window.location.href
+      );
       return;
     }
 
-    CourseDataChannel.postMessage("DEBUG: 已找到课表，开始解析...");
+    CourseDataChannel.postMessage("DEBUG: Timetable found, parsing...");
 
     var courses = [];
     var seen = {};
@@ -288,19 +622,34 @@ const String extractScript = r'''
                   return;
                 }
 
-                var blocks = splitCourseBlocks(tdHtml);
-                blocks.forEach(function(blockNodes) {
-                  try {
-                    var course = parseBlock(blockNodes, weekday, startPeriod, endPeriod);
-                    if (!course) {
-                      return;
-                    }
-
+                var globalParsedCourses = extractCoursesFromTdHtml(
+                  tdHtml,
+                  weekday,
+                  startPeriod,
+                  endPeriod,
+                );
+                if (globalParsedCourses.length > 0) {
+                  globalParsedCourses.forEach(function(course) {
                     var key = JSON.stringify(course);
                     if (!seen[key]) {
                       seen[key] = true;
                       courses.push(course);
                     }
+                  });
+                  return;
+                }
+
+                var blocks = splitCourseBlocks(tdHtml);
+                blocks.forEach(function(blockNodes) {
+                  try {
+                    var parsedCourses = parseBlock(blockNodes, weekday, startPeriod, endPeriod);
+                    parsedCourses.forEach(function(course) {
+                      var key = JSON.stringify(course);
+                      if (!seen[key]) {
+                        seen[key] = true;
+                        courses.push(course);
+                      }
+                    });
                   } catch (blockError) {
                     console.error('parse block error', blockError);
                   }
@@ -364,7 +713,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       ..addJavaScriptChannel(
         'CourseDataChannel',
         onMessageReceived: (message) async {
-          debugPrint('收到注入回传数据: ${message.message}');
+          debugPrint('ImportCoursePage message: ${message.message}');
           await _handleImportedMessage(message.message);
         },
       )
@@ -416,8 +765,13 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
   Future<void> _handleImportedMessage(String rawMessage) async {
     try {
-      final provider = context.read<SettingsProvider>();
-      if (rawMessage.startsWith('DEBUG:') || rawMessage.startsWith('ERROR:')) {
+      if (rawMessage.startsWith('DEBUG:')) {
+        // Keep parser diagnostics in logs only; never surface DEBUG via SnackBar.
+        debugPrint('ImportCoursePage DEBUG: $rawMessage');
+        return;
+      }
+
+      if (rawMessage.startsWith('ERROR:')) {
         if (!mounted) {
           return;
         }
@@ -426,10 +780,9 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
           _isImporting = false;
         });
 
-        final isError = rawMessage.startsWith('ERROR:');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: isError ? Colors.red : Colors.blueGrey,
+            backgroundColor: Colors.red,
             content: Text(rawMessage),
           ),
         );
@@ -455,19 +808,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${provider.t('import_success')}: ${importedCourses.length}'),
-        ),
-      );
-
-      await Future.delayed(const Duration(seconds: 1));
-
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(importedCourses.length);
     } catch (error) {
       if (!mounted) {
         return;

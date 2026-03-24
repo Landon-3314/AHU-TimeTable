@@ -18,8 +18,19 @@ class AppStrings {
       'zh': '编辑每天的上课节次和时间段',
       'en': 'Edit daily class periods and time ranges',
     },
+    'course_reminder_time': {
+      'zh': '课程提前提醒',
+      'en': 'Course Reminder',
+    },
+    'event_reminder_time': {
+      'zh': '日程提前提醒',
+      'en': 'Event Reminder',
+    },
     'reminder_time': {'zh': '课前提醒时间', 'en': 'Reminder Advance Time'},
     'no_reminder': {'zh': '不提醒', 'en': 'None'},
+    'one_hour': {'zh': '提前 1 小时', 'en': 'Before 1 hour'},
+    'two_hours': {'zh': '提前 2 小时', 'en': 'Before 2 hours'},
+    'one_day': {'zh': '提前 1 天', 'en': 'Before 1 day'},
     'auto_mute': {
       'zh': '上课自动静音（仅 Android）',
       'en': 'Auto Mute During Class (Android only)',

@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'background_service.dart';
 import 'providers/course_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/main_scaffold.dart';
-import 'services/auto_mute_service.dart';
 import 'services/notification_service.dart';
 
 Future<void> main() async {
@@ -60,17 +60,26 @@ class _MainAppState extends State<MainApp> {
 
     Future<void> refreshReminders() {
       final courses = _courseProvider.courses.toList();
+      final events = _courseProvider.events.toList();
+
+      print(
+        '[Main] refreshReminders start: '
+        'courseReminderAdvanceMinutes=${_settingsProvider.reminderAdvanceMinutes}, '
+        'eventReminderAdvanceMinutes=${_settingsProvider.eventReminderAdvanceMinutes}, '
+        'courses=${courses.length}, events=${events.length}, '
+        'autoMuteEnabled=${_settingsProvider.autoMuteEnabled}',
+      );
 
       return Future.wait([
         NotificationService.instance.refreshAllReminders(
           courses: courses,
-          events: _courseProvider.events.toList(),
+          events: events,
           settings: _settingsProvider,
         ),
-        AutoMuteService.instance.scheduleMuteTasks(
-          courses,
-          _settingsProvider,
-        ),
+        if (_settingsProvider.autoMuteEnabled)
+          requestBackgroundServiceSync()
+        else
+          stopBackgroundServiceIfRunning(),
       ]).then((_) {});
     }
 

@@ -14,6 +14,8 @@ enum _TimetableMode {
   week,
 }
 
+const int HOLIDAY_WEEK_INDEX = 999;
+
 String _weekdayLabel(SettingsProvider provider, String key) => provider.t(key);
 
 String _weekdayShortLabel(SettingsProvider provider, String key) {
@@ -40,6 +42,36 @@ String _periodRangeLabel(SettingsProvider provider, int start, int end) {
       .t('period_range_format')
       .replaceAll('{start}', start.toString())
       .replaceAll('{end}', end.toString());
+}
+
+bool _sameCourse(Course left, Course right) {
+  if (left.name != right.name ||
+      left.location != right.location ||
+      left.teacher != right.teacher ||
+      left.weekday != right.weekday ||
+      left.startPeriod != right.startPeriod ||
+      left.endPeriod != right.endPeriod ||
+      left.colorValue != right.colorValue ||
+      left.weeks.length != right.weeks.length) {
+    return false;
+  }
+
+  for (int index = 0; index < left.weeks.length; index += 1) {
+    if (left.weeks[index] != right.weeks[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void _openCourseDetailsIfAvailable(BuildContext context, Course course) {
+  final provider = context.read<CourseProvider>();
+  final exists = provider.courses.any((item) => _sameCourse(item, course));
+  if (!exists) {
+    return;
+  }
+
+  showCourseDetailsSheet(context, course);
 }
 
 String _formatTimeOfDay(TimeOfDay time) {
@@ -88,6 +120,7 @@ class _TimetablePageState extends State<TimetablePage> {
 
   late final PageController _dayPageController;
   late final PageController _weekPageController;
+  late int _selectedWeekForWeekView;
   _TimetableMode _mode = _TimetableMode.day;
   bool _isSyncingControllers = false;
 
@@ -101,6 +134,7 @@ class _TimetablePageState extends State<TimetablePage> {
       settingsProvider.totalWeeks,
     ).toInt();
     final initialWeekday = settingsProvider.currentRealWeekday.clamp(1, 7).toInt();
+    _selectedWeekForWeekView = initialWeek;
 
     courseProvider.setCurrentWeekAndWeekday(
       week: initialWeek,
@@ -136,10 +170,13 @@ class _TimetablePageState extends State<TimetablePage> {
   Widget build(BuildContext context) {
     final courseProvider = context.watch<CourseProvider>();
     final settingsProvider = context.watch<SettingsProvider>();
-    final currentWeek = courseProvider.currentWeek.clamp(
+    final providerWeek = courseProvider.currentWeek.clamp(
       1,
       settingsProvider.totalWeeks,
     ).toInt();
+    final currentWeek = _mode == _TimetableMode.week
+        ? _selectedWeekForWeekView
+        : providerWeek;
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
@@ -161,9 +198,22 @@ class _TimetablePageState extends State<TimetablePage> {
         actions: [
           IconButton(
             onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
+              final importedCount = await Navigator.of(context).push<int>(
+                MaterialPageRoute<int>(
                   builder: (_) => const ImportCoursePage(),
+                ),
+              );
+
+              if (!context.mounted || importedCount == null) {
+                return;
+              }
+
+              final summaryMessage = settingsProvider.languageCode == 'en'
+                  ? 'Successfully imported $importedCount courses'
+                  : '总共添加了 $importedCount 门课';
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(summaryMessage),
                 ),
               );
             },
@@ -224,6 +274,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 weekdayKeys: _weekdayKeys,
                 totalWeeks: settingsProvider.totalWeeks,
                 onWeekChanged: _handleWeekChangedFromWeekView,
+                selectedWeek: _selectedWeekForWeekView,
               ),
       ),
     );
@@ -232,8 +283,19 @@ class _TimetablePageState extends State<TimetablePage> {
   Future<void> _jumpToWeek(int selectedWeek) async {
     final provider = context.read<CourseProvider>();
     final settingsProvider = context.read<SettingsProvider>();
+    if (selectedWeek == HOLIDAY_WEEK_INDEX) {
+      setState(() {
+        _mode = _TimetableMode.week;
+        _selectedWeekForWeekView = HOLIDAY_WEEK_INDEX;
+      });
+      return;
+    }
+
     final targetWeek = selectedWeek.clamp(1, settingsProvider.totalWeeks).toInt();
     final targetWeekday = provider.currentWeekday.clamp(1, 7).toInt();
+    setState(() {
+      _selectedWeekForWeekView = targetWeek;
+    });
 
     provider.setCurrentWeek(targetWeek);
 
@@ -259,6 +321,9 @@ class _TimetablePageState extends State<TimetablePage> {
       settingsProvider.totalWeeks,
     ).toInt();
     final targetWeekday = settingsProvider.currentRealWeekday.clamp(1, 7).toInt();
+    setState(() {
+      _selectedWeekForWeekView = targetWeek;
+    });
 
     provider.setCurrentWeekAndWeekday(
       week: targetWeek,
@@ -288,6 +353,7 @@ class _TimetablePageState extends State<TimetablePage> {
           week: targetWeek,
           weekday: targetWeekday,
         );
+    _selectedWeekForWeekView = targetWeek;
 
     if (_isSyncingControllers) {
       return;
@@ -306,6 +372,9 @@ class _TimetablePageState extends State<TimetablePage> {
     final provider = context.read<CourseProvider>();
     final targetWeek = week.clamp(1, settingsProvider.totalWeeks).toInt();
     final currentWeekday = provider.currentWeekday.clamp(1, 7).toInt();
+    setState(() {
+      _selectedWeekForWeekView = targetWeek;
+    });
 
     provider.setCurrentWeek(targetWeek);
 
@@ -532,7 +601,7 @@ class _DayViewWidgetState extends State<DayViewWidget> {
                       course: (course) => CourseListCard(
                         course: course,
                         accentColor: course.color,
-                        onTap: () => showCourseDetailsSheet(context, course),
+                        onTap: () => _openCourseDetailsIfAvailable(context, course),
                       ),
                       event: (event) => EventListCard(
                         event: event,
@@ -596,18 +665,44 @@ class WeekViewWidget extends StatelessWidget {
     required this.weekdayKeys,
     required this.totalWeeks,
     required this.onWeekChanged,
+    required this.selectedWeek,
   });
 
   final PageController pageController;
   final List<String> weekdayKeys;
   final int totalWeeks;
   final ValueChanged<int> onWeekChanged;
+  final int selectedWeek;
 
   @override
   Widget build(BuildContext context) {
     final settingsProvider = context.watch<SettingsProvider>();
-    final courses = context.watch<CourseProvider>().courses.toList();
+    final provider = context.watch<CourseProvider>();
+    final courses = provider.courses.toList();
+    final events = provider.events.toList();
     final dateFormat = DateFormat('MM/dd');
+
+    if (selectedWeek == HOLIDAY_WEEK_INDEX) {
+      final semesterStart = settingsProvider.getDateFor(1, 1);
+      final semesterEnd = DateTime(
+        settingsProvider.getDateFor(totalWeeks, 7).year,
+        settingsProvider.getDateFor(totalWeeks, 7).month,
+        settingsProvider.getDateFor(totalWeeks, 7).day,
+        23,
+        59,
+        59,
+      );
+      final holidayEvents = events
+          .where(
+            (event) =>
+                event.dateTime.isBefore(semesterStart) ||
+                event.dateTime.isAfter(semesterEnd),
+          )
+          .toList()
+        ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+      return _buildHolidayListView(context, holidayEvents);
+    }
 
     return PageView.builder(
       controller: pageController,
@@ -618,6 +713,27 @@ class WeekViewWidget extends StatelessWidget {
         final weekStart = settingsProvider.getDateFor(week, 1);
         final weekEnd = settingsProvider.getDateFor(week, 7);
         final weekCourses = courses.where((course) => course.weeks.contains(week)).toList();
+        final weekStartDateTime = DateTime(
+          weekStart.year,
+          weekStart.month,
+          weekStart.day,
+        );
+        final weekEndDateTime = DateTime(
+          weekEnd.year,
+          weekEnd.month,
+          weekEnd.day,
+          23,
+          59,
+          59,
+        );
+        final weekEvents = events
+            .where(
+              (event) =>
+                  !event.dateTime.isBefore(weekStartDateTime) &&
+                  !event.dateTime.isAfter(weekEndDateTime),
+            )
+            .toList()
+          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
@@ -644,10 +760,55 @@ class WeekViewWidget extends StatelessWidget {
                     .where((course) => course.weekday == weekday)
                     .toList()
                   ..sort((a, b) => a.startPeriod.compareTo(b.startPeriod)),
+                events: weekEvents
+                    .where(
+                      (event) =>
+                          DateUtils.isSameDay(
+                            event.dateTime,
+                            settingsProvider.getDateFor(week, weekday),
+                          ),
+                    )
+                    .toList()
+                  ..sort((a, b) => a.dateTime.compareTo(b.dateTime)),
               ),
               const SizedBox(height: 14),
             ],
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHolidayListView(BuildContext context, List<Event> holidayEvents) {
+    final provider = context.read<SettingsProvider>();
+    if (holidayEvents.isEmpty) {
+      return _EmptyDayState(
+        title: provider.languageCode == 'en' ? 'Holiday' : '假期中',
+        subtitle: provider.languageCode == 'en'
+            ? 'No holiday events.'
+            : '假期暂无日程',
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      itemCount: holidayEvents.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _DayHeaderCard(
+              title: provider.languageCode == 'en' ? 'Holiday' : '假期中',
+              subtitle: provider.languageCode == 'en'
+                  ? 'Events outside semester weeks'
+                  : '展示所有非教学周日程',
+            ),
+          );
+        }
+        final event = holidayEvents[index - 1];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _HolidayEventCard(event: event),
         );
       },
     );
@@ -658,10 +819,12 @@ class _WeekdaySection extends StatelessWidget {
   const _WeekdaySection({
     required this.title,
     required this.courses,
+    required this.events,
   });
 
   final String title;
   final List<Course> courses;
+  final List<Event> events;
 
   @override
   Widget build(BuildContext context) {
@@ -683,7 +846,7 @@ class _WeekdaySection extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: 12),
-          if (courses.isEmpty)
+          if (courses.isEmpty && events.isEmpty)
             Text(
               provider.t('no_courses_today'),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -696,10 +859,75 @@ class _WeekdaySection extends StatelessWidget {
               child: CourseListCard(
                 course: course,
                 accentColor: course.color,
-                onTap: () => showCourseDetailsSheet(context, course),
+                onTap: () => _openCourseDetailsIfAvailable(context, course),
               ),
             ),
+          for (final event in events)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _WeekEventCard(event: event),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+class _WeekEventCard extends StatelessWidget {
+  const _WeekEventCard({
+    required this.event,
+  });
+
+  final Event event;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<SettingsProvider>();
+    return Card(
+      elevation: 0,
+      color: const Color(0xFFF4F7FF),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFBFD0FF)),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        leading: const Text('📅'),
+        title: Text(event.name),
+        subtitle: Text(
+          '${DateFormat('HH:mm').format(event.dateTime)}'
+          '${event.location.isEmpty ? '' : ' · ${event.location}'}',
+        ),
+        onTap: () => showEventDetailsSheet(context, event),
+      ),
+    );
+  }
+}
+
+class _HolidayEventCard extends StatelessWidget {
+  const _HolidayEventCard({
+    required this.event,
+  });
+
+  final Event event;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.event_note_outlined),
+        title: Text(event.name),
+        subtitle: Text(
+          '${DateFormat('MM-dd').format(event.dateTime)} '
+          '${DateFormat('HH:mm').format(event.dateTime)}'
+          '${event.location.isEmpty ? '' : ' · ${event.location}'}',
+        ),
+        onTap: () => showEventDetailsSheet(context, event),
       ),
     );
   }
@@ -927,6 +1155,7 @@ class _WeekJumpButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.read<SettingsProvider>();
+    final holidayLabel = provider.languageCode == 'en' ? 'Holiday' : '假期中';
 
     return PopupMenuButton<int>(
       tooltip: provider.t('jump_to_week'),
@@ -942,12 +1171,24 @@ class _WeekJumpButton extends StatelessWidget {
               ],
             ),
           ),
+        PopupMenuItem<int>(
+          value: HOLIDAY_WEEK_INDEX,
+          child: Row(
+            children: [
+              Expanded(child: Text(holidayLabel)),
+              if (currentWeek == HOLIDAY_WEEK_INDEX)
+                const Icon(Icons.check, size: 16),
+            ],
+          ),
+        ),
       ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Center(
           child: Text(
-            _weekLabel(provider, currentWeek),
+            currentWeek == HOLIDAY_WEEK_INDEX
+                ? holidayLabel
+                : _weekLabel(provider, currentWeek),
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -1046,11 +1287,12 @@ Future<void> showCourseDetailsSheet(BuildContext context, Course course) async {
                     backgroundColor: const Color(0xFFD64545),
                     foregroundColor: Colors.white,
                   ),
-                  onPressed: () async {
-                    await context.read<CourseProvider>().removeCourse(course);
-                    if (sheetContext.mounted) {
-                      Navigator.of(sheetContext).pop();
-                    }
+                  onPressed: () {
+                    Navigator.of(sheetContext).pop();
+
+                    Future.delayed(const Duration(milliseconds: 300), () async {
+                      await context.read<CourseProvider>().removeCourse(course);
+                    });
                   },
                   child: Text(provider.t('delete_course')),
                 ),
@@ -1106,11 +1348,12 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
                     backgroundColor: const Color(0xFFD64545),
                     foregroundColor: Colors.white,
                   ),
-                  onPressed: () async {
-                    await context.read<CourseProvider>().deleteEvent(event.id);
-                    if (sheetContext.mounted) {
-                      Navigator.of(sheetContext).pop();
-                    }
+                  onPressed: () {
+                    Navigator.of(sheetContext).pop();
+
+                    Future.delayed(const Duration(milliseconds: 300), () async {
+                      await context.read<CourseProvider>().deleteEvent(event.id);
+                    });
                   },
                   child: Text(provider.t('delete_event')),
                 ),

@@ -1,13 +1,14 @@
 import 'dart:io';
 
+import 'package:app_settings/app_settings.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
-import '../services/auto_mute_service.dart';
 import 'schedule_settings_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -97,10 +98,29 @@ class SettingsPage extends StatelessWidget {
             children: [
               ListTile(
                 leading: const Icon(Icons.notifications_active_outlined),
-                title: Text(provider.t('reminder_time')),
-                subtitle: Text(_reminderLabel(provider)),
+                title: Text(provider.t('course_reminder_time')),
+                subtitle: Text(
+                  _reminderLabel(
+                    provider,
+                    minutes: provider.reminderAdvanceMinutes,
+                  ),
+                ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _pickReminderAdvance(context, provider),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.event_note_outlined),
+                title: Text(provider.t('event_reminder_time')),
+                subtitle: Text(
+                  _reminderLabel(
+                    provider,
+                    minutes: provider.eventReminderAdvanceMinutes,
+                    isEventReminder: true,
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _pickEventReminderAdvance(context, provider),
               ),
               const Divider(height: 1),
               SwitchListTile(
@@ -108,11 +128,77 @@ class SettingsPage extends StatelessWidget {
                 title: Text(provider.t('auto_mute')),
                 subtitle: Text(provider.t('auto_mute_subtitle')),
                 value: provider.autoMuteEnabled,
-                onChanged: (value) => _toggleAutoMute(
-                  context,
-                  provider,
-                  value,
+                onChanged: (value) async {
+                  final success = await provider.toggleAutoMuteWithCheck(value);
+                  if (!context.mounted) {
+                    return;
+                  }
+                  if (!success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          provider.languageCode == 'en'
+                              ? 'Failed to enable. Please grant DND permission.'
+                              : '开启失败，请确保已授予免打扰权限',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.battery_alert_outlined),
+                title: Text(
+                  provider.languageCode == 'en'
+                      ? 'Battery Optimization'
+                      : '电池优化设置',
                 ),
+                subtitle: Text(
+                  provider.languageCode == 'en'
+                      ? 'Allow foreground service to stay alive in background'
+                      : '引导系统允许课表前台服务后台常驻',
+                ),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () async {
+                  await AppSettings.openAppSettings(
+                    type: AppSettingsType.batteryOptimization,
+                  );
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.play_circle_fill_outlined),
+                title: Text(
+                  provider.languageCode == 'en'
+                      ? 'Simulate Class (BG)'
+                      : '模拟上课(后台执行)',
+                ),
+                subtitle: Text(
+                  provider.languageCode == 'en'
+                      ? 'Send test_mute to background service'
+                      : '向后台服务发送 test_mute 指令',
+                ),
+                onTap: () async {
+                  FlutterBackgroundService().invoke('test_mute');
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.stop_circle_outlined),
+                title: Text(
+                  provider.languageCode == 'en'
+                      ? 'Simulate Dismiss (BG)'
+                      : '模拟下课(后台执行)',
+                ),
+                subtitle: Text(
+                  provider.languageCode == 'en'
+                      ? 'Send test_unmute to background service'
+                      : '向后台服务发送 test_unmute 指令',
+                ),
+                onTap: () async {
+                  FlutterBackgroundService().invoke('test_unmute');
+                },
               ),
             ],
           ),
@@ -235,41 +321,44 @@ class SettingsPage extends StatelessWidget {
     }
   }
 
-  Future<void> _toggleAutoMute(
+  Future<void> _pickEventReminderAdvance(
     BuildContext context,
     SettingsProvider provider,
-    bool value,
   ) async {
-    if (!value) {
-      await provider.updateAutoMuteEnabled(false);
-      return;
+    final selectedValue = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final options = <int>[0, 15, 30, 60, 120, 1440];
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final minutes in options)
+                ListTile(
+                  title: Text(
+                    _reminderLabel(
+                      provider,
+                      minutes: minutes,
+                      isEventReminder: true,
+                    ),
+                  ),
+                  trailing: provider.eventReminderAdvanceMinutes == minutes
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop(minutes);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selectedValue != null) {
+      await provider.updateEventReminderAdvanceMinutes(selectedValue);
     }
-
-    if (!Platform.isAndroid) {
-      await provider.updateAutoMuteEnabled(true);
-      return;
-    }
-
-    var hasPermission = await AutoMuteService.instance.hasPermission();
-    if (!hasPermission) {
-      await AutoMuteService.instance.openPermissionSettings();
-      hasPermission = await AutoMuteService.instance.hasPermission();
-    }
-
-    if (!hasPermission) {
-      if (!context.mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(provider.t('auto_mute_permission_required')),
-        ),
-      );
-      return;
-    }
-
-    await provider.updateAutoMuteEnabled(true);
   }
 
   Future<void> _confirmClearAllData(
@@ -320,10 +409,23 @@ class SettingsPage extends StatelessWidget {
   String _reminderLabel(
     SettingsProvider provider, {
     int? minutes,
+    bool isEventReminder = false,
   }) {
-    final value = minutes ?? provider.reminderAdvanceMinutes;
+    final value = minutes ??
+        (isEventReminder
+            ? provider.eventReminderAdvanceMinutes
+            : provider.reminderAdvanceMinutes);
     if (value == 0) {
       return provider.t('no_reminder');
+    }
+    if (value == 60) {
+      return provider.t('one_hour');
+    }
+    if (value == 120) {
+      return provider.t('two_hours');
+    }
+    if (value == 1440) {
+      return provider.t('one_day');
     }
     return '${provider.t('advance_prefix')} $value ${provider.t('minutes_suffix')}';
   }

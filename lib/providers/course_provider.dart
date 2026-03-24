@@ -227,9 +227,14 @@ class CourseProvider extends ChangeNotifier {
   Future<void> _refreshReminders() async {
     final scheduler = _reminderScheduler;
     if (scheduler == null) {
+      print('[CourseProvider] _refreshReminders skipped: scheduler is null');
       return;
     }
 
+    print(
+      '[CourseProvider] _refreshReminders called: '
+      'courses=${_courses.length}, events=${_events.length}',
+    );
     await scheduler();
   }
 }
