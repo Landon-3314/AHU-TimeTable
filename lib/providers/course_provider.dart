@@ -15,15 +15,10 @@ class CourseProvider extends ChangeNotifier {
   final StorageService _storageService;
   final List<Course> _courses;
   final List<Event> _events;
-  int _currentWeek = 1;
-  int _currentWeekday = 1;
-  bool _hasInitializedRealDate = false;
   Future<void> Function()? _reminderScheduler;
 
   UnmodifiableListView<Course> get courses => UnmodifiableListView(_courses);
   UnmodifiableListView<Event> get events => UnmodifiableListView(_events);
-  int get currentWeek => _currentWeek;
-  int get currentWeekday => _currentWeekday;
 
   void bindReminderScheduler(Future<void> Function() callback) {
     _reminderScheduler = callback;
@@ -110,49 +105,6 @@ class CourseProvider extends ChangeNotifier {
     notifyListeners();
     await _persistEvents();
     await _refreshReminders();
-  }
-
-  void initializeRealDate({required int week, required int weekday}) {
-    if (_hasInitializedRealDate) {
-      return;
-    }
-
-    _currentWeek = week.clamp(1, 30).toInt();
-    _currentWeekday = weekday.clamp(1, 7).toInt();
-    _hasInitializedRealDate = true;
-    notifyListeners();
-  }
-
-  void setCurrentWeek(int value) {
-    final safeValue = value.clamp(1, 30).toInt();
-    if (safeValue == _currentWeek) {
-      return;
-    }
-
-    _currentWeek = safeValue;
-    notifyListeners();
-  }
-
-  void setCurrentWeekday(int value) {
-    final safeValue = value.clamp(1, 7).toInt();
-    if (safeValue == _currentWeekday) {
-      return;
-    }
-
-    _currentWeekday = safeValue;
-    notifyListeners();
-  }
-
-  void setCurrentWeekAndWeekday({required int week, required int weekday}) {
-    final safeWeek = week.clamp(1, 30).toInt();
-    final safeWeekday = weekday.clamp(1, 7).toInt();
-    if (safeWeek == _currentWeek && safeWeekday == _currentWeekday) {
-      return;
-    }
-
-    _currentWeek = safeWeek;
-    _currentWeekday = safeWeekday;
-    notifyListeners();
   }
 
   Future<void> _persistCourses() async {

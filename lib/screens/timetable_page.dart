@@ -7,6 +7,7 @@ import '../models/course.dart';
 import '../models/event.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/timetable_view_provider.dart';
 import 'add_course_page.dart';
 import 'import_course_page.dart';
 
@@ -108,7 +109,7 @@ class _TimetablePageState extends State<TimetablePage> {
   void initState() {
     super.initState();
     final settingsProvider = context.read<SettingsProvider>();
-    final courseProvider = context.read<CourseProvider>();
+    final timetableViewProvider = context.read<TimetableViewProvider>();
     final initialWeek = settingsProvider.currentRealWeek
         .clamp(1, settingsProvider.totalWeeks)
         .toInt();
@@ -117,7 +118,7 @@ class _TimetablePageState extends State<TimetablePage> {
         .toInt();
     _selectedWeekForWeekView = initialWeek;
 
-    courseProvider.setCurrentWeekAndWeekday(
+    timetableViewProvider.setCurrentWeekAndWeekday(
       week: initialWeek,
       weekday: initialWeekday,
     );
@@ -149,9 +150,9 @@ class _TimetablePageState extends State<TimetablePage> {
 
   @override
   Widget build(BuildContext context) {
-    final courseProvider = context.watch<CourseProvider>();
+    final timetableViewProvider = context.watch<TimetableViewProvider>();
     final settingsProvider = context.watch<SettingsProvider>();
-    final providerWeek = courseProvider.currentWeek
+    final providerWeek = timetableViewProvider.currentWeek
         .clamp(1, settingsProvider.totalWeeks)
         .toInt();
     final currentWeek = _mode == _TimetableMode.week
@@ -257,7 +258,7 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<void> _jumpToWeek(int selectedWeek) async {
-    final provider = context.read<CourseProvider>();
+    final provider = context.read<TimetableViewProvider>();
     final settingsProvider = context.read<SettingsProvider>();
     if (selectedWeek == HOLIDAY_WEEK_INDEX) {
       setState(() {
@@ -302,7 +303,7 @@ class _TimetablePageState extends State<TimetablePage> {
 
   Future<void> _jumpToToday() async {
     final settingsProvider = context.read<SettingsProvider>();
-    final provider = context.read<CourseProvider>();
+    final provider = context.read<TimetableViewProvider>();
     final targetWeek = settingsProvider.currentRealWeek
         .clamp(1, settingsProvider.totalWeeks)
         .toInt();
@@ -338,7 +339,7 @@ class _TimetablePageState extends State<TimetablePage> {
         .toInt();
     final targetWeekday = ((index % 7) + 1).clamp(1, 7).toInt();
 
-    context.read<CourseProvider>().setCurrentWeekAndWeekday(
+    context.read<TimetableViewProvider>().setCurrentWeekAndWeekday(
       week: targetWeek,
       weekday: targetWeekday,
     );
@@ -358,7 +359,7 @@ class _TimetablePageState extends State<TimetablePage> {
 
   void _handleWeekChangedFromWeekView(int week) {
     final settingsProvider = context.read<SettingsProvider>();
-    final provider = context.read<CourseProvider>();
+    final provider = context.read<TimetableViewProvider>();
     final isHoliday = week == HOLIDAY_WEEK_INDEX;
     final targetWeek = isHoliday
         ? HOLIDAY_WEEK_INDEX
@@ -450,16 +451,17 @@ class _DayViewWidgetState extends State<DayViewWidget> {
   @override
   void initState() {
     super.initState();
-    _currentWeekday = context.read<CourseProvider>().currentWeekday - 1;
+    _currentWeekday = context.read<TimetableViewProvider>().currentWeekday - 1;
   }
 
   @override
   Widget build(BuildContext context) {
     final settingsProvider = context.watch<SettingsProvider>();
     final courseProvider = context.watch<CourseProvider>();
+    final timetableViewProvider = context.watch<TimetableViewProvider>();
     final courses = courseProvider.courses.toList();
     final events = courseProvider.events.toList();
-    final currentWeek = courseProvider.currentWeek
+    final currentWeek = timetableViewProvider.currentWeek
         .clamp(1, settingsProvider.totalWeeks)
         .toInt();
     final dateFormat = DateFormat('MM/dd');
@@ -542,7 +544,7 @@ class _DayViewWidgetState extends State<DayViewWidget> {
                 _currentWeekday = targetWeekday - 1;
               });
               widget.onDayChanged(index);
-              context.read<CourseProvider>().setCurrentWeek(targetWeek);
+              context.read<TimetableViewProvider>().setCurrentWeek(targetWeek);
             },
             itemBuilder: (context, index) {
               final targetWeek = (index ~/ 7) + 1;

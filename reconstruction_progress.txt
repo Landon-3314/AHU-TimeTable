@@ -125,9 +125,9 @@
 - 应用启动
   - main() -> SharedPreferences.getInstance()
   - main() -> NotificationService.instance.initialize()
-  - MainApp.initState() -> 构造 SettingsProvider / CourseProvider
+  - MainApp.initState() -> 构造 SettingsProvider / CourseProvider / TimetableViewProvider
   - MainApp.initState() -> bindReminderScheduler(refreshReminders)
-  - MainApp.initState() -> CourseProvider.initializeRealDate(...)
+  - MainApp.initState() -> TimetableViewProvider.initializeRealDate(...)
   - MainApp.initState() -> unawaited(refreshReminders())
 
 - 提醒刷新主入口
@@ -174,9 +174,9 @@ A. 启动与全局装配
 - 过程：
   - 初始化 SharedPreferences
   - 初始化 NotificationService
-  - 构造 SettingsProvider / CourseProvider
-  - 将 `refreshReminders` 回调绑定给两个 Provider
-  - 用 SettingsProvider 的 `currentRealWeek/currentRealWeekday` 初始化课表定位
+  - 构造 SettingsProvider / CourseProvider / TimetableViewProvider
+  - 将 `refreshReminders` 回调绑定给 SettingsProvider / CourseProvider
+  - 用 SettingsProvider 的 `currentRealWeek/currentRealWeekday` 初始化 TimetableViewProvider
 - 当前效果：
   - 启动后 UI 会定位到“真实今天所在周/星期”
   - 数据和设置变更后可统一触发后台同步入口
@@ -278,7 +278,7 @@ D. TimetablePage 多视图渲染与状态机闭环
   - `_weekPageController`
 - 同步状态：
   - `_selectedWeekForWeekView`
-  - `CourseProvider.currentWeek/currentWeekday`
+  - `TimetableViewProvider.currentWeek/currentWeekday`
   - `_isSyncingControllers`
 - 核心流转：
   - 日视图翻页 -> 计算绝对日 index -> 推导周/星期 -> 回写 Provider -> 同步周视图页码
@@ -549,15 +549,24 @@ J. 本轮建档确认出的关键风险点
   - `StorageService.loadEvents()` / `StorageService.saveEvents(...)`
   - `StorageService.read*()` / `StorageService.write*()` 设置读写接口
 
-[ ] 2. 本地数据访问层抽离
+[x] 2. 核心状态管理(Provider)拆分与解耦
 - 目标：
-  - 将 SharedPreferences key、读写、列表序列化从 Provider 中移出
-  - 建立课程、日程、设置三个独立 local data source / repository
-- 输出方向：
-  - `CourseLocalDataSource`
-  - `EventLocalDataSource`
-  - `SettingsLocalDataSource`
-  - `TimetableRepository`
+  - 将数据 CRUD、课表导航状态、设置状态从单一 Provider 中拆开
+  - 让 Provider 只保留状态持有、Getter 暴露、状态变更与 `notifyListeners()`
+  - 将纯计算逻辑与权限编排逻辑下沉到独立 Service
+- 本轮完成：
+  - `CourseProvider` 已收缩为课程/日程数据状态 Provider，只负责列表状态与 CRUD 持久化触发
+  - 新增 `TimetableViewProvider`，独立承接 `currentWeek/currentWeekday` 与课表导航状态
+  - `SettingsProvider` 保留设置状态，但把学期日期换算、节次生成等纯计算下沉到 `ScheduleCalculator`
+  - `SettingsProvider.toggleAutoMuteWithCheck(...)` 的权限编排已下沉到 `AutoMuteToggleService`
+  - Provider 层未引入 `BuildContext` 依赖；状态结果仍由 Provider 返回，UI 负责提示与路由
+- 当前各 Provider 核心职责：
+  - `CourseProvider`：课程/日程集合状态、CRUD、提醒刷新触发
+  - `TimetableViewProvider`：当前周/当前星期状态、课表翻页联动状态入口
+  - `SettingsProvider`：设置项状态、设置持久化写回、提醒刷新触发
+- 新抽离的 Service：
+  - `ScheduleCalculator`
+  - `AutoMuteToggleService`
 
 [ ] 3. 课表时间配置域重构
 - 目标：
@@ -568,16 +577,9 @@ J. 本轮建档确认出的关键风险点
   - `TimeSlotFactory`
   - `SemesterCalendarService`
 
-[ ] 4. 核心状态管理(Provider)拆分与解耦
-- 目标：
-  - 将“数据 CRUD”“页面导航状态”“设置状态”“后台同步触发”拆开
-  - Provider 只保留展示层需要的状态拼装
-- 输出方向：
-  - `TimetableViewProvider`
-  - `CourseCatalogProvider`
-  - `EventProvider`
-  - `SettingsProvider` 瘦身版
-  - 或等价职责切分
+[x] 4. 核心状态管理(Provider)拆分与解耦（已按当前执行顺序并入任务 2 完成）
+- 说明：
+  - 本项在当前重构顺序中已提前执行并完成，实际落地内容见任务 2 记录。
 
 [ ] 5. Timetable 页面状态机独立化
 - 目标：

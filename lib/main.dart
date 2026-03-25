@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'background_service.dart';
 import 'providers/course_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/timetable_view_provider.dart';
 import 'screens/main_scaffold.dart';
 import 'services/notification_service.dart';
 import 'services/storage_service.dart';
@@ -41,6 +42,7 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> {
   late final SettingsProvider _settingsProvider;
   late final CourseProvider _courseProvider;
+  late final TimetableViewProvider _timetableViewProvider;
 
   @override
   void initState() {
@@ -48,6 +50,7 @@ class _MainAppState extends State<MainApp> {
 
     _settingsProvider = SettingsProvider(storageService: widget.storageService);
     _courseProvider = CourseProvider(storageService: widget.storageService);
+    _timetableViewProvider = TimetableViewProvider();
 
     Future<void> refreshReminders() {
       final courses = _courseProvider.courses.toList();
@@ -77,7 +80,7 @@ class _MainAppState extends State<MainApp> {
     _settingsProvider.bindReminderScheduler(refreshReminders);
     _courseProvider.bindReminderScheduler(refreshReminders);
 
-    _courseProvider.initializeRealDate(
+    _timetableViewProvider.initializeRealDate(
       week: _settingsProvider.currentRealWeek,
       weekday: _settingsProvider.currentRealWeekday,
     );
@@ -92,6 +95,9 @@ class _MainAppState extends State<MainApp> {
           value: _settingsProvider,
         ),
         ChangeNotifierProvider<CourseProvider>.value(value: _courseProvider),
+        ChangeNotifierProvider<TimetableViewProvider>.value(
+          value: _timetableViewProvider,
+        ),
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settingsProvider, _) {

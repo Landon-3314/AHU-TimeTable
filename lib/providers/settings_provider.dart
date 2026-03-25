@@ -1,53 +1,65 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../app_localizations.dart';
 import '../models/clock_time.dart';
 import '../models/time_slot.dart';
-import '../services/auto_mute_service.dart';
+import '../services/auto_mute_toggle_service.dart';
+import '../services/schedule_calculator.dart';
 import '../services/storage_service.dart';
 
 class SettingsProvider extends ChangeNotifier {
-  SettingsProvider({required StorageService storageService})
-    : _storageService = storageService,
-      _pixelsPerMinute = storageService.readPixelsPerMinute(
-        fallback: _defaultPixelsPerMinute,
-      ),
-      _classDuration = storageService.readClassDuration(
-        fallback: _defaultClassDuration,
-      ),
-      _shortBreak = storageService.readShortBreak(fallback: _defaultShortBreak),
-      _bigBreak = storageService.readBigBreak(fallback: _defaultBigBreak),
-      _morningStartTime = storageService.readMorningStartTime(
-        fallback: _defaultMorningStartTime,
-      ),
-      _morningClasses = storageService.readMorningClasses(
-        fallback: _defaultMorningClasses,
-      ),
-      _afternoonStartTime = storageService.readAfternoonStartTime(
-        fallback: _defaultAfternoonStartTime,
-      ),
-      _afternoonClasses = storageService.readAfternoonClasses(
-        fallback: _defaultAfternoonClasses,
-      ),
-      _eveningStartTime = storageService.readEveningStartTime(
-        fallback: _defaultEveningStartTime,
-      ),
-      _eveningClasses = storageService.readEveningClasses(
-        fallback: _defaultEveningClasses,
-      ),
-      _semesterStartDate = _loadSemesterStartDate(storageService),
-      _totalWeeks = storageService.readTotalWeeks(fallback: _defaultTotalWeeks),
-      _reminderAdvanceMinutes = storageService.readReminderAdvanceMinutes(
-        fallback: _defaultReminderAdvanceMinutes,
-      ),
-      _eventReminderAdvanceMinutes = storageService
-          .readEventReminderAdvanceMinutes(
-            fallback: _defaultEventReminderAdvanceMinutes,
-          ),
-      _languageCode = storageService.readLanguageCode(fallback: 'zh'),
-      _autoMuteEnabled = storageService.readAutoMuteEnabled(fallback: false);
+  SettingsProvider({
+    required StorageService storageService,
+    ScheduleCalculator? scheduleCalculator,
+    AutoMuteToggleService? autoMuteToggleService,
+  }) : _storageService = storageService,
+       _scheduleCalculator = scheduleCalculator ?? const ScheduleCalculator(),
+       _autoMuteToggleService =
+           autoMuteToggleService ?? AutoMuteToggleService(),
+       _pixelsPerMinute = storageService.readPixelsPerMinute(
+         fallback: _defaultPixelsPerMinute,
+       ),
+       _classDuration = storageService.readClassDuration(
+         fallback: _defaultClassDuration,
+       ),
+       _shortBreak = storageService.readShortBreak(
+         fallback: _defaultShortBreak,
+       ),
+       _bigBreak = storageService.readBigBreak(fallback: _defaultBigBreak),
+       _morningStartTime = storageService.readMorningStartTime(
+         fallback: _defaultMorningStartTime,
+       ),
+       _morningClasses = storageService.readMorningClasses(
+         fallback: _defaultMorningClasses,
+       ),
+       _afternoonStartTime = storageService.readAfternoonStartTime(
+         fallback: _defaultAfternoonStartTime,
+       ),
+       _afternoonClasses = storageService.readAfternoonClasses(
+         fallback: _defaultAfternoonClasses,
+       ),
+       _eveningStartTime = storageService.readEveningStartTime(
+         fallback: _defaultEveningStartTime,
+       ),
+       _eveningClasses = storageService.readEveningClasses(
+         fallback: _defaultEveningClasses,
+       ),
+       _semesterStartDate = _restoreSemesterStartDate(
+         storageService: storageService,
+         scheduleCalculator: scheduleCalculator ?? const ScheduleCalculator(),
+       ),
+       _totalWeeks = storageService.readTotalWeeks(
+         fallback: _defaultTotalWeeks,
+       ),
+       _reminderAdvanceMinutes = storageService.readReminderAdvanceMinutes(
+         fallback: _defaultReminderAdvanceMinutes,
+       ),
+       _eventReminderAdvanceMinutes = storageService
+           .readEventReminderAdvanceMinutes(
+             fallback: _defaultEventReminderAdvanceMinutes,
+           ),
+       _languageCode = storageService.readLanguageCode(fallback: 'zh'),
+       _autoMuteEnabled = storageService.readAutoMuteEnabled(fallback: false);
 
   static const double _defaultPixelsPerMinute = 1.2;
   static const int _defaultClassDuration = 45;
@@ -64,6 +76,8 @@ class SettingsProvider extends ChangeNotifier {
   static const int _defaultEventReminderAdvanceMinutes = 0;
 
   final StorageService _storageService;
+  final ScheduleCalculator _scheduleCalculator;
+  final AutoMuteToggleService _autoMuteToggleService;
 
   double _pixelsPerMinute;
   int _classDuration;
@@ -102,23 +116,19 @@ class SettingsProvider extends ChangeNotifier {
   List<TimeSlot> get timeSlots => generateTimeSlots();
   String t(String key) => AppStrings.get(key, _languageCode);
 
-  int get currentRealWeek {
-    final today = DateUtils.dateOnly(DateTime.now());
-    final diffDays = today.difference(_semesterStartDate).inDays;
-    final week = (diffDays ~/ 7) + 1;
-    return week.clamp(1, _totalWeeks).toInt();
-  }
+  int get currentRealWeek => _scheduleCalculator.computeCurrentWeek(
+    semesterStartDate: _semesterStartDate,
+    totalWeeks: _totalWeeks,
+  );
 
-  int get currentRealWeekday {
-    final weekday = DateTime.now().weekday;
-    return weekday.clamp(1, 7).toInt();
-  }
+  int get currentRealWeekday => _scheduleCalculator.computeCurrentWeekday();
 
   DateTime getDateFor(int week, int weekday) {
-    final safeWeek = week.clamp(1, _totalWeeks).toInt();
-    final safeWeekday = weekday.clamp(1, 7).toInt();
-    return _semesterStartDate.add(
-      Duration(days: (safeWeek - 1) * 7 + (safeWeekday - 1)),
+    return _scheduleCalculator.getDateFor(
+      semesterStartDate: _semesterStartDate,
+      totalWeeks: _totalWeeks,
+      week: week,
+      weekday: weekday,
     );
   }
 
@@ -137,35 +147,17 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   List<TimeSlot> generateTimeSlots() {
-    final List<TimeSlot> slots = [];
-    int periodNumber = 1;
-
-    periodNumber = _appendSessionSlots(
-      slots: slots,
-      startTime: ClockTime.fromString(_morningStartTime),
-      count: _morningClasses,
-      periodNumber: periodNumber,
-      label: 'Morning',
-      hasBigBreak: true,
+    return _scheduleCalculator.generateTimeSlots(
+      classDuration: _classDuration,
+      shortBreak: _shortBreak,
+      bigBreak: _bigBreak,
+      morningStartTime: ClockTime.fromString(_morningStartTime),
+      morningClasses: _morningClasses,
+      afternoonStartTime: ClockTime.fromString(_afternoonStartTime),
+      afternoonClasses: _afternoonClasses,
+      eveningStartTime: ClockTime.fromString(_eveningStartTime),
+      eveningClasses: _eveningClasses,
     );
-    periodNumber = _appendSessionSlots(
-      slots: slots,
-      startTime: ClockTime.fromString(_afternoonStartTime),
-      count: _afternoonClasses,
-      periodNumber: periodNumber,
-      label: 'Afternoon',
-      hasBigBreak: true,
-    );
-    _appendSessionSlots(
-      slots: slots,
-      startTime: ClockTime.fromString(_eveningStartTime),
-      count: _eveningClasses,
-      periodNumber: periodNumber,
-      label: 'Evening',
-      hasBigBreak: false,
-    );
-
-    return slots;
   }
 
   Future<void> updatePixelsPerMinute(double value) async {
@@ -272,8 +264,8 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> updateSemesterStartDate(DateTime value) async {
-    final aligned = _alignToMonday(value);
-    if (DateUtils.isSameDay(aligned, _semesterStartDate)) {
+    final aligned = _scheduleCalculator.alignToMonday(value);
+    if (_isSameDate(aligned, _semesterStartDate)) {
       return;
     }
 
@@ -323,8 +315,6 @@ class SettingsProvider extends ChangeNotifier {
     bool value, {
     bool fromUserAction = false,
   }) async {
-    // Guardrail: only explicit user operations from settings UI
-    // are allowed to mutate the persisted auto-mute preference.
     if (!fromUserAction) {
       return;
     }
@@ -346,68 +336,15 @@ class SettingsProvider extends ChangeNotifier {
     }
 
     try {
-      if (!Platform.isAndroid) {
-        await updateAutoMuteEnabled(true, fromUserAction: true);
-        return true;
-      }
-
-      var hasPermission = await AutoMuteService.instance.hasPermission();
-      if (!hasPermission) {
-        await AutoMuteService.instance.openPermissionSettings();
-        hasPermission = await AutoMuteService.instance.hasPermission();
-      }
-
-      if (!hasPermission) {
-        await updateAutoMuteEnabled(false, fromUserAction: true);
-        return false;
-      }
-
-      await updateAutoMuteEnabled(true, fromUserAction: true);
-      return true;
+      final canEnable = await _autoMuteToggleService.ensureCanEnableAutoMute();
+      await updateAutoMuteEnabled(canEnable, fromUserAction: true);
+      return canEnable;
     } catch (error, stackTrace) {
       print('[SettingsProvider] toggleAutoMuteWithCheck error: $error');
       print(stackTrace);
       await updateAutoMuteEnabled(false, fromUserAction: true);
       return false;
     }
-  }
-
-  int _appendSessionSlots({
-    required List<TimeSlot> slots,
-    required ClockTime startTime,
-    required int count,
-    required int periodNumber,
-    required String label,
-    required bool hasBigBreak,
-  }) {
-    int currentStartMinutes = startTime.toMinutes();
-
-    for (int index = 1; index <= count; index++) {
-      final int classStartMinutes = currentStartMinutes;
-      final int classEndMinutes = classStartMinutes + _classDuration;
-
-      slots.add(
-        TimeSlot(
-          periodNumber: periodNumber,
-          startTime: ClockTime.fromMinutes(classStartMinutes),
-          endTime: ClockTime.fromMinutes(classEndMinutes),
-          label: label,
-        ),
-      );
-
-      periodNumber += 1;
-      currentStartMinutes = classEndMinutes;
-
-      if (index == count) {
-        continue;
-      }
-
-      currentStartMinutes += hasBigBreak && index == 2
-          ? _bigBreak
-          : _shortBreak;
-    }
-
-    return periodNumber;
   }
 
   Future<void> _updateTime({
@@ -447,20 +384,20 @@ class SettingsProvider extends ChangeNotifier {
     return '$hour:$minute';
   }
 
-  static DateTime _loadSemesterStartDate(StorageService storageService) {
-    final rawValue = storageService.readSemesterStartDate();
-    if (rawValue == null) {
-      return _defaultSemesterStartDate();
+  bool _isSameDate(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
+  }
+
+  static DateTime _restoreSemesterStartDate({
+    required StorageService storageService,
+    required ScheduleCalculator scheduleCalculator,
+  }) {
+    final storedValue = storageService.readSemesterStartDate();
+    if (storedValue == null) {
+      return scheduleCalculator.defaultSemesterStartDate();
     }
-    return _alignToMonday(rawValue);
-  }
-
-  static DateTime _defaultSemesterStartDate() {
-    return _alignToMonday(DateTime.now());
-  }
-
-  static DateTime _alignToMonday(DateTime date) {
-    final normalized = DateUtils.dateOnly(date);
-    return normalized.subtract(Duration(days: normalized.weekday - 1));
+    return scheduleCalculator.alignToMonday(storedValue);
   }
 }
