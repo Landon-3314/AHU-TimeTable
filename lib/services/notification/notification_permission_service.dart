@@ -63,7 +63,11 @@ class NotificationPermissionService {
           IOSFlutterLocalNotificationsPlugin
         >();
     final notificationsGranted =
-        await iosPlugin?.requestPermissions(alert: true, badge: true, sound: true) ??
+        await iosPlugin?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        ) ??
         true;
 
     return NotificationPermissionStatus(

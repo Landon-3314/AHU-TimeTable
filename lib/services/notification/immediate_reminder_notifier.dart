@@ -71,7 +71,8 @@ class ImmediateReminderNotifier {
     android: AndroidNotificationDetails(
       NotificationChannelRegistrar.reminderChannelId,
       NotificationChannelRegistrar.reminderChannelName,
-      channelDescription: NotificationChannelRegistrar.reminderChannelDescription,
+      channelDescription:
+          NotificationChannelRegistrar.reminderChannelDescription,
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,

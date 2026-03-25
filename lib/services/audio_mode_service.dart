@@ -1,4 +1,5 @@
 import 'package:sound_mode/permission_handler.dart';
+import 'package:flutter/foundation.dart';
 import 'package:sound_mode/sound_mode.dart';
 import 'package:sound_mode/utils/ringer_mode_statuses.dart';
 
@@ -10,7 +11,28 @@ class AudioModeService {
   }
 
   Future<void> muteDevice() async {
-    await _apply(DeviceAudioMode.vibrate);
+    await executeMute();
+  }
+
+  Future<void> muteDeviceSafely() async {
+    await executeMute();
+  }
+
+  Future<void> executeMute() async {
+    try {
+      final isGranted = await _isPermissionGranted();
+      if (!isGranted) {
+        return;
+      }
+
+      final currentMode = await SoundMode.ringerModeStatus;
+      if (currentMode != RingerModeStatus.vibrate &&
+          currentMode != RingerModeStatus.silent) {
+        await SoundMode.setSoundMode(RingerModeStatus.vibrate);
+      }
+    } catch (error) {
+      debugPrint('Mute execution failed: $error');
+    }
   }
 
   Future<void> restoreDeviceAudio() async {
@@ -26,5 +48,16 @@ class AudioModeService {
         ? RingerModeStatus.vibrate
         : RingerModeStatus.normal;
     await SoundMode.setSoundMode(target);
+  }
+
+  Future<bool> _isPermissionGranted() async {
+    try {
+      final dynamic soundModeDynamic = SoundMode;
+      final granted = await soundModeDynamic.isPermissionGranted;
+      if (granted is bool) {
+        return granted;
+      }
+    } catch (_) {}
+    return await canControlAudioMode();
   }
 }

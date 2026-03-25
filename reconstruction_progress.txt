@@ -799,3 +799,17 @@ J. 本轮建档确认出的关键风险点
 - 当前主链路已基本实现“UI -> Provider/Controller -> Service -> Storage/System Plugin”的单向依赖，UI 层不再直接承担复杂解析、后台调度或导航页码计算。
 - 系统级插件调用已被收口到 Service；命名路由、主题与视觉常量也已集中管理，主干页面的可维护性与可替换性已明显提升。
 - 仍待后续专项治理的尾项主要集中在：表单状态机继续下沉、设置页动作控制拆分、国际化资源治理与最小回归测试补强。
+
+[Bugfix Patch 1 applied]
+[Developer Diagnostics Patch applied]
+[Deep Logging And Background Recovery Patch applied]
+[Bugfix Patch 2 applied]
+[Bugfix Patch 4 applied]
+[Bugfix Patch 5 courseStructure adaptation applied]
+[Bugfix Patch 7 IPC lifecycle recovery applied]
+[Bugfix Patch 8 isolate entrypoint hardening applied]
+[Bugfix Patch 10 DND permission probe and safe mute path applied]
+[Final Cleanup Patch applied: Ready for Production]
+[x] 终极重构闭环 (Production-Ready Polish)：完成了全局日志静音、通知汉化、静音执行层精简与诊断页降级。项目当前处于 Release 就绪状态。
+
+[Bugfix Patch 11 navigation state page-sync symmetry applied]

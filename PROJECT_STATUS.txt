@@ -169,3 +169,121 @@ Quick Resume Notes
 - 设置页调试按钮已移除
 - 前台通知空文案覆盖问题已修复
 - 默认 mock 课程注入已移除（首装空数据）
+
+==================================================
+2026-03-25 重构闭环与 Bug 修复归档（同步 reconstruction_progress.txt）
+==================================================
+
+一、重构主线结果（Task Pipeline 状态）
+- 已完成：
+  - [x] 1. 基础模型层与持久化重构（StorageService 落地，模型纯净化）
+  - [x] 2. Provider 拆分与解耦（状态持有与业务计算分离）
+  - [x] 3. 后台服务与系统通道封装（AppServices/BackgroundServiceCoordinator/BackgroundRuntimeService）
+  - [x] 4. UI 纯净化与组件拆分（Timetable 组件树落地）
+  - [x] 5. 导航状态机解耦（TimetableNavigationController 单向流）
+  - [x] 6. 教务解析引擎剥离（ScheduleHtmlExtractor + ScheduleParserService）
+  - [x] 7. 路由/主题/常量统一（core/app_routes.dart + app_theme.dart + app_constants.dart）
+  - [x] 8. 通知子系统拆分（Permission/Channel/Notifier）
+  - [x] 9. Event 提醒链路补全（后台并行扫描 + 去重）
+- 待后续专项治理（非阻塞发布）：
+  - [ ] 10. 表单层纯净化
+  - [ ] 11. 设置页动作控制器拆分
+  - [ ] 12. 国际化资源治理
+  - [ ] 13. 自动化回归测试补齐
+
+二、关键 Bug 闭环与具体修复代码逻辑
+1) 教务导入“识别为空”
+- 根因：教务页面常位于 iframe，且旧链路把 JS 诊断字符串直接透传给 UI。
+- 修复：
+  - `lib/services/schedule_html_extractor.dart`
+    - JS 递归遍历 `window.frames`，收集 `table.Wjkc/table.courseTable/.tdHtml` 候选片段。
+    - 跨域/抓取异常统一返回 `JS_ERROR:` 前缀字符串。
+  - `lib/screens/import_course_page.dart`
+    - `runJavaScriptReturningResult` 结果经 `_normalizeJavaScriptResult(...)` 标准化后再处理。
+    - `JS_ERROR:` 分支统一抛 `ScheduleParseException('教务系统连接失败，请检查网络或重新登录后重试。')`，
+      UI 仅以 SnackBar 友好提示，不再展示原始 JS 报错细节。
+
+2) Event 后台提醒未触发
+- 根因：旧方案使用“绝对时刻命中”，系统调度抖动会错过分钟边界。
+- 修复：
+  - `lib/services/background_runtime_service.dart`
+    - 在 `_runEventReminderTick(...)` 中改为“时间窗口 + 去重”策略：
+      - 窗口命中：`now >= reminderTime && now < eventEndTime`
+      - 去重：`_notifiedEventIds` 按事件 id 去重
+      - 过期清理：`_pruneExpiredEventNotifications(...)` 动态移除已失效 id
+    - 命中后调用 `NotificationService.showEventReminder(...)`，并加入去重集合。
+
+3) 后台 IPC 断联 / Isolate 启动失败
+- 根因：后台入口与监听时序不稳，异常缺少统一兜底。
+- 修复：
+  - `lib/services/background_service_coordinator.dart`
+    - 顶层入口 `@pragma('vm:entry-point') onServiceStart(ServiceInstance service)`。
+    - `runZonedGuarded(...)` 包裹隔离区主流程，保留 `debugPrint('Background Error: $error')` 安全网。
+    - `AndroidConfiguration.onStart` 明确绑定顶层函数。
+  - `lib/services/background_runtime_service.dart`
+    - `start(...)` 最先注册 `test_mute/test_unmute/sync_now/stop_service` 监听，再执行后续初始化。
+
+4) DND 权限通过但静音未生效
+- 根因：静音执行层缺少紧凑的权限-模式-设置闭环。
+- 修复：
+  - `lib/services/audio_mode_service.dart`
+    - 新增 `executeMute()`：
+      - 权限检查（优先动态兼容 `SoundMode.isPermissionGranted`，回退 `PermissionHandler.permissionsGranted`）
+      - 仅在当前不是 `vibrate/silent` 时才调用 `SoundMode.setSoundMode(RingerModeStatus.vibrate)`
+      - 异常仅 `debugPrint('Mute execution failed: ...')`，避免崩溃。
+    - `muteDevice()/muteDeviceSafely()` 统一委托到 `executeMute()`。
+
+5) 生产收尾（日志与诊断探针清理）
+- `background_runtime_service.dart` / `audio_mode_service.dart` / `import_course_page.dart`
+  - 删除调试期 Emoji/`====` 打印与原始 HTML 打印，保留必要异常捕获。
+- `developer_diagnostics_page.dart`
+  - 保留页面与入口机制。
+  - 移除“强制唤醒等待”与“读取后台崩溃日志”临时能力，恢复为纯指令发送器。
+- 通知汉化统一：
+  - 常驻通知标题：`课程表守护服务`
+  - 常驻通知内容：`正在后台保障自动静音与课前提醒`
+  - 配置与运行时刷新文案已在 coordinator/runtime 两侧对齐。
+
+三、reconstruction_progress.txt 同步记录（关键条目）
+- 已存在并持续更新的补丁记录：
+  - `[Bugfix Patch 1 applied]`
+  - `[Developer Diagnostics Patch applied]`
+  - `[Deep Logging And Background Recovery Patch applied]`
+  - `[Bugfix Patch 2 applied]`
+  - `[Bugfix Patch 4 applied]`
+  - `[Bugfix Patch 5 courseStructure adaptation applied]`
+  - `[Bugfix Patch 7 IPC lifecycle recovery applied]`
+  - `[Bugfix Patch 8 isolate entrypoint hardening applied]`
+  - `[Bugfix Patch 10 DND permission probe and safe mute path applied]`
+  - `[Final Cleanup Patch applied: Ready for Production]`
+  - `[x] 终极重构闭环 (Production-Ready Polish)：完成了全局日志静音、通知汉化、静音执行层精简与诊断页降级。项目当前处于 Release 就绪状态。`
+
+四、当前发布结论
+- 项目核心链路（导入解析、后台 IPC、自动静音、课程/Event 提醒）均已完成真机闭环验证。
+- 代码分层与职责边界已显著收敛，当前状态可进入 Release 发布流程。
+
+五、增量修复：Bugfix Patch 11（导航状态机页码同步与跳转对称性）
+- 问题 1：日视图通过周选择器切到“假期中”时，UI 显示假期但底层页码可能回退到第一周（控制器挂载时序导致未命中目标页）。
+- 问题 2：周视图“普通周 -> 假期”与“假期 -> 普通周”跳转表现不对称，一侧动画、一侧闪切。
+
+修复文件
+- `lib/services/timetable_navigation_controller.dart`
+
+核心修复逻辑
+1) 假期跳转挂载后对齐
+- `jumpToWeek(holidayWeekIndex)` 中先更新状态并 `notifyListeners()`，再调用 `_scheduleControllerAlignment()`。
+- `_scheduleControllerAlignment()` 在下一帧触发 `_alignControllersToCurrentState()`，确保 `PageController` 已挂载时也能正确对齐到假期页索引。
+
+2) 页码跳转策略统一（对称）
+- 新增 `_moveToPageSmart(PageController, targetPage, ...)`：
+  - 计算 `delta = (target - current).abs()`
+  - `delta == 1` 使用 `animateToPage`
+  - `delta > 1` 使用 `jumpToPage`
+- `jumpToWeek`、`jumpToToday`、`jumpToDay`、日/周联动同步与内部对齐均统一走该策略，消除双向不一致。
+
+验证结果
+- 本地静态分析通过：
+  - `dart analyze lib/services/timetable_navigation_controller.dart`
+  - `No issues found!`
+- 已同步进度追踪：
+  - `reconstruction_progress.txt` 追加 `[Bugfix Patch 11 navigation state page-sync symmetry applied]`

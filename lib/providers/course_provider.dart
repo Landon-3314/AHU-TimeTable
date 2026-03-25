@@ -1,6 +1,8 @@
 import 'dart:collection';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 import '../models/course.dart';
 import '../models/event.dart';
@@ -28,6 +30,10 @@ class CourseProvider extends ChangeNotifier {
     _courses.add(course);
     notifyListeners();
     await _persistCourses();
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'addCourse',
+    );
     await _refreshReminders();
   }
 
@@ -39,6 +45,10 @@ class CourseProvider extends ChangeNotifier {
     _courses.addAll(courses);
     notifyListeners();
     await _persistCourses();
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'addCourses',
+    );
     await _refreshReminders();
   }
 
@@ -46,6 +56,10 @@ class CourseProvider extends ChangeNotifier {
     _courses.removeWhere((item) => item.id == course.id);
     notifyListeners();
     await _persistCourses();
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'removeCourse',
+    );
     await _refreshReminders();
   }
 
@@ -63,6 +77,10 @@ class CourseProvider extends ChangeNotifier {
     _courses[index] = updatedCourse;
     notifyListeners();
     await _persistCourses();
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'updateCourse',
+    );
     await _refreshReminders();
   }
 
@@ -70,6 +88,10 @@ class CourseProvider extends ChangeNotifier {
     _courses.clear();
     notifyListeners();
     await _storageService.clearCourses();
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'clearAllCourses',
+    );
     await _refreshReminders();
   }
 
@@ -78,6 +100,10 @@ class CourseProvider extends ChangeNotifier {
     _events.clear();
     notifyListeners();
     await _storageService.clearAllTimetableData();
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'clearAllData',
+    );
     await _refreshReminders();
   }
 
@@ -85,6 +111,10 @@ class CourseProvider extends ChangeNotifier {
     _events.add(event);
     notifyListeners();
     await _persistEvents();
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'addEvent',
+    );
     await _refreshReminders();
   }
 
@@ -92,6 +122,10 @@ class CourseProvider extends ChangeNotifier {
     _events.removeWhere((event) => event.id == eventId);
     notifyListeners();
     await _persistEvents();
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'deleteEvent',
+    );
     await _refreshReminders();
   }
 
@@ -104,6 +138,10 @@ class CourseProvider extends ChangeNotifier {
     _events[index] = updatedEvent;
     notifyListeners();
     await _persistEvents();
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'updateEvent',
+    );
     await _refreshReminders();
   }
 
@@ -127,5 +165,31 @@ class CourseProvider extends ChangeNotifier {
       'courses=${_courses.length}, events=${_events.length}',
     );
     await scheduler();
+  }
+
+  Future<void> _wakeBackgroundServiceIfNeeded({
+    required bool shouldStart,
+    required String reason,
+  }) async {
+    if (!shouldStart || !Platform.isAndroid) {
+      return;
+    }
+
+    final service = FlutterBackgroundService();
+    print('[CourseProvider] startService requested from $reason');
+    await service.startService();
+  }
+
+  bool _shouldKeepBackgroundServiceAlive() {
+    final autoMuteEnabled = _storageService.readAutoMuteEnabled(
+      fallback: false,
+    );
+    final reminderEnabled =
+        _storageService.readReminderAdvanceMinutes(fallback: 0) > 0 &&
+        _courses.isNotEmpty;
+    final eventReminderEnabled =
+        _storageService.readEventReminderAdvanceMinutes(fallback: 0) > 0 &&
+        _events.any((event) => event.enableAlarm);
+    return autoMuteEnabled || reminderEnabled || eventReminderEnabled;
   }
 }

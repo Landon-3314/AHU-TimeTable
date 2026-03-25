@@ -99,8 +99,18 @@ class TimetableNavigationController extends ChangeNotifier {
     if (_mode == nextMode) {
       return;
     }
+    if (nextMode == TimetableMode.day &&
+        _selectedWeekForWeekView == holidayWeekIndex) {
+      _selectedWeekForWeekView = _currentWeek;
+    }
     _mode = nextMode;
     notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_mode != nextMode) {
+        return;
+      }
+      _alignControllersToCurrentState();
+    });
   }
 
   Future<void> jumpToWeek(int selectedWeek) async {
@@ -108,14 +118,7 @@ class TimetableNavigationController extends ChangeNotifier {
       _mode = TimetableMode.week;
       _selectedWeekForWeekView = holidayWeekIndex;
       notifyListeners();
-
-      if (_weekPageController.hasClients) {
-        await _weekPageController.animateToPage(
-          holidayPagePageIndex,
-          duration: AppDurations.pageJump,
-          curve: Curves.easeInOut,
-        );
-      }
+      _scheduleControllerAlignment();
       return;
     }
 
@@ -129,15 +132,11 @@ class TimetableNavigationController extends ChangeNotifier {
 
     _isSyncingControllers = true;
     try {
-      if (_weekPageController.hasClients) {
-        _weekPageController.jumpToPage(targetWeek - 1);
-      }
-
-      if (_dayPageController.hasClients) {
-        _dayPageController.jumpToPage(
-          (targetWeek - 1) * 7 + (targetWeekday - 1),
-        );
-      }
+      await _moveToPageSmart(_weekPageController, targetWeek - 1);
+      await _moveToPageSmart(
+        _dayPageController,
+        (targetWeek - 1) * 7 + (targetWeekday - 1),
+      );
     } finally {
       _isSyncingControllers = false;
     }
@@ -157,15 +156,11 @@ class TimetableNavigationController extends ChangeNotifier {
 
     _isSyncingControllers = true;
     try {
-      if (_weekPageController.hasClients) {
-        _weekPageController.jumpToPage(targetWeek - 1);
-      }
-
-      if (_dayPageController.hasClients) {
-        _dayPageController.jumpToPage(
-          (targetWeek - 1) * 7 + (targetWeekday - 1),
-        );
-      }
+      await _moveToPageSmart(_weekPageController, targetWeek - 1);
+      await _moveToPageSmart(
+        _dayPageController,
+        (targetWeek - 1) * 7 + (targetWeekday - 1),
+      );
     } finally {
       _isSyncingControllers = false;
     }
@@ -180,10 +175,9 @@ class TimetableNavigationController extends ChangeNotifier {
     notifyListeners();
 
     if (_dayPageController.hasClients) {
-      await _dayPageController.animateToPage(
+      await _moveToPageSmart(
+        _dayPageController,
         (targetWeek - 1) * 7 + (targetWeekday - 1),
-        duration: AppDurations.pageJump,
-        curve: Curves.easeInOut,
       );
     }
   }
@@ -205,7 +199,7 @@ class TimetableNavigationController extends ChangeNotifier {
     if (_weekPageController.hasClients &&
         _weekPageController.page?.round() != targetWeek - 1) {
       _isSyncingControllers = true;
-      _weekPageController.jumpToPage(targetWeek - 1);
+      _moveToPageSmart(_weekPageController, targetWeek - 1);
       _isSyncingControllers = false;
     }
   }
@@ -232,7 +226,7 @@ class TimetableNavigationController extends ChangeNotifier {
       final targetDayIndex = (targetWeek - 1) * 7 + (currentWeekday - 1);
       if (_dayPageController.page?.round() != targetDayIndex) {
         _isSyncingControllers = true;
-        _dayPageController.jumpToPage(targetDayIndex);
+        _moveToPageSmart(_dayPageController, targetDayIndex);
         _isSyncingControllers = false;
       }
     }
@@ -258,27 +252,23 @@ class TimetableNavigationController extends ChangeNotifier {
     _isSyncingControllers = true;
     try {
       if (_weekPageController.hasClients) {
-        if (animateWeek) {
-          _weekPageController.animateToPage(
-            safeWeek - 1,
-            duration: AppDurations.pageSync,
-            curve: Curves.easeOutCubic,
-          );
-        } else {
-          _weekPageController.jumpToPage(safeWeek - 1);
-        }
+        _moveToPageSmart(
+          _weekPageController,
+          safeWeek - 1,
+          forceJump: !animateWeek,
+          animationDuration: AppDurations.pageSync,
+          animationCurve: Curves.easeOutCubic,
+        );
       }
 
       if (_dayPageController.hasClients) {
-        if (animateDay) {
-          _dayPageController.animateToPage(
-            dayIndex,
-            duration: AppDurations.pageSync,
-            curve: Curves.easeOutCubic,
-          );
-        } else {
-          _dayPageController.jumpToPage(dayIndex);
-        }
+        _moveToPageSmart(
+          _dayPageController,
+          dayIndex,
+          forceJump: !animateDay,
+          animationDuration: AppDurations.pageSync,
+          animationCurve: Curves.easeOutCubic,
+        );
       }
     } finally {
       _isSyncingControllers = false;
@@ -300,5 +290,56 @@ class TimetableNavigationController extends ChangeNotifier {
       week: safeWeek,
       weekday: safeWeekday,
     );
+  }
+
+  void _alignControllersToCurrentState() {
+    if (_selectedWeekForWeekView == holidayWeekIndex) {
+      _moveToPageSmart(_weekPageController, holidayPagePageIndex);
+      return;
+    }
+
+    _syncToWeekAndWeekday(
+      week: _currentWeek,
+      weekday: _currentWeekday,
+      animateWeek: false,
+      animateDay: false,
+    );
+  }
+
+  void _scheduleControllerAlignment() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_weekPageController.hasClients && !_dayPageController.hasClients) {
+        return;
+      }
+      _alignControllersToCurrentState();
+    });
+  }
+
+  Future<void> _moveToPageSmart(
+    PageController controller,
+    int targetPage, {
+    bool forceJump = false,
+    Duration animationDuration = AppDurations.pageJump,
+    Curve animationCurve = Curves.easeInOut,
+  }) async {
+    if (!controller.hasClients) {
+      return;
+    }
+
+    final currentPage = (controller.page ?? controller.initialPage.toDouble())
+        .round();
+    final delta = (targetPage - currentPage).abs();
+    final shouldAnimate = !forceJump && delta == 1;
+
+    if (shouldAnimate) {
+      await controller.animateToPage(
+        targetPage,
+        duration: animationDuration,
+        curve: animationCurve,
+      );
+      return;
+    }
+
+    controller.jumpToPage(targetPage);
   }
 }

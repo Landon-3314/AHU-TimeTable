@@ -73,6 +73,9 @@ class _TimetablePageState extends State<TimetablePage> {
         final navigationState = _navigationController.state;
         final currentDayPage =
             screenData.dayPages[navigationState.currentDayPageIndex];
+        final currentWeekChips =
+            screenData.dayChipsByWeek[currentDayPage.week] ??
+            const <TimetableDayChipData>[];
         return Scaffold(
           appBar: AppBar(
             centerTitle: false,
@@ -149,42 +152,48 @@ class _TimetablePageState extends State<TimetablePage> {
           body: AnimatedSwitcher(
             duration: AppDurations.switcher,
             child: navigationState.mode == TimetableMode.day
-                ? PageView.builder(
+                ? Column(
                     key: const ValueKey('day-view'),
-                    controller: _navigationController.dayPageController,
-                    itemCount: screenData.dayPages.length,
-                    onPageChanged: _navigationController.handleDayPageChanged,
-                    itemBuilder: (context, index) {
-                      final pageData = screenData.dayPages[index];
-                      final pageWeekChips =
-                          screenData.dayChipsByWeek[pageData.week] ??
-                          const <TimetableDayChipData>[];
-                      return DayAgendaView(
-                        pageData: pageData,
-                        chips: pageWeekChips,
-                        selectedWeekday:
-                            pageData.week == navigationState.currentWeek
-                            ? currentDayPage.weekday
-                            : pageData.weekday,
+                    children: [
+                      DayWeekHeader(
+                        summaryLabel: currentDayPage.summaryLabel,
+                        chips: currentWeekChips,
+                        selectedWeekday: navigationState.currentWeekday,
                         onDaySelected: (weekday) {
                           _navigationController.jumpToDay(
-                            week: pageData.week,
+                            week: navigationState.currentWeek,
                             weekday: weekday,
                           );
                         },
-                        onCourseTap: (course) {
-                          showCourseDetailsSheet(context, course);
-                        },
-                        onEventTap: (event) {
-                          showEventDetailsSheet(context, event);
-                        },
-                        coursePeriodTextBuilder: _buildCoursePeriodText,
-                        eventMarkerLabel: settingsProvider.t('event_marker'),
-                        locationPendingLabel: settingsProvider.t(
-                          'location_pending',
+                      ),
+                      Expanded(
+                        child: PageView.builder(
+                          controller: _navigationController.dayPageController,
+                          itemCount: screenData.dayPages.length,
+                          onPageChanged:
+                              _navigationController.handleDayPageChanged,
+                          itemBuilder: (context, index) {
+                            final pageData = screenData.dayPages[index];
+                            return DayAgendaView(
+                              pageData: pageData,
+                              onCourseTap: (course) {
+                                showCourseDetailsSheet(context, course);
+                              },
+                              onEventTap: (event) {
+                                showEventDetailsSheet(context, event);
+                              },
+                              coursePeriodTextBuilder: _buildCoursePeriodText,
+                              eventMarkerLabel: settingsProvider.t(
+                                'event_marker',
+                              ),
+                              locationPendingLabel: settingsProvider.t(
+                                'location_pending',
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
+                      ),
+                    ],
                   )
                 : PageView.builder(
                     key: const ValueKey('week-view'),

@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 
 import '../models/clock_time.dart';
+import '../models/event.dart';
 import '../models/time_slot.dart';
 import 'audio_mode_service.dart';
 import 'notification_service.dart';
@@ -23,9 +24,8 @@ class BackgroundRuntimeService {
        _scheduleCalculator = scheduleCalculator ?? const ScheduleCalculator();
 
   static const int foregroundServiceNotificationId = 9527;
-  static const String foregroundServiceTitle = '自动服务运行中';
-  static const String foregroundServiceContent =
-      '正在保障上下课服务。如需隐藏，请在系统通知设置中关闭此类别。';
+  static const String foregroundServiceTitle = '课程表守护服务';
+  static const String foregroundServiceContent = '正在后台保障自动静音与课前提醒';
 
   final AudioModeService _audioModeService;
   final NotificationService _notificationService;
@@ -35,12 +35,25 @@ class BackgroundRuntimeService {
   DeviceAudioMode? _lastAppliedMode;
   final Set<String> _notifiedCourseIds = <String>{};
   final Set<String> _notifiedEventIds = <String>{};
-  String? _notifiedDay;
+  String? _notifiedCourseDay;
 
   Future<void> start(ServiceInstance service) async {
     WidgetsFlutterBinding.ensureInitialized();
-    ui.DartPluginRegistrant.ensureInitialized();
-    await _notificationService.initializeForBackgroundIsolate();
+
+    // Must be registered before any potentially slow initialization.
+    service.on('test_mute').listen((_) async {
+      await _handleDeveloperCommand(
+        service: service,
+        action: _audioModeService.muteDeviceSafely,
+      );
+    });
+
+    service.on('test_unmute').listen((_) async {
+      await _handleDeveloperCommand(
+        service: service,
+        action: _audioModeService.restoreDeviceAudio,
+      );
+    });
 
     service.on('sync_now').listen((_) async {
       await runScheduleTick(service);
@@ -51,14 +64,18 @@ class BackgroundRuntimeService {
       service.stopSelf();
     });
 
+    ui.DartPluginRegistrant.ensureInitialized();
+    await _notificationService.initializeForBackgroundIsolate();
+
     if (service is AndroidServiceInstance) {
       service.setAsForegroundService();
       await _refreshForegroundNotification(service);
     }
 
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) async {
-      await runScheduleTick(service);
-    });
+    _timer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) async => runScheduleTick(service),
+    );
 
     await runScheduleTick(service);
   }
@@ -179,7 +196,7 @@ class BackgroundRuntimeService {
 
     final now = DateTime.now();
     final dayKey = '${now.year}-${now.month}-${now.day}';
-    _resetNotificationDeduplication(dayKey);
+    _resetCourseNotificationDeduplication(dayKey);
 
     final totalWeeks = storageService.readTotalWeeks(fallback: 20).clamp(1, 30);
     final semesterStartDate = _loadSemesterStartDate(storageService);
@@ -249,23 +266,19 @@ class BackgroundRuntimeService {
     }
 
     final now = DateTime.now();
-    final dayKey = '${now.year}-${now.month}-${now.day}';
-    _resetNotificationDeduplication(dayKey);
-
     final events = storageService.loadEvents();
+    _pruneExpiredEventNotifications(events, now);
+
     for (final event in events) {
       if (!event.enableAlarm) {
-        continue;
-      }
-
-      if (!_isSameDay(now, event.dateTime)) {
         continue;
       }
 
       final reminderTime = event.dateTime.subtract(
         Duration(minutes: advanceMinutes),
       );
-      if (!_isSameMinute(now, reminderTime)) {
+      final eventEndTime = _eventNotificationWindowEnd(event);
+      if (now.isBefore(reminderTime) || !now.isBefore(eventEndTime)) {
         continue;
       }
 
@@ -274,16 +287,26 @@ class BackgroundRuntimeService {
         continue;
       }
 
-      final dedupeId = '$dayKey-${event.id}';
-      if (_notifiedEventIds.contains(dedupeId)) {
+      if (_notifiedEventIds.contains(event.id)) {
         continue;
       }
 
-      await _notificationService.showEventReminder(
-        event: event,
-        notificationId: dedupeId.hashCode & 0x7fffffff,
-      );
-      _notifiedEventIds.add(dedupeId);
+      try {
+        await _notificationService.showEventReminder(
+          event: event,
+          notificationId: event.id.hashCode & 0x7fffffff,
+        );
+      } catch (error, stackTrace) {
+        developer.log(
+          'showEventReminder failed',
+          name: 'BackgroundRuntimeService',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        continue;
+      }
+
+      _notifiedEventIds.add(event.id);
     }
   }
 
@@ -329,19 +352,43 @@ class BackgroundRuntimeService {
         left.minute == right.minute;
   }
 
-  bool _isSameDay(DateTime left, DateTime right) {
-    return left.year == right.year &&
-        left.month == right.month &&
-        left.day == right.day;
-  }
-
-  void _resetNotificationDeduplication(String dayKey) {
-    if (_notifiedDay == dayKey) {
+  void _resetCourseNotificationDeduplication(String dayKey) {
+    if (_notifiedCourseDay == dayKey) {
       return;
     }
 
     _notifiedCourseIds.clear();
-    _notifiedEventIds.clear();
-    _notifiedDay = dayKey;
+    _notifiedCourseDay = dayKey;
+  }
+
+  DateTime _eventNotificationWindowEnd(Event event) {
+    return event.dateTime.add(const Duration(minutes: 1));
+  }
+
+  void _pruneExpiredEventNotifications(List<Event> events, DateTime now) {
+    final activeIds = events
+        .where((event) => _eventNotificationWindowEnd(event).isAfter(now))
+        .map((event) => event.id)
+        .toSet();
+    _notifiedEventIds.removeWhere((id) => !activeIds.contains(id));
+  }
+
+  Future<void> _handleDeveloperCommand({
+    required ServiceInstance service,
+    required Future<void> Function() action,
+  }) async {
+    try {
+      await action();
+      if (service is AndroidServiceInstance) {
+        await _refreshForegroundNotification(service);
+      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'developer command failed',
+        name: 'BackgroundRuntimeService',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 }

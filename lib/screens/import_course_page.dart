@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -17,6 +19,7 @@ class ImportCoursePage extends StatefulWidget {
 
 class _ImportCoursePageState extends State<ImportCoursePage> {
   static const ScheduleParserService _parserService = ScheduleParserService();
+  static const Duration _extractScriptSettleDelay = Duration(milliseconds: 350);
 
   late final WebViewController _controller;
   bool _isImporting = false;
@@ -30,12 +33,6 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         NavigationDelegate(
           onNavigationRequest: (request) => NavigationDecision.navigate,
         ),
-      )
-      ..addJavaScriptChannel(
-        'CourseDataChannel',
-        onMessageReceived: (message) async {
-          await _handleImportedHtml(message.message);
-        },
       )
       ..loadRequest(Uri.parse(ScheduleHtmlExtractor.academicLoginUrl));
   }
@@ -64,16 +61,23 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     });
 
     try {
-      await _controller.runJavaScript(
+      await Future<void>.delayed(_extractScriptSettleDelay);
+      final rawResult = await _controller.runJavaScriptReturningResult(
         ScheduleHtmlExtractor.extractTimetableHtmlScript,
       );
+      final rawHtml = _normalizeJavaScriptResult(rawResult);
+      await _handleImportedHtml(rawHtml);
     } catch (error) {
-      _finishImportWithMessage('课表提取失败：$error');
+      _finishImportWithMessage('Timetable extraction failed: $error');
     }
   }
 
   Future<void> _handleImportedHtml(String rawMessage) async {
     try {
+      if (rawMessage.startsWith('JS_ERROR:')) {
+        throw ScheduleParseException('教务系统连接失败，请检查网络或重新登录后重试。');
+      }
+
       if (rawMessage.startsWith('ERROR:')) {
         throw ScheduleParseException(
           rawMessage.replaceFirst('ERROR:', '').trim(),
@@ -88,9 +92,9 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       }
       Navigator.of(context).pop(importedCourses.length);
     } on ScheduleParseException catch (error) {
-      _finishImportWithMessage('导入失败：${error.message}');
+      _finishImportWithMessage('Import failed: ${error.message}');
     } catch (error) {
-      _finishImportWithMessage('导入失败：$error');
+      _finishImportWithMessage('Import failed: $error');
     } finally {
       if (mounted) {
         setState(() {
@@ -112,5 +116,24 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(backgroundColor: AppColors.danger, content: Text(message)),
     );
+  }
+
+  String _normalizeJavaScriptResult(Object rawResult) {
+    if (rawResult is String) {
+      final trimmed = rawResult.trim();
+      if (trimmed.isEmpty || trimmed == 'null' || trimmed == 'undefined') {
+        return '';
+      }
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is String) {
+          return decoded;
+        }
+      } catch (_) {
+        return trimmed;
+      }
+      return trimmed;
+    }
+    return rawResult.toString();
   }
 }

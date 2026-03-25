@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 import '../app_localizations.dart';
 import '../models/clock_time.dart';
@@ -296,6 +299,10 @@ class SettingsProvider extends ChangeNotifier {
     _reminderAdvanceMinutes = safeValue;
     notifyListeners();
     await _storageService.writeReminderAdvanceMinutes(safeValue);
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'updateReminderAdvanceMinutes',
+    );
     await _refreshReminders();
   }
 
@@ -308,6 +315,10 @@ class SettingsProvider extends ChangeNotifier {
     _eventReminderAdvanceMinutes = safeValue;
     notifyListeners();
     await _storageService.writeEventReminderAdvanceMinutes(safeValue);
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'updateEventReminderAdvanceMinutes',
+    );
     await _refreshReminders();
   }
 
@@ -326,6 +337,10 @@ class SettingsProvider extends ChangeNotifier {
     _autoMuteEnabled = value;
     notifyListeners();
     await _storageService.writeAutoMuteEnabled(value);
+    await _wakeBackgroundServiceIfNeeded(
+      shouldStart: _shouldKeepBackgroundServiceAlive(),
+      reason: 'updateAutoMuteEnabled',
+    );
     await _refreshReminders();
   }
 
@@ -371,6 +386,25 @@ class SettingsProvider extends ChangeNotifier {
     }
 
     await scheduler();
+  }
+
+  Future<void> _wakeBackgroundServiceIfNeeded({
+    required bool shouldStart,
+    required String reason,
+  }) async {
+    if (!Platform.isAndroid || !shouldStart) {
+      return;
+    }
+
+    final service = FlutterBackgroundService();
+    print('[SettingsProvider] startService requested from $reason');
+    await service.startService();
+  }
+
+  bool _shouldKeepBackgroundServiceAlive() {
+    return _autoMuteEnabled ||
+        _reminderAdvanceMinutes > 0 ||
+        _eventReminderAdvanceMinutes > 0;
   }
 
   TimeOfDay _parseTime(String value) {

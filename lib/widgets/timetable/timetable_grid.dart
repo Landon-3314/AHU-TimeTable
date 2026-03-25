@@ -12,9 +12,6 @@ class DayAgendaView extends StatelessWidget {
   const DayAgendaView({
     super.key,
     required this.pageData,
-    required this.chips,
-    required this.selectedWeekday,
-    required this.onDaySelected,
     required this.onCourseTap,
     required this.onEventTap,
     required this.coursePeriodTextBuilder,
@@ -23,9 +20,6 @@ class DayAgendaView extends StatelessWidget {
   });
 
   final TimetableDayPageData pageData;
-  final List<TimetableDayChipData> chips;
-  final int selectedWeekday;
-  final ValueChanged<int> onDaySelected;
   final ValueChanged<Course> onCourseTap;
   final ValueChanged<Event> onEventTap;
   final String Function(Course course) coursePeriodTextBuilder;
@@ -37,49 +31,6 @@ class DayAgendaView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xxl,
-            AppSpacing.xl,
-            AppSpacing.xxl,
-            AppSpacing.sm,
-          ),
-          child: Text(
-            pageData.summaryLabel,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-        SizedBox(
-          height: AppSpacing.chipHeight,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-            child: Row(
-              children: [
-                for (final chip in chips)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(chip.label),
-                          Text(
-                            chip.dateLabel,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                      selected: selectedWeekday == chip.weekday,
-                      onSelected: (_) => onDaySelected(chip.weekday),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
         const SizedBox(height: AppSpacing.xs),
         Expanded(
           child: pageData.isEmpty
@@ -125,6 +76,73 @@ class DayAgendaView extends StatelessWidget {
                     );
                   },
                 ),
+        ),
+      ],
+    );
+  }
+}
+
+class DayWeekHeader extends StatelessWidget {
+  const DayWeekHeader({
+    super.key,
+    required this.summaryLabel,
+    required this.chips,
+    required this.selectedWeekday,
+    required this.onDaySelected,
+  });
+
+  final String summaryLabel;
+  final List<TimetableDayChipData> chips;
+  final int selectedWeekday;
+  final ValueChanged<int> onDaySelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xxl,
+            AppSpacing.xl,
+            AppSpacing.xxl,
+            AppSpacing.sm,
+          ),
+          child: Text(
+            summaryLabel,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+        SizedBox(
+          height: AppSpacing.chipHeight,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Row(
+              children: [
+                for (final chip in chips)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: ChoiceChip(
+                      label: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(chip.label),
+                          Text(
+                            chip.dateLabel,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                      selected: selectedWeekday == chip.weekday,
+                      onSelected: (_) => onDaySelected(chip.weekday),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ],
     );

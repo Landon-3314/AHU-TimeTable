@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/course.dart';
 import '../screens/add_course_page.dart';
+import '../screens/developer_diagnostics_page.dart';
 import '../screens/import_course_page.dart';
 import '../screens/main_scaffold.dart';
 import '../screens/schedule_settings_page.dart';
@@ -13,6 +14,7 @@ class AppRoutes {
   static const String addCourse = '/add-course';
   static const String importCourses = '/import-courses';
   static const String scheduleSettings = '/schedule-settings';
+  static const String developerDiagnostics = '/developer-diagnostics';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -38,6 +40,11 @@ class AppRoutes {
       case scheduleSettings:
         return MaterialPageRoute<void>(
           builder: (_) => const ScheduleSettingsPage(),
+          settings: settings,
+        );
+      case developerDiagnostics:
+        return MaterialPageRoute<void>(
+          builder: (_) => const DeveloperDiagnosticsPage(),
           settings: settings,
         );
       default:
