@@ -288,6 +288,13 @@ class _TimetablePageState extends State<TimetablePage> {
         _mode = _TimetableMode.week;
         _selectedWeekForWeekView = HOLIDAY_WEEK_INDEX;
       });
+      if (_weekPageController.hasClients) {
+        _weekPageController.animateToPage(
+          settingsProvider.totalWeeks,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeInOut,
+        );
+      }
       return;
     }
 
@@ -370,19 +377,24 @@ class _TimetablePageState extends State<TimetablePage> {
   void _handleWeekChangedFromWeekView(int week) {
     final settingsProvider = context.read<SettingsProvider>();
     final provider = context.read<CourseProvider>();
-    final targetWeek = week.clamp(1, settingsProvider.totalWeeks).toInt();
+    final isHoliday = week == HOLIDAY_WEEK_INDEX;
+    final targetWeek = isHoliday
+        ? HOLIDAY_WEEK_INDEX
+        : week.clamp(1, settingsProvider.totalWeeks).toInt();
     final currentWeekday = provider.currentWeekday.clamp(1, 7).toInt();
     setState(() {
       _selectedWeekForWeekView = targetWeek;
     });
 
-    provider.setCurrentWeek(targetWeek);
+    if (!isHoliday) {
+      provider.setCurrentWeek(targetWeek);
+    }
 
     if (_isSyncingControllers) {
       return;
     }
 
-    if (_dayPageController.hasClients) {
+    if (!isHoliday && _dayPageController.hasClients) {
       final targetDayIndex = (targetWeek - 1) * 7 + (currentWeekday - 1);
       if (_dayPageController.page?.round() != targetDayIndex) {
         _isSyncingControllers = true;
@@ -682,33 +694,39 @@ class WeekViewWidget extends StatelessWidget {
     final events = provider.events.toList();
     final dateFormat = DateFormat('MM/dd');
 
-    if (selectedWeek == HOLIDAY_WEEK_INDEX) {
-      final semesterStart = settingsProvider.getDateFor(1, 1);
-      final semesterEnd = DateTime(
-        settingsProvider.getDateFor(totalWeeks, 7).year,
-        settingsProvider.getDateFor(totalWeeks, 7).month,
-        settingsProvider.getDateFor(totalWeeks, 7).day,
-        23,
-        59,
-        59,
-      );
-      final holidayEvents = events
-          .where(
-            (event) =>
-                event.dateTime.isBefore(semesterStart) ||
-                event.dateTime.isAfter(semesterEnd),
-          )
-          .toList()
-        ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-
-      return _buildHolidayListView(context, holidayEvents);
-    }
-
     return PageView.builder(
       controller: pageController,
-      itemCount: totalWeeks,
-      onPageChanged: (index) => onWeekChanged(index + 1),
+      itemCount: totalWeeks + 1,
+      onPageChanged: (index) {
+        if (index == totalWeeks) {
+          onWeekChanged(HOLIDAY_WEEK_INDEX);
+          return;
+        }
+        onWeekChanged(index + 1);
+      },
       itemBuilder: (context, index) {
+        if (index == totalWeeks) {
+          final semesterStart = settingsProvider.getDateFor(1, 1);
+          final semesterEnd = DateTime(
+            settingsProvider.getDateFor(totalWeeks, 7).year,
+            settingsProvider.getDateFor(totalWeeks, 7).month,
+            settingsProvider.getDateFor(totalWeeks, 7).day,
+            23,
+            59,
+            59,
+          );
+          final holidayEvents = events
+              .where(
+                (event) =>
+                    event.dateTime.isBefore(semesterStart) ||
+                    event.dateTime.isAfter(semesterEnd),
+              )
+              .toList()
+            ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+          return _buildHolidayListView(context, holidayEvents);
+        }
+
         final week = index + 1;
         final weekStart = settingsProvider.getDateFor(week, 1);
         final weekEnd = settingsProvider.getDateFor(week, 7);
@@ -882,7 +900,6 @@ class _WeekEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<SettingsProvider>();
     return Card(
       elevation: 0,
       color: const Color(0xFFF4F7FF),

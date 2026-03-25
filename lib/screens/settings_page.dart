@@ -1,8 +1,5 @@
-import 'dart:io';
-
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -139,7 +136,7 @@ class SettingsPage extends StatelessWidget {
                         content: Text(
                           provider.languageCode == 'en'
                               ? 'Failed to enable. Please grant DND permission.'
-                              : '开启失败，请确保已授予免打扰权限',
+                              : 'Failed to enable. Please grant DND permission.',
                         ),
                       ),
                     );
@@ -152,52 +149,18 @@ class SettingsPage extends StatelessWidget {
                 title: Text(
                   provider.languageCode == 'en'
                       ? 'Battery Optimization'
-                      : '电池优化设置',
+                      : '\u7535\u6c60\u4f18\u5316\u8bbe\u7f6e',
                 ),
                 subtitle: Text(
                   provider.languageCode == 'en'
                       ? 'Allow foreground service to stay alive in background'
-                      : '引导系统允许课表前台服务后台常驻',
+                      : '\u5f15\u5bfc\u7cfb\u7edf\u5141\u8bb8\u8bfe\u8868\u524d\u53f0\u670d\u52a1\u540e\u53f0\u5e38\u9a7b',
                 ),
                 trailing: const Icon(Icons.open_in_new),
                 onTap: () async {
                   await AppSettings.openAppSettings(
                     type: AppSettingsType.batteryOptimization,
                   );
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.play_circle_fill_outlined),
-                title: Text(
-                  provider.languageCode == 'en'
-                      ? 'Simulate Class (BG)'
-                      : '模拟上课(后台执行)',
-                ),
-                subtitle: Text(
-                  provider.languageCode == 'en'
-                      ? 'Send test_mute to background service'
-                      : '向后台服务发送 test_mute 指令',
-                ),
-                onTap: () async {
-                  FlutterBackgroundService().invoke('test_mute');
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.stop_circle_outlined),
-                title: Text(
-                  provider.languageCode == 'en'
-                      ? 'Simulate Dismiss (BG)'
-                      : '模拟下课(后台执行)',
-                ),
-                subtitle: Text(
-                  provider.languageCode == 'en'
-                      ? 'Send test_unmute to background service'
-                      : '向后台服务发送 test_unmute 指令',
-                ),
-                onTap: () async {
-                  FlutterBackgroundService().invoke('test_unmute');
                 },
               ),
             ],

@@ -10,28 +10,6 @@ import '../models/event.dart';
 class CourseProvider extends ChangeNotifier {
   static const String _coursesKey = 'courses.items';
   static const String _eventsKey = 'events.items';
-  static const List<Course> _mockCourses = [
-    Course(
-      name: 'Advanced Math',
-      location: 'Teaching Building A-201',
-      teacher: 'Prof. Chen',
-      weekday: 1,
-      weeks: [1, 2, 3, 4, 5, 6, 7, 8],
-      startPeriod: 1,
-      endPeriod: 2,
-      colorValue: 0xFF4F46E5,
-    ),
-    Course(
-      name: 'Data Structures',
-      location: 'Lab Building B-305',
-      teacher: 'Dr. Lin',
-      weekday: 3,
-      weeks: [1, 2, 4, 6, 8, 10, 12, 14, 16],
-      startPeriod: 6,
-      endPeriod: 7,
-      colorValue: 0xFF059669,
-    ),
-  ];
 
   CourseProvider({
     required SharedPreferences sharedPreferences,
@@ -191,7 +169,7 @@ class CourseProvider extends ChangeNotifier {
     final List<String>? rawCourses = sharedPreferences.getStringList(_coursesKey);
 
     if (rawCourses == null || rawCourses.isEmpty) {
-      return List<Course>.from(_mockCourses);
+      return <Course>[];
     }
 
     return rawCourses.map((item) {

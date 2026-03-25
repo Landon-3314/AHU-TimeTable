@@ -27,12 +27,16 @@ const String _afternoonStartTimeKey = 'settings.afternoonStartTime';
 const String _afternoonClassesKey = 'settings.afternoonClasses';
 const String _eveningStartTimeKey = 'settings.eveningStartTime';
 const String _eveningClassesKey = 'settings.eveningClasses';
+const int _foregroundServiceNotificationId = 9527;
+const String _foregroundServiceTitle = '自动服务运行中';
+const String _foregroundServiceContent =
+    '正在保障上下课服务。如需隐藏，请在系统通知设置中关闭此类别。';
 
 bool _serviceConfigured = false;
 
 const AndroidNotificationChannel _silentBgChannel = AndroidNotificationChannel(
   'silent_bg_channel',
-  'Silent Background Service',
+  '后台静音服务',
   description: 'Low visibility foreground channel for auto-mute service',
   importance: Importance.min,
   playSound: false,
@@ -41,7 +45,7 @@ const AndroidNotificationChannel _silentBgChannel = AndroidNotificationChannel(
 const AndroidNotificationChannel _courseReminderChannel =
     AndroidNotificationChannel(
   'course_reminder_channel',
-  'Course Reminder Channel',
+  '课程提醒',
   description: 'High priority course reminder notifications',
   importance: Importance.max,
   playSound: true,
@@ -76,9 +80,9 @@ Future<void> _ensureBackgroundServiceConfigured() async {
       autoStartOnBoot: true,
       isForegroundMode: true,
       notificationChannelId: _silentBgChannel.id,
-      initialNotificationTitle: '',
-      initialNotificationContent: '',
-      foregroundServiceNotificationId: 9527,
+      initialNotificationTitle: _foregroundServiceTitle,
+      initialNotificationContent: _foregroundServiceContent,
+      foregroundServiceNotificationId: _foregroundServiceNotificationId,
       foregroundServiceTypes: [AndroidForegroundType.specialUse],
     ),
     iosConfiguration: IosConfiguration(
@@ -96,6 +100,7 @@ Future<void> requestBackgroundServiceSync() async {
     return;
   }
 
+  await _ensureNotificationPermissionForAndroid();
   await _ensureBackgroundServiceConfigured();
   final service = FlutterBackgroundService();
   final running = await service.isRunning();
@@ -117,6 +122,14 @@ Future<void> stopBackgroundServiceIfRunning() async {
     return;
   }
   service.invoke('stop_service');
+}
+
+Future<void> _ensureNotificationPermissionForAndroid() async {
+  final notificationsPlugin = FlutterLocalNotificationsPlugin();
+  final androidNotifications = notificationsPlugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+  await androidNotifications?.requestNotificationsPermission();
 }
 
 @pragma('vm:entry-point')
@@ -166,8 +179,8 @@ void onServiceStart(ServiceInstance service) {
 
     if (service is AndroidServiceInstance) {
       await service.setForegroundNotificationInfo(
-        title: '',
-        content: '',
+        title: _foregroundServiceTitle,
+        content: _foregroundServiceContent,
       );
     }
   }
@@ -525,7 +538,7 @@ Future<void> _runCourseReminderTick({
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           'course_reminder_channel',
-          'Course Reminder Channel',
+          '课程提醒',
           channelDescription: 'High priority course reminder notifications',
           importance: Importance.max,
           priority: Priority.high,

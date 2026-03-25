@@ -14,7 +14,7 @@ class NotificationService {
   static const AndroidNotificationChannel silentBgChannel =
       AndroidNotificationChannel(
     'silent_bg_channel',
-    'Silent Background Service',
+    '后台静音服务',
     description: 'Foreground service channel for background worker',
     importance: Importance.min,
     playSound: false,
@@ -25,7 +25,7 @@ class NotificationService {
   static const AndroidNotificationChannel courseReminderChannel =
       AndroidNotificationChannel(
     'course_reminder_channel',
-    'Course Reminder Channel',
+    '课程提醒',
     description: 'High priority course reminder notifications',
     importance: Importance.max,
     playSound: true,
