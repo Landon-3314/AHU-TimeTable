@@ -5,6 +5,28 @@ import '../providers/timetable_view_provider.dart';
 
 enum TimetableMode { day, week }
 
+class TimetableNavigationState {
+  const TimetableNavigationState({
+    required this.mode,
+    required this.currentWeek,
+    required this.currentWeekday,
+    required this.selectedWeekForWeekView,
+    required this.currentDisplayWeek,
+    required this.currentDayPageIndex,
+    required this.currentWeekPageIndex,
+    required this.isHolidaySelected,
+  });
+
+  final TimetableMode mode;
+  final int currentWeek;
+  final int currentWeekday;
+  final int selectedWeekForWeekView;
+  final int currentDisplayWeek;
+  final int currentDayPageIndex;
+  final int currentWeekPageIndex;
+  final bool isHolidaySelected;
+}
+
 class TimetableNavigationController extends ChangeNotifier {
   TimetableNavigationController({
     required SettingsProvider settingsProvider,
@@ -19,6 +41,8 @@ class TimetableNavigationController extends ChangeNotifier {
         .clamp(1, 7)
         .toInt();
 
+    _currentWeek = initialWeek;
+    _currentWeekday = initialWeekday;
     _selectedWeekForWeekView = initialWeek;
     _timetableViewProvider.setCurrentWeekAndWeekday(
       week: initialWeek,
@@ -36,35 +60,37 @@ class TimetableNavigationController extends ChangeNotifier {
 
   late final PageController _dayPageController;
   late final PageController _weekPageController;
+  int _currentWeek = 1;
+  int _currentWeekday = 1;
   int _selectedWeekForWeekView = 1;
   TimetableMode _mode = TimetableMode.day;
   bool _isSyncingControllers = false;
 
   PageController get dayPageController => _dayPageController;
   PageController get weekPageController => _weekPageController;
-  int get selectedWeekForWeekView => _selectedWeekForWeekView;
-  TimetableMode get mode => _mode;
-
-  int get currentDisplayWeek {
-    final providerWeek = _timetableViewProvider.currentWeek
-        .clamp(1, _settingsProvider.totalWeeks)
-        .toInt();
-    return _mode == TimetableMode.week
+  TimetableNavigationState get state => TimetableNavigationState(
+    mode: _mode,
+    currentWeek: _currentWeek,
+    currentWeekday: _currentWeekday,
+    selectedWeekForWeekView: _selectedWeekForWeekView,
+    currentDisplayWeek: _mode == TimetableMode.week
         ? _selectedWeekForWeekView
-        : providerWeek;
-  }
+        : _currentWeek,
+    currentDayPageIndex: (_currentWeek - 1) * 7 + (_currentWeekday - 1),
+    currentWeekPageIndex: _selectedWeekForWeekView == holidayWeekIndex
+        ? holidayPagePageIndex
+        : _selectedWeekForWeekView - 1,
+    isHolidaySelected: _selectedWeekForWeekView == holidayWeekIndex,
+  );
 
-  void syncInitialPosition({
-    required bool animateWeek,
-    required bool animateDay,
-  }) {
-    final week = _timetableViewProvider.currentWeek;
-    final weekday = _timetableViewProvider.currentWeekday;
+  int get holidayPagePageIndex => _settingsProvider.totalWeeks;
+
+  void syncInitialPosition() {
     _syncToWeekAndWeekday(
-      week: week,
-      weekday: weekday,
-      animateWeek: animateWeek,
-      animateDay: animateDay,
+      week: _currentWeek,
+      weekday: _currentWeekday,
+      animateWeek: false,
+      animateDay: false,
     );
   }
 
@@ -84,7 +110,7 @@ class TimetableNavigationController extends ChangeNotifier {
 
       if (_weekPageController.hasClients) {
         await _weekPageController.animateToPage(
-          _settingsProvider.totalWeeks,
+          holidayPagePageIndex,
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeInOut,
         );
@@ -95,11 +121,9 @@ class TimetableNavigationController extends ChangeNotifier {
     final targetWeek = selectedWeek
         .clamp(1, _settingsProvider.totalWeeks)
         .toInt();
-    final targetWeekday = _timetableViewProvider.currentWeekday
-        .clamp(1, 7)
-        .toInt();
+    final targetWeekday = _currentWeekday.clamp(1, 7).toInt();
     _selectedWeekForWeekView = targetWeek;
-    _timetableViewProvider.setCurrentWeek(targetWeek);
+    _setCurrentWeek(targetWeek);
     notifyListeners();
 
     _isSyncingControllers = true;
@@ -127,10 +151,7 @@ class TimetableNavigationController extends ChangeNotifier {
         .toInt();
 
     _selectedWeekForWeekView = targetWeek;
-    _timetableViewProvider.setCurrentWeekAndWeekday(
-      week: targetWeek,
-      weekday: targetWeekday,
-    );
+    _setCurrentWeekAndWeekday(week: targetWeek, weekday: targetWeekday);
     notifyListeners();
 
     _isSyncingControllers = true;
@@ -154,10 +175,7 @@ class TimetableNavigationController extends ChangeNotifier {
     final targetWeekday = weekday.clamp(1, 7).toInt();
 
     _selectedWeekForWeekView = targetWeek;
-    _timetableViewProvider.setCurrentWeekAndWeekday(
-      week: targetWeek,
-      weekday: targetWeekday,
-    );
+    _setCurrentWeekAndWeekday(week: targetWeek, weekday: targetWeekday);
     notifyListeners();
 
     if (_dayPageController.hasClients) {
@@ -169,16 +187,13 @@ class TimetableNavigationController extends ChangeNotifier {
     }
   }
 
-  void handleAbsoluteDayChanged(int index) {
+  void handleDayPageChanged(int index) {
     final targetWeek = ((index ~/ 7) + 1)
         .clamp(1, _settingsProvider.totalWeeks)
         .toInt();
     final targetWeekday = ((index % 7) + 1).clamp(1, 7).toInt();
 
-    _timetableViewProvider.setCurrentWeekAndWeekday(
-      week: targetWeek,
-      weekday: targetWeekday,
-    );
+    _setCurrentWeekAndWeekday(week: targetWeek, weekday: targetWeekday);
     _selectedWeekForWeekView = targetWeek;
     notifyListeners();
 
@@ -194,18 +209,17 @@ class TimetableNavigationController extends ChangeNotifier {
     }
   }
 
-  void handleWeekChanged(int week) {
-    final isHoliday = week == holidayWeekIndex;
+  void handleWeekPageChanged(int pageIndex) {
+    final isHoliday = pageIndex == holidayPagePageIndex;
+    final week = isHoliday ? holidayWeekIndex : pageIndex + 1;
     final targetWeek = isHoliday
         ? holidayWeekIndex
         : week.clamp(1, _settingsProvider.totalWeeks).toInt();
-    final currentWeekday = _timetableViewProvider.currentWeekday
-        .clamp(1, 7)
-        .toInt();
+    final currentWeekday = _currentWeekday.clamp(1, 7).toInt();
 
     _selectedWeekForWeekView = targetWeek;
     if (!isHoliday) {
-      _timetableViewProvider.setCurrentWeek(targetWeek);
+      _setCurrentWeek(targetWeek);
     }
     notifyListeners();
 
@@ -268,5 +282,25 @@ class TimetableNavigationController extends ChangeNotifier {
     } finally {
       _isSyncingControllers = false;
     }
+  }
+
+  void _setCurrentWeek(int value) {
+    final safeValue = value.clamp(1, _settingsProvider.totalWeeks).toInt();
+    _currentWeek = safeValue;
+    _timetableViewProvider.setCurrentWeek(safeValue);
+  }
+
+  void _setCurrentWeekAndWeekday({
+    required int week,
+    required int weekday,
+  }) {
+    final safeWeek = week.clamp(1, _settingsProvider.totalWeeks).toInt();
+    final safeWeekday = weekday.clamp(1, 7).toInt();
+    _currentWeek = safeWeek;
+    _currentWeekday = safeWeekday;
+    _timetableViewProvider.setCurrentWeekAndWeekday(
+      week: safeWeek,
+      weekday: safeWeekday,
+    );
   }
 }

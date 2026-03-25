@@ -625,14 +625,28 @@ J. 本轮建档确认出的关键风险点
   - `TimetableNavigationController.handleAbsoluteDayChanged(...)`
   - `TimetableNavigationController.handleWeekChanged(...)`
 
-[ ] 5. Timetable 页面状态机独立化
+[x] 5. Timetable 页面状态机独立化（已按当前执行顺序完成）
 - 目标：
   - 抽离 day/week/holiday 的统一选择状态机
   - 让 UI 只渲染状态，不直接编排 PageController 与业务规则
+- 本轮完成：
+  - `TimetablePage` 已不再自行推导当前周/当前日索引、假期页边界或 PageView 变更规则，页面 State 仅持有 `TimetableNavigationController`
+  - `TimetableNavigationController` 新增统一的 `TimetableNavigationState` 输出对象，集中暴露当前模式、当前周/日、当前显示周、日页索引、周页索引与假期选中状态
+  - 日视图翻页、周视图翻页、跳周、回到今天、按日期跳转与初始定位均已收口为控制器内部意图接口，页码计算、边界判定与 `PageController` 调度不再由 UI 承担
+  - `timetable_page.dart` 当前仅负责读取 `navigationState`、装配组件和转发用户意图，形成单向数据流：UI Intent -> NavigationController -> State 更新 -> UI 渲染
+- 当前对外核心控制接口：
+  - `TimetableNavigationController.state`
+  - `TimetableNavigationController.syncInitialPosition()`
+  - `TimetableNavigationController.setMode(...)`
+  - `TimetableNavigationController.jumpToWeek(...)`
+  - `TimetableNavigationController.jumpToToday()`
+  - `TimetableNavigationController.jumpToDay(...)`
+  - `TimetableNavigationController.handleDayPageChanged(...)`
+  - `TimetableNavigationController.handleWeekPageChanged(...)`
 - 输出方向：
-  - `WeekSelectionState`
+  - `TimetableNavigationState`
   - `TimetableNavigationController`
-  - `HolidayWeekPolicy`
+  - `HolidayWeekPolicy`（当前假期页规则已内聚到控制器与视图数据装配层，后续若继续细分可再独立命名）
 
 [ ] 6. 导入解析器(Service)独立封装
 - 目标：

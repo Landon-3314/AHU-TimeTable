@@ -5,7 +5,6 @@ import '../models/course.dart';
 import '../models/timetable_view_data.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
-import '../providers/timetable_view_provider.dart';
 import '../services/timetable_navigation_controller.dart';
 import '../services/timetable_view_data_service.dart';
 import '../widgets/timetable/holiday_list_view.dart';
@@ -35,7 +34,7 @@ class _TimetablePageState extends State<TimetablePage> {
     super.initState();
     _navigationController = TimetableNavigationController(
       settingsProvider: context.read<SettingsProvider>(),
-      timetableViewProvider: context.read<TimetableViewProvider>(),
+      timetableViewProvider: context.read(),
       holidayWeekIndex: holidayWeekIndex,
     );
 
@@ -43,10 +42,7 @@ class _TimetablePageState extends State<TimetablePage> {
       if (!mounted) {
         return;
       }
-      _navigationController.syncInitialPosition(
-        animateWeek: false,
-        animateDay: false,
-      );
+      _navigationController.syncInitialPosition();
     });
   }
 
@@ -60,7 +56,6 @@ class _TimetablePageState extends State<TimetablePage> {
   Widget build(BuildContext context) {
     final settingsProvider = context.watch<SettingsProvider>();
     final courseProvider = context.watch<CourseProvider>();
-    final timetableViewProvider = context.watch<TimetableViewProvider>();
     final screenData = _viewDataService.build(
       courses: courseProvider.courses.toList(),
       events: courseProvider.events.toList(),
@@ -71,22 +66,15 @@ class _TimetablePageState extends State<TimetablePage> {
       timeSlots: settingsProvider.timeSlots,
       holidayWeekIndex: holidayWeekIndex,
     );
-
-    final currentWeek = timetableViewProvider.currentWeek
-        .clamp(1, settingsProvider.totalWeeks)
-        .toInt();
-    final currentWeekday = timetableViewProvider.currentWeekday
-        .clamp(1, 7)
-        .toInt();
-    final currentDayPage =
-        screenData.dayPages[(currentWeek - 1) * 7 + (currentWeekday - 1)];
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
     return AnimatedBuilder(
       animation: _navigationController,
       builder: (context, _) {
-        final displayWeek = _navigationController.currentDisplayWeek;
+        final navigationState = _navigationController.state;
+        final currentDayPage =
+            screenData.dayPages[navigationState.currentDayPageIndex];
         return Scaffold(
           appBar: AppBar(
             centerTitle: false,
@@ -94,7 +82,7 @@ class _TimetablePageState extends State<TimetablePage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 WeekSelector(
-                  currentWeek: displayWeek,
+                  currentWeek: navigationState.currentDisplayWeek,
                   options: screenData.weekOptions,
                   tooltip: settingsProvider.t('jump_to_week'),
                   onSelected: _navigationController.jumpToWeek,
@@ -158,7 +146,7 @@ class _TimetablePageState extends State<TimetablePage> {
                       icon: const Icon(Icons.calendar_view_week_outlined),
                     ),
                   ],
-                  selected: {_navigationController.mode},
+                  selected: {navigationState.mode},
                   onSelectionChanged: (selection) {
                     _navigationController.setMode(selection.first);
                   },
@@ -168,13 +156,12 @@ class _TimetablePageState extends State<TimetablePage> {
           ),
           body: AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
-            child: _navigationController.mode == TimetableMode.day
+            child: navigationState.mode == TimetableMode.day
                 ? PageView.builder(
                     key: const ValueKey('day-view'),
                     controller: _navigationController.dayPageController,
                     itemCount: screenData.dayPages.length,
-                    onPageChanged:
-                        _navigationController.handleAbsoluteDayChanged,
+                    onPageChanged: _navigationController.handleDayPageChanged,
                     itemBuilder: (context, index) {
                       final pageData = screenData.dayPages[index];
                       final pageWeekChips =
@@ -183,7 +170,8 @@ class _TimetablePageState extends State<TimetablePage> {
                       return DayAgendaView(
                         pageData: pageData,
                         chips: pageWeekChips,
-                        selectedWeekday: pageData.week == currentWeek
+                        selectedWeekday:
+                            pageData.week == navigationState.currentWeek
                             ? currentDayPage.weekday
                             : pageData.weekday,
                         onDaySelected: (weekday) {
@@ -210,15 +198,7 @@ class _TimetablePageState extends State<TimetablePage> {
                     key: const ValueKey('week-view'),
                     controller: _navigationController.weekPageController,
                     itemCount: screenData.weekPages.length + 1,
-                    onPageChanged: (index) {
-                      if (index == screenData.weekPages.length) {
-                        _navigationController.handleWeekChanged(
-                          holidayWeekIndex,
-                        );
-                        return;
-                      }
-                      _navigationController.handleWeekChanged(index + 1);
-                    },
+                    onPageChanged: _navigationController.handleWeekPageChanged,
                     itemBuilder: (context, index) {
                       if (index == screenData.weekPages.length) {
                         return HolidayListView(
