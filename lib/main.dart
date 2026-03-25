@@ -5,10 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'background_service.dart';
+import 'core/app_routes.dart';
+import 'core/app_theme.dart';
 import 'providers/course_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/timetable_view_provider.dart';
-import 'screens/main_scaffold.dart';
 import 'services/app_services.dart';
 import 'services/notification_service.dart';
 import 'services/storage_service.dart';
@@ -53,6 +54,15 @@ class _MainAppState extends State<MainApp> {
     Future<void> refreshReminders() {
       final courses = _courseProvider.courses.toList();
       final events = _courseProvider.events.toList();
+      final hasCourseReminderRuntime =
+          _settingsProvider.reminderAdvanceMinutes > 0 && courses.isNotEmpty;
+      final hasEventReminderRuntime =
+          _settingsProvider.eventReminderAdvanceMinutes > 0 &&
+          events.any((event) => event.enableAlarm);
+      final shouldKeepBackgroundRuntime =
+          _settingsProvider.autoMuteEnabled ||
+          hasCourseReminderRuntime ||
+          hasEventReminderRuntime;
 
       return Future.wait([
         NotificationService.instance.refreshAllReminders(
@@ -60,7 +70,7 @@ class _MainAppState extends State<MainApp> {
           events: events,
           settings: _settingsProvider,
         ),
-        if (_settingsProvider.autoMuteEnabled)
+        if (shouldKeepBackgroundRuntime)
           requestBackgroundServiceSync()
         else
           stopBackgroundServiceIfRunning(),
@@ -95,15 +105,9 @@ class _MainAppState extends State<MainApp> {
             debugShowCheckedModeBanner: false,
             locale: Locale(settingsProvider.languageCode),
             scrollBehavior: const AppScrollBehavior(),
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.blue,
-                brightness: Brightness.light,
-              ),
-              scaffoldBackgroundColor: const Color(0xFFF5F7FB),
-              useMaterial3: true,
-            ),
-            home: const MainScaffold(),
+            theme: AppTheme.light(),
+            initialRoute: AppRoutes.home,
+            onGenerateRoute: AppRoutes.onGenerateRoute,
           );
         },
       ),

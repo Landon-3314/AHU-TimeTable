@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/app_constants.dart';
+import '../core/app_routes.dart';
 import '../models/course.dart';
 import '../models/timetable_view_data.dart';
 import '../providers/course_provider.dart';
@@ -11,10 +13,6 @@ import '../widgets/timetable/holiday_list_view.dart';
 import '../widgets/timetable/timetable_detail_sheets.dart';
 import '../widgets/timetable/timetable_grid.dart';
 import '../widgets/timetable/week_selector.dart';
-import 'add_course_page.dart';
-import 'import_course_page.dart';
-
-const int holidayWeekIndex = 999;
 
 class TimetablePage extends StatefulWidget {
   const TimetablePage({super.key});
@@ -35,7 +33,7 @@ class _TimetablePageState extends State<TimetablePage> {
     _navigationController = TimetableNavigationController(
       settingsProvider: context.read<SettingsProvider>(),
       timetableViewProvider: context.read(),
-      holidayWeekIndex: holidayWeekIndex,
+      holidayWeekIndex: AppConstants.holidayWeekIndex,
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -64,7 +62,7 @@ class _TimetablePageState extends State<TimetablePage> {
       translate: settingsProvider.t,
       getDateFor: settingsProvider.getDateFor,
       timeSlots: settingsProvider.timeSlots,
-      holidayWeekIndex: holidayWeekIndex,
+      holidayWeekIndex: AppConstants.holidayWeekIndex,
     );
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -97,10 +95,8 @@ class _TimetablePageState extends State<TimetablePage> {
             actions: [
               IconButton(
                 onPressed: () async {
-                  final importedCount = await navigator.push<int>(
-                    MaterialPageRoute<int>(
-                      builder: (_) => const ImportCoursePage(),
-                    ),
+                  final importedCount = await navigator.pushNamed<int>(
+                    AppRoutes.importCourses,
                   );
 
                   if (!mounted || importedCount == null) {
@@ -119,11 +115,7 @@ class _TimetablePageState extends State<TimetablePage> {
               ),
               IconButton(
                 onPressed: () async {
-                  await navigator.push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const AddCoursePage(),
-                    ),
-                  );
+                  await navigator.pushNamed(AppRoutes.addCourse);
                 },
                 icon: const Icon(Icons.add),
                 tooltip: settingsProvider.t('add_course'),
@@ -155,7 +147,7 @@ class _TimetablePageState extends State<TimetablePage> {
             ),
           ),
           body: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
+            duration: AppDurations.switcher,
             child: navigationState.mode == TimetableMode.day
                 ? PageView.builder(
                     key: const ValueKey('day-view'),

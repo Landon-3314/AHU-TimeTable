@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../core/app_colors.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/schedule_html_extractor.dart';
@@ -109,7 +110,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(backgroundColor: Colors.red, content: Text(message)),
+      SnackBar(backgroundColor: AppColors.danger, content: Text(message)),
     );
   }
 }

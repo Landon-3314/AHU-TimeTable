@@ -4,10 +4,12 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../core/app_colors.dart';
+import '../core/app_constants.dart';
+import '../core/app_routes.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/settings/settings_section.dart';
-import 'schedule_settings_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -19,7 +21,7 @@ class SettingsPage extends StatelessWidget {
 
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: AppSpacing.pagePadding,
         children: [
           Text(
             provider.t('settings'),
@@ -27,9 +29,9 @@ class SettingsPage extends StatelessWidget {
               context,
             ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xxxl),
           SettingsSectionTitle(title: provider.t('basic_settings')),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.md),
           SettingsSectionCard(
             children: [
               ListTile(
@@ -80,18 +82,16 @@ class SettingsPage extends StatelessWidget {
                 subtitle: Text(provider.t('schedule_time_settings_subtitle')),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ScheduleSettingsPage(),
-                    ),
-                  );
+                  await Navigator.of(
+                    context,
+                  ).pushNamed(AppRoutes.scheduleSettings);
                 },
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xxxl),
           SettingsSectionTitle(title: provider.t('notifications')),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.md),
           SettingsSectionCard(
             children: [
               ListTile(
@@ -134,6 +134,7 @@ class SettingsPage extends StatelessWidget {
                   if (!success) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
+                        backgroundColor: AppColors.danger,
                         content: Text(
                           provider.languageCode == 'en'
                               ? 'Failed to enable. Please grant DND permission.'
@@ -166,9 +167,9 @@ class SettingsPage extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xxxl),
           SettingsSectionTitle(title: provider.t('data_storage')),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.md),
           SettingsSectionCard(
             children: [
               ListTile(

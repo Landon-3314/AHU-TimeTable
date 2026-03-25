@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_constants.dart';
 import '../../models/timetable_view_data.dart';
 
 class WeekSelector extends StatelessWidget {
@@ -43,7 +44,7 @@ class WeekSelector extends StatelessWidget {
           ),
       ],
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
         child: Center(
           child: Text(
             currentLabel,

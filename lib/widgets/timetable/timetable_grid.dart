@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_colors.dart';
+import '../../core/app_constants.dart';
 import '../../models/course.dart';
 import '../../models/event.dart';
 import '../../models/timetable_view_data.dart';
@@ -36,7 +38,12 @@ class DayAgendaView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xxl,
+            AppSpacing.xl,
+            AppSpacing.xxl,
+            AppSpacing.sm,
+          ),
           child: Text(
             pageData.summaryLabel,
             style: Theme.of(
@@ -45,10 +52,10 @@ class DayAgendaView extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 64,
+          height: AppSpacing.chipHeight,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             child: Row(
               children: [
                 for (final chip in chips)
@@ -73,7 +80,7 @@ class DayAgendaView extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: AppSpacing.xs),
         Expanded(
           child: pageData.isEmpty
               ? EmptyScheduleState(
@@ -81,7 +88,12 @@ class DayAgendaView extends StatelessWidget {
                   subtitle: pageData.emptySubtitle,
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.xl,
+                    AppSpacing.sm,
+                    AppSpacing.xl,
+                    AppSpacing.xxl,
+                  ),
                   itemCount: pageData.items.length + 1,
                   itemBuilder: (context, index) {
                     if (index == 0) {
@@ -136,7 +148,7 @@ class TimetableGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      padding: AppSpacing.listPagePadding,
       children: [
         Text(
           pageData.title,
@@ -149,9 +161,9 @@ class TimetableGrid extends StatelessWidget {
           pageData.subtitle,
           style: Theme.of(
             context,
-          ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.xl),
         for (final section in pageData.sections) ...[
           _WeekdaySection(
             section: section,
@@ -182,10 +194,10 @@ class _WeekdaySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.xxl),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,13 +208,13 @@ class _WeekdaySection extends StatelessWidget {
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.lg),
           if (section.isEmpty)
             Text(
               section.emptyText,
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
             ),
           for (final item in section.items)
             Padding(
@@ -238,10 +250,10 @@ class ScheduleHeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.xxl),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,12 +264,12 @@ class ScheduleHeaderCard extends StatelessWidget {
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             subtitle,
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -279,12 +291,12 @@ class EmptyScheduleState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.xxxl),
         child: Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.xxxl),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadii.surface),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -295,13 +307,13 @@ class EmptyScheduleState extends StatelessWidget {
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ],
           ),

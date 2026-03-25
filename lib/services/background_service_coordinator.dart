@@ -30,7 +30,7 @@ class BackgroundServiceCoordinator {
         autoStart: false,
         autoStartOnBoot: true,
         isForegroundMode: true,
-        notificationChannelId: NotificationService.silentBgChannel.id,
+        notificationChannelId: NotificationService.silentBackgroundChannelId,
         initialNotificationTitle:
             BackgroundRuntimeService.foregroundServiceTitle,
         initialNotificationContent:

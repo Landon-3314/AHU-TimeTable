@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_constants.dart';
 import '../providers/settings_provider.dart';
 import '../providers/timetable_view_provider.dart';
 
@@ -111,7 +112,7 @@ class TimetableNavigationController extends ChangeNotifier {
       if (_weekPageController.hasClients) {
         await _weekPageController.animateToPage(
           holidayPagePageIndex,
-          duration: const Duration(milliseconds: 280),
+          duration: AppDurations.pageJump,
           curve: Curves.easeInOut,
         );
       }
@@ -181,7 +182,7 @@ class TimetableNavigationController extends ChangeNotifier {
     if (_dayPageController.hasClients) {
       await _dayPageController.animateToPage(
         (targetWeek - 1) * 7 + (targetWeekday - 1),
-        duration: const Duration(milliseconds: 280),
+        duration: AppDurations.pageJump,
         curve: Curves.easeInOut,
       );
     }
@@ -260,7 +261,7 @@ class TimetableNavigationController extends ChangeNotifier {
         if (animateWeek) {
           _weekPageController.animateToPage(
             safeWeek - 1,
-            duration: const Duration(milliseconds: 260),
+            duration: AppDurations.pageSync,
             curve: Curves.easeOutCubic,
           );
         } else {
@@ -272,7 +273,7 @@ class TimetableNavigationController extends ChangeNotifier {
         if (animateDay) {
           _dayPageController.animateToPage(
             dayIndex,
-            duration: const Duration(milliseconds: 260),
+            duration: AppDurations.pageSync,
             curve: Curves.easeOutCubic,
           );
         } else {
@@ -290,10 +291,7 @@ class TimetableNavigationController extends ChangeNotifier {
     _timetableViewProvider.setCurrentWeek(safeValue);
   }
 
-  void _setCurrentWeekAndWeekday({
-    required int week,
-    required int weekday,
-  }) {
+  void _setCurrentWeekAndWeekday({required int week, required int weekday}) {
     final safeWeek = week.clamp(1, _settingsProvider.totalWeeks).toInt();
     final safeWeekday = weekday.clamp(1, 7).toInt();
     _currentWeek = safeWeek;

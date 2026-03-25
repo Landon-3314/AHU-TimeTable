@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_constants.dart';
 import '../../models/event.dart';
 import '../../models/timetable_view_data.dart';
 import 'event_card.dart';
@@ -25,12 +26,12 @@ class HolidayListView extends StatelessWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      padding: AppSpacing.listPagePadding,
       itemCount: pageData.events.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
             child: ScheduleHeaderCard(
               title: pageData.title,
               subtitle: pageData.subtitle,
@@ -40,7 +41,7 @@ class HolidayListView extends StatelessWidget {
 
         final event = pageData.events[index - 1];
         return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
           child: HolidayEventCard(event: event, onTap: () => onEventTap(event)),
         );
       },

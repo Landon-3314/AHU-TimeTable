@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/app_colors.dart';
+import '../core/app_constants.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/settings/settings_section.dart';
 
 class ScheduleSettingsPage extends StatelessWidget {
   const ScheduleSettingsPage({super.key});
@@ -14,13 +17,13 @@ class ScheduleSettingsPage extends StatelessWidget {
       appBar: AppBar(title: Text(provider.t('schedule_time_settings'))),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: AppSpacing.pagePadding,
           children: [
             _SettingsSection(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                  horizontal: AppSpacing.xl,
+                  vertical: AppSpacing.lg,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -31,12 +34,12 @@ class ScheduleSettingsPage extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.xxs),
                     Text(
                       '${provider.pixelsPerMinute.toStringAsFixed(1)} px / ${provider.t('minutes_suffix')}',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     Slider(
                       value: provider.pixelsPerMinute,
@@ -51,7 +54,7 @@ class ScheduleSettingsPage extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.xl),
             _SettingsSection(
               child: Column(
                 children: [
@@ -84,7 +87,7 @@ class ScheduleSettingsPage extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.xl),
             _SessionSection(
               title: provider.t('morning'),
               startTime: provider.morningStartTime,
@@ -93,7 +96,7 @@ class ScheduleSettingsPage extends StatelessWidget {
               onCountChanged: provider.updateMorningClasses,
               maxClasses: 8,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.xl),
             _SessionSection(
               title: provider.t('afternoon'),
               startTime: provider.afternoonStartTime,
@@ -102,7 +105,7 @@ class ScheduleSettingsPage extends StatelessWidget {
               onCountChanged: provider.updateAfternoonClasses,
               maxClasses: 8,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.xl),
             _SessionSection(
               title: provider.t('evening'),
               startTime: provider.eveningStartTime,
@@ -193,13 +196,7 @@ class _SettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: child,
-    );
+    return SettingsSectionCard(children: [child]);
   }
 }
 
@@ -223,7 +220,10 @@ class _SliderSettingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xl,
+        vertical: AppSpacing.lg,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -233,12 +233,12 @@ class _SliderSettingTile extends StatelessWidget {
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             '$value $unit',
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
           ),
           Slider(
             value: value.toDouble(),

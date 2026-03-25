@@ -461,11 +461,24 @@ G. 后台自动静音与课程提醒闭环
 - 当前效果：
   - 课程提醒已从“未来定时调度”迁移为“后台分钟级轮询 + 即时 show”
 
-5. 当前提醒链路的重要真实状态
-- NotificationService 只是兼容层，不负责任何未来调度
-- 课程提醒只处理 Course，不处理 Event
-- `eventReminderAdvanceMinutes` 目前只存在于设置存储与 UI 文案，不参与后台轮询判断
-- `Event.enableAlarm` 目前只会在表单保存和详情页展示，不参与提醒命中
+5. 日程提醒当前如何跑通
+- 核心链路：
+  - 后台每分钟 `runScheduleTick()`
+  - `_runEventReminderTick(...)`
+  - 读取 `settings.eventReminderAdvanceMinutes`
+  - 读取 `Event` 列表并过滤 `event.enableAlarm == true`
+  - 仅扫描“今天”的日程，计算 `reminderTime = event.dateTime - advanceMinutes`
+  - 通过 `_isSameMinute(now, reminderTime)` 命中当前分钟
+  - 使用 `showEventReminder(...)` 即时发送通知
+  - `notifiedEventIds` 按天重置，防止同一日程在同一天重复提醒
+- 当前效果：
+  - Event 提醒已与 Course 提醒一起接入后台分钟级轮询链路
+
+6. 当前提醒链路的重要真实状态
+- `NotificationService` 现已收缩为外观协调层，内部拆分为权限、通道注册与即时通知发送三类服务
+- Course / Event 提醒都通过后台分钟级轮询命中，不依赖未来定时调度
+- `eventReminderAdvanceMinutes` 与 `Event.enableAlarm` 已真实参与后台命中判断
+- `notifiedCourseIds` / `notifiedEventIds` 双集合按天重置，防止同一课程或同一日程重复轰炸
 
 
 H. 设置页与系统交互闭环
@@ -664,33 +677,62 @@ J. 本轮建档确认出的关键风险点
   - `ScheduleParserService.parse(String html)`
   - `ScheduleParseException`
 
-[x] 7. 后台服务与系统通道(Service)独立封装（已并入任务 3 完成）
+[x] 7. 全局路由、主题与常量规范化
 - 目标：
-  - 拆解 background_service.dart 单体
-  - 隔离服务配置、命令监听、静音引擎、提醒引擎、SharedPreferences 读取
-- 输出方向：
-  - `BackgroundServiceCoordinator`
-  - `AutoMuteEngine`
-  - `CourseReminderEngine`
-  - `ForegroundNotificationManager`
-  - `BackgroundPrefsSnapshotLoader`
+  - 消除主干 UI 中的魔法数字、硬编码颜色与散落路由跳转
+  - 建立统一的主题、常量与命名路由入口
+  - 让页面尽量复用 `Theme.of(context).textTheme` 与核心配置文件
+- 本轮完成：
+  - 新增 `lib/core/app_colors.dart`，统一收拢主题主色、背景色、卡片色、强调色、危险色、文本层级色与课程预设色板
+  - 新增 `lib/core/app_constants.dart`，统一承接 `holidayWeekIndex`、标准间距、圆角半径与动画时长
+  - 新增 `lib/core/app_theme.dart`，由 `AppTheme.light()` 统一装配 `ThemeData`
+  - 新增 `lib/core/app_routes.dart`，集中管理首页、添加课程、教务导入、课表时间设置等命名路由与 `AddCourseRouteArgs`
+  - `main.dart` 已切换到 `AppTheme.light()` + `AppRoutes.onGenerateRoute`
+  - `timetable_page.dart`、`settings_page.dart`、`timetable_detail_sheets.dart` 已从 `MaterialPageRoute(...)` 切换到命名路由
+  - `settings_section.dart`、`course_card.dart`、`event_card.dart`、`timetable_grid.dart`、`holiday_list_view.dart`、`schedule_settings_page.dart`、`add_course_page.dart`、`timetable_navigation_controller.dart` 等主干文件已回填颜色/间距/圆角/动画常量
+- 当前对外核心接口：
+  - `AppRoutes.home` / `AppRoutes.addCourse` / `AppRoutes.importCourses` / `AppRoutes.scheduleSettings`
+  - `AppRoutes.onGenerateRoute(...)`
+  - `AddCourseRouteArgs`
+  - `AppTheme.light()`
+  - `AppColors.*`
+  - `AppConstants.holidayWeekIndex`
+  - `AppSpacing.*` / `AppRadii.*` / `AppDurations.*`
 
-[ ] 8. 通知子系统重构
+[x] 8. 通知子系统重构
 - 目标：
   - 把 NotificationService 从兼容壳整理为“权限 + 通道 + 立即通知发送”的纯服务
   - 明确课程提醒与事件提醒的能力边界
-- 输出方向：
+- 本轮完成：
+  - 新增 `lib/services/notification/notification_permission_service.dart`
+  - 新增 `lib/services/notification/notification_channel_registrar.dart`
+  - 新增 `lib/services/notification/immediate_reminder_notifier.dart`
+  - `NotificationService` 已收缩为通知外观层，负责插件初始化编排与对旧调用点的兼容转发
+  - Android 13+ 通知权限与精确闹钟权限检查/申请已收口到 `NotificationPermissionService`
+  - `silent_bg_channel` 与 `course_reminder_channel` 的注册已收口到 `NotificationChannelRegistrar`
+  - 课程提醒与日程提醒的即时弹窗发送已收口到 `ImmediateReminderNotifier.showCourseReminder(...)` / `showEventReminder(...)`
+- 当前对外核心接口：
+  - `NotificationService.initialize()` / `initializeForBackgroundIsolate()`
+  - `NotificationService.ensurePermissions()` / `getPermissionStatus()`
+  - `NotificationService.showCourseReminder(...)` / `showEventReminder(...)`
   - `NotificationPermissionService`
   - `NotificationChannelRegistrar`
   - `ImmediateReminderNotifier`
 
-[ ] 9. Event 提醒链路补全或下线决策
+[x] 9. Event 提醒链路补全或下线决策（已按“补全提醒链路”方案完成）
 - 目标：
   - 二选一：补全 Event remind pipeline，或明确下线 UI 入口与存储字段
   - 防止“设置可配但实际无效”的假功能继续存在
-- 输出方向：
-  - 若补全：`EventReminderEngine`
-  - 若下线：删除相关设置与字段消费点
+- 本轮完成：
+  - `BackgroundRuntimeService.runScheduleTick(...)` 已在课程提醒扫描后并列接入 `_runEventReminderTick(...)`
+  - Event 提醒逻辑已打通：`StorageService.loadEvents()` -> 过滤当天事件 -> 校验 `enableAlarm` -> 比对 `eventReminderAdvanceMinutes` -> 命中后调用 `NotificationService.showEventReminder(...)`
+  - 后台轮询状态已补充 `notifiedEventIds`，并与 `notifiedCourseIds` 共享按天重置策略
+  - `main.dart` 中的提醒刷新入口已修正后台服务启停条件：只要自动静音、课程提醒或 Event 提醒任一链路需要轮询，都会保持后台运行
+- 当前对外核心接入点：
+  - `BackgroundRuntimeService._runEventReminderTick(...)`
+  - `NotificationService.showEventReminder(...)`
+  - `StorageService.loadEvents()`
+  - `SettingsProvider.eventReminderAdvanceMinutes`
 
 [ ] 10. 课程/日程表单层纯净化
 - 目标：
@@ -742,3 +784,18 @@ J. 本轮建档确认出的关键风险点
 - 每次开始新的模块重构前，先回读本文件。
 - 每次只处理一个 Task Pipeline 模块。
 - 模块完成并经用户确认后，再把对应任务改为 `[x]`，并补记新接口/新类名。
+
+
+==================================================
+五、重构完成状况评估
+==================================================
+
+- 当前项目已形成较清晰的五层结构：
+  - `lib/core/`：全局常量、主题、路由与基础配置
+  - `lib/models/`：纯 Dart 数据模型与序列化协议
+  - `lib/services/`：存储、课表计算、导入解析、导航状态机、后台服务、通知与系统能力封装
+  - `lib/providers/`：状态持有、Getter 暴露、状态变更与 `notifyListeners()`
+  - `lib/screens/` + `lib/widgets/`：页面壳层与哑组件渲染
+- 当前主链路已基本实现“UI -> Provider/Controller -> Service -> Storage/System Plugin”的单向依赖，UI 层不再直接承担复杂解析、后台调度或导航页码计算。
+- 系统级插件调用已被收口到 Service；命名路由、主题与视觉常量也已集中管理，主干页面的可维护性与可替换性已明显提升。
+- 仍待后续专项治理的尾项主要集中在：表单状态机继续下沉、设置页动作控制拆分、国际化资源治理与最小回归测试补强。

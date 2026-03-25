@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/app_colors.dart';
+import '../core/app_constants.dart';
 import '../models/course.dart';
 import '../models/event.dart';
 import '../providers/course_provider.dart';
@@ -52,14 +54,7 @@ class _CourseFormState extends State<_CourseForm> {
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _teacherController = TextEditingController();
 
-  static const List<int> _presetColors = [
-    0xFF7C9AF2,
-    0xFF5DC5B8,
-    0xFFF3A76F,
-    0xFFE98BB2,
-    0xFF9A8CF2,
-    0xFF7FCB72,
-  ];
+  static const List<int> _presetColors = AppColors.coursePaletteValues;
 
   int _selectedWeekday = 1;
   int _selectedColorValue = _presetColors.first;
@@ -116,7 +111,7 @@ class _CourseFormState extends State<_CourseForm> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.all(20),
+            padding: AppSpacing.pagePadding,
             children: [
               TextFormField(
                 controller: _nameController,
@@ -132,7 +127,7 @@ class _CourseFormState extends State<_CourseForm> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xl),
               TextFormField(
                 controller: _locationController,
                 textInputAction: TextInputAction.done,
@@ -147,7 +142,7 @@ class _CourseFormState extends State<_CourseForm> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xl),
               TextFormField(
                 controller: _teacherController,
                 textInputAction: TextInputAction.next,
@@ -156,9 +151,9 @@ class _CourseFormState extends State<_CourseForm> {
                   border: const OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xl),
               DropdownButtonFormField<int>(
-                value: _selectedWeekday,
+                initialValue: _selectedWeekday,
                 decoration: InputDecoration(
                   labelText: provider.t('weekday_label'),
                   border: const OutlineInputBorder(),
@@ -178,14 +173,14 @@ class _CourseFormState extends State<_CourseForm> {
                   }
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xxl),
               Text(
                 provider.t('teaching_weeks'),
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.lg),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -206,12 +201,12 @@ class _CourseFormState extends State<_CourseForm> {
                     ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xxl),
               Row(
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<int>(
-                      value: currentStartValue,
+                      initialValue: currentStartValue,
                       decoration: InputDecoration(
                         labelText: provider.t('start_period'),
                         border: const OutlineInputBorder(),
@@ -239,10 +234,10 @@ class _CourseFormState extends State<_CourseForm> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpacing.lg),
                   Expanded(
                     child: DropdownButtonFormField<int>(
-                      value: currentEndValue,
+                      initialValue: currentEndValue,
                       decoration: InputDecoration(
                         labelText: provider.t('end_period'),
                         border: const OutlineInputBorder(),
@@ -269,17 +264,17 @@ class _CourseFormState extends State<_CourseForm> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xxl),
               Text(
                 provider.t('card_color'),
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.lg),
               Wrap(
-                spacing: 12,
-                runSpacing: 12,
+                spacing: AppSpacing.lg,
+                runSpacing: AppSpacing.lg,
                 children: _presetColors.map((colorValue) {
                   final isSelected = colorValue == _selectedColorValue;
                   return GestureDetector(
@@ -289,7 +284,7 @@ class _CourseFormState extends State<_CourseForm> {
                       });
                     },
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
+                      duration: AppDurations.fast,
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
@@ -297,15 +292,15 @@ class _CourseFormState extends State<_CourseForm> {
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: isSelected
-                              ? Colors.black87
-                              : Colors.transparent,
+                              ? AppColors.textPrimary
+                              : AppColors.transparent,
                           width: 2.5,
                         ),
                       ),
                       child: isSelected
                           ? const Icon(
                               Icons.check,
-                              color: Colors.white,
+                              color: AppColors.onPrimary,
                               size: 20,
                             )
                           : null,
@@ -313,13 +308,13 @@ class _CourseFormState extends State<_CourseForm> {
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 96),
+              const SizedBox(height: AppSpacing.formBottomSafeArea),
             ],
           ),
         ),
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        minimum: AppSpacing.actionBarPadding,
         child: FilledButton(
           onPressed: _isSaving ? null : () => _saveCourse(periodCount),
           child: Text(
@@ -466,7 +461,10 @@ class _EventFormState extends State<_EventForm> {
     final provider = context.watch<SettingsProvider>();
     const sharedDecoration = InputDecoration(
       border: OutlineInputBorder(),
-      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xl,
+      ),
     );
 
     return Scaffold(
@@ -474,7 +472,7 @@ class _EventFormState extends State<_EventForm> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.all(20),
+            padding: AppSpacing.pagePadding,
             children: [
               TextFormField(
                 controller: _nameController,
@@ -488,17 +486,17 @@ class _EventFormState extends State<_EventForm> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xl),
               TextFormField(
                 controller: _locationController,
                 decoration: sharedDecoration.copyWith(
                   labelText: provider.t('location'),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xl),
               InkWell(
                 onTap: _pickDate,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(AppRadii.sm),
                 child: InputDecorator(
                   decoration: sharedDecoration.copyWith(
                     labelText: provider.t('date'),
@@ -511,10 +509,10 @@ class _EventFormState extends State<_EventForm> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xl),
               InkWell(
                 onTap: _pickTime,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(AppRadii.sm),
                 child: InputDecorator(
                   decoration: sharedDecoration.copyWith(
                     labelText: provider.t('time'),
@@ -527,7 +525,7 @@ class _EventFormState extends State<_EventForm> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xl),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(provider.t('enable_alarm_reminder')),
@@ -538,13 +536,13 @@ class _EventFormState extends State<_EventForm> {
                   });
                 },
               ),
-              const SizedBox(height: 96),
+              const SizedBox(height: AppSpacing.formBottomSafeArea),
             ],
           ),
         ),
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        minimum: AppSpacing.actionBarPadding,
         child: FilledButton(
           onPressed: _isSaving ? null : _saveEvent,
           child: Text(_isSaving ? provider.t('saving') : provider.t('save')),

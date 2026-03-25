@@ -34,6 +34,7 @@ class BackgroundRuntimeService {
   Timer? _timer;
   DeviceAudioMode? _lastAppliedMode;
   final Set<String> _notifiedCourseIds = <String>{};
+  final Set<String> _notifiedEventIds = <String>{};
   String? _notifiedDay;
 
   Future<void> start(ServiceInstance service) async {
@@ -70,6 +71,7 @@ class BackgroundRuntimeService {
       final nextMode = _computeTargetMode(storageService);
       await _applyMode(service: service, mode: nextMode);
       await _runCourseReminderTick(storageService);
+      await _runEventReminderTick(storageService);
     } catch (error, stackTrace) {
       developer.log(
         'runScheduleTick error',
@@ -177,10 +179,7 @@ class BackgroundRuntimeService {
 
     final now = DateTime.now();
     final dayKey = '${now.year}-${now.month}-${now.day}';
-    if (_notifiedDay != dayKey) {
-      _notifiedCourseIds.clear();
-      _notifiedDay = dayKey;
-    }
+    _resetNotificationDeduplication(dayKey);
 
     final totalWeeks = storageService.readTotalWeeks(fallback: 20).clamp(1, 30);
     final semesterStartDate = _loadSemesterStartDate(storageService);
@@ -240,6 +239,54 @@ class BackgroundRuntimeService {
     }
   }
 
+  Future<void> _runEventReminderTick(StorageService storageService) async {
+    final advanceMinutes = storageService
+        .readEventReminderAdvanceMinutes(fallback: 0)
+        .clamp(0, 1440)
+        .toInt();
+    if (advanceMinutes <= 0) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final dayKey = '${now.year}-${now.month}-${now.day}';
+    _resetNotificationDeduplication(dayKey);
+
+    final events = storageService.loadEvents();
+    for (final event in events) {
+      if (!event.enableAlarm) {
+        continue;
+      }
+
+      if (!_isSameDay(now, event.dateTime)) {
+        continue;
+      }
+
+      final reminderTime = event.dateTime.subtract(
+        Duration(minutes: advanceMinutes),
+      );
+      if (!_isSameMinute(now, reminderTime)) {
+        continue;
+      }
+
+      final eventName = event.name.trim();
+      if (eventName.isEmpty) {
+        continue;
+      }
+
+      final dedupeId = '$dayKey-${event.id}';
+      if (_notifiedEventIds.contains(dedupeId)) {
+        continue;
+      }
+
+      await _notificationService.showEventReminder(
+        event: event,
+        notificationId: dedupeId.hashCode & 0x7fffffff,
+      );
+      _notifiedEventIds.add(dedupeId);
+    }
+  }
+
   List<TimeSlot> _generateTimeSlots(StorageService storageService) {
     return _scheduleCalculator.generateTimeSlots(
       classDuration: storageService.readClassDuration(fallback: 45),
@@ -280,5 +327,21 @@ class BackgroundRuntimeService {
         left.day == right.day &&
         left.hour == right.hour &&
         left.minute == right.minute;
+  }
+
+  bool _isSameDay(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
+  }
+
+  void _resetNotificationDeduplication(String dayKey) {
+    if (_notifiedDay == dayKey) {
+      return;
+    }
+
+    _notifiedCourseIds.clear();
+    _notifiedEventIds.clear();
+    _notifiedDay = dayKey;
   }
 }

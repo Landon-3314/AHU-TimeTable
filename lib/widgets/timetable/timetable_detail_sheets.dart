@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/app_colors.dart';
+import '../../core/app_constants.dart';
+import '../../core/app_routes.dart';
 import '../../models/clock_time.dart';
 import '../../models/course.dart';
 import '../../models/event.dart';
 import '../../providers/course_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/timetable_view_data_service.dart';
-import '../../screens/add_course_page.dart';
 
 Future<void> showCourseDetailsSheet(BuildContext context, Course course) async {
   final settingsProvider = context.read<SettingsProvider>();
@@ -40,7 +42,7 @@ Future<void> showCourseDetailsSheet(BuildContext context, Course course) async {
     builder: (sheetContext) {
       return SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          padding: AppSpacing.floatingSheetPadding,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,21 +53,21 @@ Future<void> showCourseDetailsSheet(BuildContext context, Course course) async {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xl),
               DetailRow(
                 label: settingsProvider.t('teacher'),
                 value: course.teacher.isEmpty
                     ? settingsProvider.t('not_set')
                     : course.teacher,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.md),
               DetailRow(
                 label: settingsProvider.t('location'),
                 value: course.location.isEmpty
                     ? settingsProvider.t('not_set')
                     : course.location,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.md),
               DetailRow(
                 label: settingsProvider.t('periods'),
                 value: _periodRangeLabel(
@@ -74,53 +76,52 @@ Future<void> showCourseDetailsSheet(BuildContext context, Course course) async {
                   course.endPeriod,
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.md),
               DetailRow(
                 label: settingsProvider.t('time'),
                 value: courseTimeText,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.md),
               DetailRow(
                 label: settingsProvider.t('weekday'),
                 value: settingsProvider.t(weekdayLabels[course.weekday - 1]),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.md),
               DetailRow(
                 label: settingsProvider.t('weeks'),
                 value: course.weeks.join(', '),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xxl),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.onPrimary,
                   ),
                   onPressed: () async {
                     Navigator.of(sheetContext).pop();
-                    await navigator.push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => AddCoursePage(existingCourse: course),
-                      ),
+                    await navigator.pushNamed(
+                      AppRoutes.addCourse,
+                      arguments: AddCourseRouteArgs(existingCourse: course),
                     );
                   },
                   child: Text(settingsProvider.t('edit_course')),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.lg),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFD64545),
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: AppColors.onPrimary,
                   ),
                   onPressed: () {
                     Navigator.of(sheetContext).pop();
                     unawaited(
                       Future<void>.delayed(
-                        const Duration(milliseconds: 300),
+                        AppDurations.sheetActionDelay,
                       ).then((_) => courseProvider.removeCourse(course)),
                     );
                   },
@@ -145,7 +146,7 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
     builder: (sheetContext) {
       return SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          padding: AppSpacing.floatingSheetPadding,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,38 +157,38 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xl),
               DetailRow(
                 label: settingsProvider.t('time'),
                 value: DateFormat('yyyy/MM/dd HH:mm').format(event.dateTime),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.md),
               DetailRow(
                 label: settingsProvider.t('location'),
                 value: event.location.isEmpty
                     ? settingsProvider.t('not_set')
                     : event.location,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpacing.md),
               DetailRow(
                 label: settingsProvider.t('alarm'),
                 value: event.enableAlarm
                     ? settingsProvider.t('enabled')
                     : settingsProvider.t('disabled'),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xxl),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFD64545),
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: AppColors.onPrimary,
                   ),
                   onPressed: () {
                     Navigator.of(sheetContext).pop();
                     unawaited(
                       Future<void>.delayed(
-                        const Duration(milliseconds: 300),
+                        AppDurations.sheetActionDelay,
                       ).then((_) => courseProvider.deleteEvent(event.id)),
                     );
                   },
@@ -218,7 +219,7 @@ class DetailRow extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.black54,
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
