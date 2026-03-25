@@ -1,20 +1,22 @@
-Project: Local-first Flutter Timetable & Schedule App
+﻿Project: Local-first Flutter Timetable & Schedule App
 Workspace: D:\zzzzz\timetable
-Last updated: 2026-03-23
+Last updated: 2026-03-25
 
 Overview
-This project has evolved from a simple campus timetable app into a local-first schedule manager that supports:
-- Periodic courses
-- One-off events
-- WebView-based academic-system import
-- Local notifications
-- Android auto-mute
-- Lightweight bilingual UI (Chinese / English)
+该项目已从“课程展示”演进为“本地优先的课程 + 日程管理应用”，核心能力包括：
+- 课程（Course）与单次日程（Event）混合管理
+- 教务系统 WebView 抓取导入（含异常结构兼容）
+- 多语言（中文/英文）
+- Android 自动静音（前台常驻后台服务）
+- 课前提醒迁移至后台轮询触发（不再依赖 zonedSchedule）
+- 周视图支持“假期中”模式
 
-The main timetable UI is no longer based on absolute positioning. The active architecture is:
-- PageView + ListView
-- Provider for global state
-- SharedPreferences for local persistence
+Current Architecture (Active)
+- UI: PageView + ListView + Provider
+- Local storage: SharedPreferences
+- Import: WebView + JS 注入 DOM 抓取
+- Background runtime: flutter_background_service (Android foreground service)
+- Notifications: flutter_local_notifications（即时 show；不再注册未来闹钟）
 
 Core Tech Stack
 - Flutter
@@ -23,16 +25,13 @@ Core Tech Stack
 - webview_flutter
 - intl
 - flutter_local_notifications
-- timezone
+- flutter_background_service
+- app_settings
+- sound_mode
 
-Important Architecture Direction
-- Keep the current PageView/ListView architecture
-- Do not revert to the old Stack + Positioned timetable layout
-- Import logic is now real DOM parsing logic inside WebView JS injection, not a mock payload
-- Notifications and schedule logic are local-first and do not depend on a backend
-
-Current Main Modules
+Main Modules (Current)
 - lib/main.dart
+- lib/background_service.dart
 - lib/providers/course_provider.dart
 - lib/providers/settings_provider.dart
 - lib/services/notification_service.dart
@@ -42,457 +41,131 @@ Current Main Modules
 - lib/screens/import_course_page.dart
 - lib/screens/settings_page.dart
 - lib/screens/schedule_settings_page.dart
-- lib/app_localizations.dart
+- android/app/src/main/AndroidManifest.xml
 
 Data Models
-1. Course
-File: lib/models/course.dart
-
-Current fields:
-- name: String
-- location: String
-- teacher: String
-- weekday: int
-- weeks: List<int>
-- startPeriod: int
-- endPeriod: int
-- colorValue: int
-
-Notes:
-- weeks is already stored as List<int>
-- Course.fromJson still contains backward-compatible defaults because local data format changed multiple times during development
-
-2. Event
-File: lib/models/event.dart
-
-Current fields:
-- id: String
-- name: String
-- location: String
-- dateTime: DateTime
-- enableAlarm: bool
-
-Supports:
-- toJson
-- fromJson
-- local persistence through SharedPreferences
-
-Provider Layer
-1. CourseProvider
-File: lib/providers/course_provider.dart
-
-Currently manages:
-- List<Course> _courses
-- List<Event> _events
-- currentWeek
-- currentWeekday
-
-Implemented features:
-- load persisted courses/events
-- addCourse()
-- addCourses()
-- updateCourse()
-- removeCourse()
-- addEvent()
-- updateEvent()
-- deleteEvent()
-- clearAllCourses()
-- clearAllData()
-- setCurrentWeek()
-- setCurrentWeekday()
-- setCurrentWeekAndWeekday()
-- initializeRealDate()
-
-Reminder binding:
-- Provider does not schedule notifications directly by itself
-- It calls a bound callback through _refreshReminders()
-- Logging was added for reminder refresh debugging
-
-Current debug log:
-- [CourseProvider] _refreshReminders called: courses=..., events=...
-
-2. SettingsProvider
-File: lib/providers/settings_provider.dart
-
-Currently manages:
-- timetable slot settings
-- semester date settings
-- reminder settings
-- language selection
-- auto mute toggle
-
-Persistent settings currently include:
-- classDuration
-- shortBreak
-- bigBreak
-- morningStartTime
-- morningClasses
-- afternoonStartTime
-- afternoonClasses
-- eveningStartTime
-- eveningClasses
-- semesterStartDate
-- totalWeeks
-- reminderAdvanceMinutes
-- eventReminderAdvanceMinutes
-- languageCode
-- autoMuteEnabled
-
-Important current semantics:
-- reminderAdvanceMinutes = course reminder advance minutes
-- eventReminderAdvanceMinutes = event reminder advance minutes
-
-Default values:
-- semester total weeks: 20
-- course reminderAdvanceMinutes: 0
-- eventReminderAdvanceMinutes: 0
-- languageCode: zh
-- autoMuteEnabled: false
-
-Time-aware helpers already implemented:
-- currentRealWeek
-- currentRealWeekday
-- getDateFor(int week, int weekday)
-
-Reminder callback binding:
-- Settings changes that affect reminder timing call _refreshReminders()
-
-Main App Bootstrap
-File: lib/main.dart
-
-Current behavior:
-- WidgetsFlutterBinding.ensureInitialized()
-- SharedPreferences.getInstance() before runApp()
-- await NotificationService.instance.initialize() before runApp()
-- creates SettingsProvider and CourseProvider at root
-- binds a shared refreshReminders() callback into both providers
-
-refreshReminders() currently:
-- prints debug information
-- refreshes all notifications through NotificationService
-- refreshes Android auto-mute tasks through AutoMuteService
-
-Current debug log:
-- [Main] refreshReminders start: courseReminderAdvanceMinutes=..., eventReminderAdvanceMinutes=..., courses=..., events=..., autoMuteEnabled=...
-
-UI Structure
-1. MainScaffold
-Bottom navigation currently routes between:
-- Timetable
-- Settings
-
-2. TimetablePage
-File: lib/screens/timetable_page.dart
-
-Current active structure:
-- AppBar left side:
-  - week jump popup
-  - today button
-- AppBar right side:
-  - import button
-  - add button
-- SegmentedButton for:
-  - Day View
-  - Week View
-
-Important note:
-- The old animated title text in AppBar was removed entirely to eliminate jitter
-- There is no longer a dynamic textual title switching between day/week mode
-
-Day View
-- Uses PageView.builder with totalWeeks * 7 pages
-- Supports continuous cross-week sliding
-- Computes:
-  - targetWeek = (index ~/ 7) + 1
-  - targetWeekday = (index % 7) + 1
-- Syncs current week/current weekday back into CourseProvider
-- Top chip bar shows weekday + real date
-- Day page header shows:
-  - week label
-  - weekday label
-  - actual date
-- Renders mixed timeline of:
-  - courses
-  - events
-- Sorts mixed items by actual DateTime order
-
-Week View
-- Uses PageView.builder with totalWeeks pages
-- Shows week date range using getDateFor(week, 1/7)
-- Groups courses by weekday
-
-Current navigation behavior:
-- week jump popup uses jumpToPage for instant switching
-- today button uses jumpToPage to jump back to current real week/day
-- ordinary day chip tap still uses animated page change
-
-Course Card / Event Card
-- Course cards show name, teacher/location, and period range
-- Event cards have separate visual style and show:
-  - event marker
-  - name
-  - location
-  - event time
-
-Detail Sheets
-File: lib/screens/timetable_page.dart
-
-Course detail sheet:
-- receives a static Course object
-- does not watch Provider by courseId
-- shows teacher, location, periods, actual clock time, weekday, weeks
-- supports edit
-- supports delete
-
-Event detail sheet:
-- receives a static Event object
-- shows time, location, alarm enabled/disabled
-- supports delete
-
-Recent stability fixes:
-- Event delete now closes sheet first, then deletes after 300ms
-- Course delete now closes sheet first, then deletes after 300ms
-- Course tap now checks whether the tapped course still exists in CourseProvider before opening details
-- This prevents fast repeated tapping from opening detail on already-removed data
-
-Add / Edit UI
-File: lib/screens/add_course_page.dart
-
-Current page uses TabBar + TabBarView:
-- 添加课程 / Add Course
-- 添加日程 / Add Event
-
-Course form supports:
-- name
-- location
-- teacher
-- weekday
-- teaching weeks
-- start period
-- end period
-- color
-
-Event form supports:
-- name
-- location
-- date picker
-- time picker
-- enable alarm toggle
-
-Important UI detail:
-- Date and time selectors were refactored to InkWell + InputDecorator
-- They now visually align with the TextField inputs and have full-width click targets
-
-Import System
-File: lib/screens/import_course_page.dart
-
-Current state:
-- Real WebView-based import page
-- Loads actual AHU WebVPN portal URL
-- Enables unrestricted JavaScript
-- Registers CourseDataChannel
-- Uses injected extractScript to scrape DOM
-
-Current scraper capabilities:
-- searches in main document first
-- if not found, searches accessible iframes
-- supports table.Wjkc and table.courseTable
-- parses tdHtml / course-name / lesson-name structure
-- avoids duplicate hidden tdHtml copies
-- supports multiple courses in one cell
-- calculates weekday from td class
-- calculates period range from dayPartUnit + rowspan
-- returns JSON array matching Course model
-
-Recent parser upgrade:
-- fixed irregular week formats like:
-  - (1-18周)
-  - (1-3,5-18周)
-  - (1,3,5周)
-  - odd/even week suffixes
-- weeks are now expanded into List<int>
-- location parsing now strips week/period fragments first, preventing week fragments from leaking into location
-- this was specifically added to fix the bug where "1-3" leaked into location on adjusted-course rows
-
-Current import UX behavior:
-- success path now only saves imported courses and pops back
-- the old import success result popup/snackbar was removed
-- debug/error messages from JS are still shown through SnackBar
-
-Known limitation:
-- Because this is still DOM scraping against a live academic system, selectors may need adjustment if the university page changes
-
-Notifications
-File: lib/services/notification_service.dart
-
-Current features:
-- initializes timezone engine
-- gets local timezone through MethodChannel('app.timezone')
-- supports Android + iOS notification initialization
-- requests iOS notification permissions
-- requests Android notification permission
-- handles exact alarm permission checks on Android
-
-Scheduling features:
-- schedule course reminders
-- schedule event reminders
-- refresh all reminders on data/settings changes
-- iOS fallback reminder for auto-mute mode
-
-Current separation:
-- Course reminders use settings.reminderAdvanceMinutes
-- Event reminders use settings.eventReminderAdvanceMinutes
-
-Android scheduling behavior:
-- prefers AndroidScheduleMode.exactAllowWhileIdle
-- automatically falls back to AndroidScheduleMode.inexactAllowWhileIdle if exact alarm cannot be used
-
-Current debugging logs in NotificationService:
-- course scheduling logs
-- event scheduling entry logs
-- event skip reason logs
-- schedule time / now / diffMinutes logs
-- exact scheduling capability logs
-- zonedSchedule try-catch with error and stack trace logging
-
-Important diagnosis already confirmed:
-- If an event is created too close to its start time, and eventReminderAdvanceMinutes pushes the reminder trigger into the past, scheduling is intentionally skipped
-- Example already observed in logs:
-  - event at 13:35
-  - event reminder = 5 minutes
-  - created at 13:34
-  - computed reminder time = 13:30
-  - skipped because scheduledTime was already in the past
-
-Therefore:
-- If testing event reminders, either:
-  - set event reminder to 0
-  - or create an event far enough in the future
-
-Auto Mute
-Files:
-- lib/services/auto_mute_service.dart
-- android/app/src/main/kotlin/com/example/timetable/*
-
-Current state:
-- Android only
-- implemented through native MethodChannel, not third-party mute plugins
-- iOS does not attempt real mute control
-- iOS uses fallback local notifications reminding the user to mute manually
-
-Android side supports:
-- permission check
-- open system permission settings
-- scheduling mute/restore tasks natively
-
-iOS Compatibility
-Files:
-- ios/Runner/Info.plist
-- ios/Runner/AppDelegate.swift
-
-Current state:
-- ATS is relaxed to support WebView/WebVPN/iframe loading
-- app.timezone channel implemented on iOS
-- flutter_local_notifications registrant callback configured
-- iOS local notifications initialized and permission requested
-
-Settings UI
-Files:
-- lib/screens/settings_page.dart
-- lib/screens/schedule_settings_page.dart
-
-Current structure:
-1. Basic Settings
-- language
-- semester start date
-- semester total weeks
-- schedule time slot editor entry
-
-2. Notifications
-- course reminder time
-- event reminder time
-- auto mute toggle / iOS fallback behavior
-
-3. Data & Storage
-- clear browser cookies
-- clear all local data
-
-Reminder settings UI:
-- course reminder options:
-  - 0
-  - 5
-  - 10
-  - 15
-  - 30
-- event reminder options:
-  - 0
-  - 15
-  - 30
-  - 60
-  - 120
-  - 1440
-
-0 is displayed as:
-- zh: 不提醒
-- en: None
-
-Localization
-File: lib/app_localizations.dart
-
-Current state:
-- lightweight custom translation map
-- no CLI code generation
-- SettingsProvider stores languageCode
-- MaterialApp locale reacts to SettingsProvider.languageCode
-- major core screens already switched to provider.t(...)
-
-Pages already connected to localization:
-- main scaffold
-- timetable page
-- settings page
-- schedule settings page
-- add course / add event page
-- import course page
-
-Notes:
-- This is not full Flutter intl/l10n tooling
-- It is intentionally a simple Provider-driven lightweight solution
-
-Known Recent Fixes From This Conversation
-- Split reminder settings into course reminders and event reminders
-- Added detailed scheduling debug logs
-- Confirmed event reminder skip behavior when scheduled trigger is already in the past
-- Reworked import JS to properly parse discontinuous teaching weeks
-- Removed import success popup/snackbar to keep flow clean
-- Fixed event detail delete timing lag by closing first, deleting after delay
-- Applied same close-first-delete-later pattern to course detail delete
-- Added safe existence check before opening course detail to prevent fast-tap black screen crash
-
-Current Known Caveats / Risks
-- Some terminal output may display mojibake due Windows console encoding, but source files were cleaned where touched
-- ImportCoursePage still depends on live DOM structure of AHU system and WebVPN
-- No stable unique Course id exists yet; course existence guard currently compares structural fields
-- If two courses are structurally identical, the existence check treats them as the same course
-- Notification logic is heavily instrumented for debugging right now; logs may be noisy
-- Reminder scheduling should be tested using future trigger times that are truly after current system time
+1) Course (lib/models/course.dart)
+- name, location, teacher
+- weekday, weeks, startPeriod, endPeriod
+- colorValue
+
+2) Event (lib/models/event.dart)
+- id, name, location, dateTime, enableAlarm
+
+Implemented Features (Confirmed)
+1. Day View（按天）
+- 课程+日程混合时间线展示
+- 按实际时间排序
+
+2. Week View（按周）
+- 正常周：按 weekday 混合展示 Course + Event（样式区分）
+- HOLIDAY_WEEK_INDEX=999（“假期中”）
+- 假期模式：非学期区间 Event 按时间升序 ListView 展示
+
+3. 周选择器与滑动联动
+- 周选择器末尾固定“假期中”
+- Week PageView 已扩展为 totalWeeks + 1
+- 可从最后一周继续右滑进入“假期中”
+- 滑到最后一页会同步顶部状态为“假期中”
+- 点击顶部“假期中”会跳转到最后一页
+
+4. 自动静音开关分层重构
+- UI 层：onChanged 仅调用 provider.toggleAutoMuteWithCheck
+- 业务层：权限检查、异常保护、持久化收拢到 SettingsProvider
+
+5. 后台服务（Android）
+- onServiceStart 使用 WidgetsFlutterBinding.ensureInitialized + DartPluginRegistrant.ensureInitialized
+- 每分钟 Timer.periodic 轮询
+- 支持 sync_now / stop_service 指令
+- 使用 silent_bg_channel 低感知前台服务通道
+
+6. 课前提醒架构迁移
+- notification_service.dart 中旧 zonedSchedule 路径已废弃（保留兼容壳）
+- 改为 background_service 每分钟匹配后即时 localNotifications.show
+- 去重机制：Set<String> notifiedCourseIds（按天重置）
+
+7. 通知通道重构
+- silent_bg_channel：Importance.min，无声无振动
+- course_reminder_channel：Importance.max + Priority.high
+- Android 通道名中文化：
+  - silent_bg_channel -> “后台静音服务”
+  - course_reminder_channel -> “课程提醒”
+
+8. 前台常驻通知文案修复（关键）
+- 根因修复：onServiceStart 内此前 setForegroundNotificationInfo(title:'', content:'') 会覆盖初始文案
+- 现已统一常量文案并在运行中刷新保持一致：
+  - 标题：自动静音服务运行中
+  - 内容：正在保障上下课自动静音。如需隐藏，请在系统通知设置中关闭此类别。
+- foregroundServiceNotificationId 已统一为 9527，避免双通知/空通知分裂
+- 启动后台服务前补充 Android 通知权限请求（requestNotificationsPermission）
+
+9. 设置页清理
+- 已删除“模拟上课(后台执行)”/“模拟下课(后台执行)”调试入口及回调绑定
+- 保留电池优化跳转入口（app_settings）
+
+10. 导入抓取脚本增强（import_course_page.dart）
+- 保留原结构解析
+- 新增降维解析：tdHtml.innerHtml -> 纯文本
+- 全局正则 allMatches 提取多段“周次/节次/校区/地点/老师”
+- 兼容周次分隔符：, - ~
+- 兼容“同一 tdHtml 内 div + 游离 TextNode”混合结构
+
+11. 首装空数据修复（移除默认测试课程）
+- 已删除 CourseProvider 中 _mockCourses（两节默认测试课）
+- _loadInitialCourses 现为“本地无数据即返回空列表 []”
+- 全新安装后课表默认为空，不再注入占位数据
+
+Known Issues / Verification Pending
+1) 导入特例回归
+- courseStructure.txt 对应特例已加兼容路径
+- 需继续用真实页面回放验证“多时间段同名课”是否 100% 入库
+
+2) 后台服务机型差异
+- 历史问题包含 startForeground Bad notification / isolate 插件限制
+- 关键链路已修复，但仍需真机长时回归（含省电策略）
+
+3) 分钟级轮询边界
+- 当前提醒采用 _isSameMinute
+- 极端省电/调度抖动场景仍有边界漏触发概率
+
+High Coupling / Low Robustness Areas (Rewrite Backlog)
+[Priority P0]
+A) Import JS Parser（lib/screens/import_course_page.dart）
+- 单文件脚本过大，DOM/正则分支耦合高
+- 建议拆分：清洗/分段/字段抽取/周次解析/去重，并建立 HTML 夹具回归测试
+
+B) Background Service Monolith（lib/background_service.dart）
+- 静音、提醒、通知、去重、课表时间计算耦合在单文件
+- 建议拆分为 coordinator + mute engine + reminder engine + schedule matcher
+
+[Priority P1]
+C) TimetablePage 状态耦合（lib/screens/timetable_page.dart）
+- Day/Week/Holiday 与控制器同步逻辑偏重
+- 建议抽离统一 WeekSelectionState（含普通周/假期周状态机）
+
+D) NotificationService 兼容壳
+- 已迁移后台轮询，但仍保留历史 schedule API
+- 建议加 deprecate 标记并收敛职责为 channel/permission manager
+
+[Priority P2]
+E) Course 唯一标识
+- 当前缺 stable id，结构相同课程存在误判风险
+- 建议为 Course 增加 stable id 并改造导入/编辑/删除全链路
+
+F) 日志治理
+- Main/Provider/BackgroundService 日志噪音偏高
+- 建议引入日志级别与开关
 
 Recommended Next Steps
-1. If reminder notifications still appear inconsistent, test with:
-   - eventReminderAdvanceMinutes = 0
-   - event scheduled 2-5 minutes ahead
-2. Consider adding a stable id field to Course model
-   - would simplify existence checks, editing, and de-duplication
-3. Consider adding import de-duplication strategy for repeated academic-system imports
-4. Consider trimming NotificationService debug logs after scheduling behavior is fully verified
-5. If AHU DOM changes again, re-check import_course_page.dart extractScript first
+1. 真机回归：自动静音开启后，观察前台通知文案是否持续正确显示
+2. 真机回归：周视图从最后一周右滑进入“假期中”，及顶部选择器状态联动
+3. 真机回归：全新安装后，课程列表与课表页应为空（无默认测试课程）
+4. 导入回归：用 courseStructure 特例页面再次验证多段课程解析入库
+5. 分阶段拆分 background_service 与 import parser，降低耦合
 
-Quick Resume Notes For Next Chat
-- Main architecture is PageView/ListView, not absolute-position layout
-- Course and Event both exist and are persisted locally
-- SettingsProvider already handles semester dates, bilingual UI, course reminders, and event reminders
-- NotificationService already supports separate course/event reminder offsets
-- ImportCoursePage already has live WebView scraping with discontinuous week parsing fixed
-- Course detail fast-tap crash has already been mitigated by:
-  - static course snapshot
-  - close-first-delete-later
-  - open-before-check existence guard
+Quick Resume Notes
+- 自动静音与课前提醒均由 background_service 常驻服务驱动
+- WeekView 已支持右滑进入“假期中”并双向同步顶部周选择
+- 设置页调试按钮已移除
+- 前台通知空文案覆盖问题已修复
+- 默认 mock 课程注入已移除（首装空数据）

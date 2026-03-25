@@ -1,36 +1,19 @@
-﻿import 'dart:async';
-import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sound_mode/permission_handler.dart';
 import 'package:sound_mode/sound_mode.dart';
 import 'package:sound_mode/utils/ringer_mode_statuses.dart';
 
-const String _coursesKey = 'courses.items';
-const String _autoMuteEnabledKey = 'settings.autoMuteEnabled';
-const String _semesterStartDateKey = 'settings.semesterStartDate';
-const String _totalWeeksKey = 'settings.totalWeeks';
-const String _reminderAdvanceMinutesKey = 'settings.reminderAdvanceMinutes';
+import 'services/storage_service.dart';
 
-const String _classDurationKey = 'settings.classDuration';
-const String _shortBreakKey = 'settings.shortBreak';
-const String _bigBreakKey = 'settings.bigBreak';
-const String _morningStartTimeKey = 'settings.morningStartTime';
-const String _morningClassesKey = 'settings.morningClasses';
-const String _afternoonStartTimeKey = 'settings.afternoonStartTime';
-const String _afternoonClassesKey = 'settings.afternoonClasses';
-const String _eveningStartTimeKey = 'settings.eveningStartTime';
-const String _eveningClassesKey = 'settings.eveningClasses';
 const int _foregroundServiceNotificationId = 9527;
 const String _foregroundServiceTitle = '自动服务运行中';
-const String _foregroundServiceContent =
-    '正在保障上下课服务。如需隐藏，请在系统通知设置中关闭此类别。';
+const String _foregroundServiceContent = '正在保障上下课服务。如需隐藏，请在系统通知设置中关闭此类别。';
 
 bool _serviceConfigured = false;
 
@@ -44,18 +27,14 @@ const AndroidNotificationChannel _silentBgChannel = AndroidNotificationChannel(
 
 const AndroidNotificationChannel _courseReminderChannel =
     AndroidNotificationChannel(
-  'course_reminder_channel',
-  '课程提醒',
-  description: 'High priority course reminder notifications',
-  importance: Importance.max,
-  playSound: true,
-  enableVibration: true,
-  showBadge: true,
-);
-
-Future<void> initBackgroundService() async {
-  await _ensureBackgroundServiceConfigured();
-}
+      'course_reminder_channel',
+      '课程提醒',
+      description: 'High priority course reminder notifications',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+    );
 
 Future<void> _ensureBackgroundServiceConfigured() async {
   if (!Platform.isAndroid) {
@@ -68,7 +47,8 @@ Future<void> _ensureBackgroundServiceConfigured() async {
   final notificationsPlugin = FlutterLocalNotificationsPlugin();
   final androidNotifications = notificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+        AndroidFlutterLocalNotificationsPlugin
+      >();
   await androidNotifications?.createNotificationChannel(_silentBgChannel);
   await androidNotifications?.createNotificationChannel(_courseReminderChannel);
 
@@ -128,7 +108,8 @@ Future<void> _ensureNotificationPermissionForAndroid() async {
   final notificationsPlugin = FlutterLocalNotificationsPlugin();
   final androidNotifications = notificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+        AndroidFlutterLocalNotificationsPlugin
+      >();
   await androidNotifications?.requestNotificationsPermission();
 }
 
@@ -187,15 +168,15 @@ void onServiceStart(ServiceInstance service) {
 
   Future<void> runScheduleTick() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.reload();
-      final mode = _computeTargetModeFromPrefs(prefs);
+      final storageService = await StorageService.create();
+      await storageService.reload();
+      final mode = _computeTargetMode(storageService);
       if (mode == null) {
         return;
       }
       await applyMode(mode);
       await _runCourseReminderTick(
-        prefs: prefs,
+        storageService: storageService,
         localNotifications: localNotifications,
         notifiedCourseIds: notifiedCourseIds,
         notifiedDay: notifiedDay,
@@ -247,15 +228,15 @@ void onServiceStart(ServiceInstance service) {
   unawaited(runScheduleTick());
 }
 
-String? _computeTargetModeFromPrefs(SharedPreferences prefs) {
-  final autoMuteEnabled = prefs.getBool(_autoMuteEnabledKey) ?? false;
+String? _computeTargetMode(StorageService storageService) {
+  final autoMuteEnabled = storageService.readAutoMuteEnabled(fallback: false);
   if (!autoMuteEnabled) {
     return 'normal';
   }
 
   final now = DateTime.now();
-  final totalWeeks = (prefs.getInt(_totalWeeksKey) ?? 20).clamp(1, 30);
-  final semesterStartDate = _loadSemesterStartDate(prefs);
+  final totalWeeks = storageService.readTotalWeeks(fallback: 20).clamp(1, 30);
+  final semesterStartDate = _loadSemesterStartDate(storageService);
   final currentWeek = _computeCurrentWeek(
     semesterStartDate: semesterStartDate,
     totalWeeks: totalWeeks,
@@ -263,33 +244,21 @@ String? _computeTargetModeFromPrefs(SharedPreferences prefs) {
   );
   final currentWeekday = now.weekday.clamp(1, 7);
 
-  final slots = _generateTimeSlots(prefs);
-  final rawCourses = prefs.getStringList(_coursesKey) ?? <String>[];
-  final courses = rawCourses
-      .map((raw) {
-        try {
-          return jsonDecode(raw) as Map<String, dynamic>;
-        } catch (_) {
-          return <String, dynamic>{};
-        }
-      })
-      .where((course) => course.isNotEmpty)
-      .toList();
+  final slots = _generateTimeSlots(storageService);
+  final courses = storageService.loadCourses();
 
   var inClass = false;
   for (final course in courses) {
-    final weekday = (course['weekday'] as num?)?.toInt();
-    if (weekday != currentWeekday) {
+    if (course.weekday != currentWeekday) {
       continue;
     }
 
-    final weeks = _parseWeeks(course['weeks']);
-    if (!weeks.contains(currentWeek)) {
+    if (!course.weeks.contains(currentWeek)) {
       continue;
     }
 
-    final startPeriod = (course['startPeriod'] as num?)?.toInt() ?? 0;
-    final endPeriod = (course['endPeriod'] as num?)?.toInt() ?? 0;
+    final startPeriod = course.startPeriod;
+    final endPeriod = course.endPeriod;
     if (startPeriod <= 0 ||
         endPeriod <= 0 ||
         startPeriod > slots.length ||
@@ -323,9 +292,8 @@ String? _computeTargetModeFromPrefs(SharedPreferences prefs) {
   return inClass ? 'vibrate' : 'normal';
 }
 
-DateTime _loadSemesterStartDate(SharedPreferences prefs) {
-  final raw = prefs.getString(_semesterStartDateKey);
-  final parsed = raw == null ? null : DateTime.tryParse(raw);
+DateTime _loadSemesterStartDate(StorageService storageService) {
+  final parsed = storageService.readSemesterStartDate();
   final date = parsed ?? DateTime.now();
   final normalized = DateTime(date.year, date.month, date.day);
   return normalized.subtract(Duration(days: normalized.weekday - 1));
@@ -342,35 +310,18 @@ int _computeCurrentWeek({
   return week.clamp(1, totalWeeks).toInt();
 }
 
-List<int> _parseWeeks(Object? raw) {
-  if (raw is! List) {
-    return const <int>[];
-  }
-
-  return raw
-      .map((item) {
-        if (item is int) {
-          return item;
-        }
-        if (item is num) {
-          return item.toInt();
-        }
-        return int.tryParse(item.toString());
-      })
-      .whereType<int>()
-      .toList();
-}
-
-List<_TimeSlot> _generateTimeSlots(SharedPreferences prefs) {
-  final classDuration = prefs.getInt(_classDurationKey) ?? 45;
-  final shortBreak = prefs.getInt(_shortBreakKey) ?? 5;
-  final bigBreak = prefs.getInt(_bigBreakKey) ?? 15;
-  final morningStart = prefs.getString(_morningStartTimeKey) ?? '08:00';
-  final morningClasses = prefs.getInt(_morningClassesKey) ?? 5;
-  final afternoonStart = prefs.getString(_afternoonStartTimeKey) ?? '14:00';
-  final afternoonClasses = prefs.getInt(_afternoonClassesKey) ?? 5;
-  final eveningStart = prefs.getString(_eveningStartTimeKey) ?? '19:00';
-  final eveningClasses = prefs.getInt(_eveningClassesKey) ?? 3;
+List<_TimeSlot> _generateTimeSlots(StorageService storageService) {
+  final classDuration = storageService.readClassDuration(fallback: 45);
+  final shortBreak = storageService.readShortBreak(fallback: 5);
+  final bigBreak = storageService.readBigBreak(fallback: 15);
+  final morningStart = storageService.readMorningStartTime(fallback: '08:00');
+  final morningClasses = storageService.readMorningClasses(fallback: 5);
+  final afternoonStart = storageService.readAfternoonStartTime(
+    fallback: '14:00',
+  );
+  final afternoonClasses = storageService.readAfternoonClasses(fallback: 5);
+  final eveningStart = storageService.readEveningStartTime(fallback: '19:00');
+  final eveningClasses = storageService.readEveningClasses(fallback: 3);
 
   final slots = <_TimeSlot>[];
   _appendSessionSlots(
@@ -453,13 +404,14 @@ class _TimeSlot {
 }
 
 Future<void> _runCourseReminderTick({
-  required SharedPreferences prefs,
+  required StorageService storageService,
   required FlutterLocalNotificationsPlugin localNotifications,
   required Set<String> notifiedCourseIds,
   required String? notifiedDay,
   required void Function(String dayKey) onDayChanged,
 }) async {
-  final advanceMinutes = (prefs.getInt(_reminderAdvanceMinutesKey) ?? 0)
+  final advanceMinutes = storageService
+      .readReminderAdvanceMinutes(fallback: 0)
       .clamp(0, 60)
       .toInt();
   if (advanceMinutes <= 0) {
@@ -473,36 +425,27 @@ Future<void> _runCourseReminderTick({
     onDayChanged(dayKey);
   }
 
-  final totalWeeks = (prefs.getInt(_totalWeeksKey) ?? 20).clamp(1, 30);
-  final semesterStartDate = _loadSemesterStartDate(prefs);
+  final totalWeeks = storageService.readTotalWeeks(fallback: 20).clamp(1, 30);
+  final semesterStartDate = _loadSemesterStartDate(storageService);
   final currentWeek = _computeCurrentWeek(
     semesterStartDate: semesterStartDate,
     totalWeeks: totalWeeks,
     now: now,
   );
   final currentWeekday = now.weekday.clamp(1, 7);
-  final slots = _generateTimeSlots(prefs);
-  final rawCourses = prefs.getStringList(_coursesKey) ?? <String>[];
+  final slots = _generateTimeSlots(storageService);
+  final courses = storageService.loadCourses();
 
-  for (final raw in rawCourses) {
-    Map<String, dynamic> course;
-    try {
-      course = jsonDecode(raw) as Map<String, dynamic>;
-    } catch (_) {
+  for (final course in courses) {
+    if (course.weekday != currentWeekday) {
       continue;
     }
 
-    final weekday = (course['weekday'] as num?)?.toInt();
-    if (weekday != currentWeekday) {
+    if (!course.weeks.contains(currentWeek)) {
       continue;
     }
 
-    final weeks = _parseWeeks(course['weeks']);
-    if (!weeks.contains(currentWeek)) {
-      continue;
-    }
-
-    final startPeriod = (course['startPeriod'] as num?)?.toInt() ?? 0;
+    final startPeriod = course.startPeriod;
     if (startPeriod <= 0 || startPeriod > slots.length) {
       continue;
     }
@@ -520,11 +463,11 @@ Future<void> _runCourseReminderTick({
       continue;
     }
 
-    final name = (course['name'] as String?)?.trim();
-    if (name == null || name.isEmpty) {
+    final name = course.name.trim();
+    if (name.isEmpty) {
       continue;
     }
-    final location = (course['location'] as String?)?.trim() ?? '';
+    final location = course.location.trim();
 
     final dedupeId = '$dayKey-$currentWeek-$name-$startPeriod';
     if (notifiedCourseIds.contains(dedupeId)) {

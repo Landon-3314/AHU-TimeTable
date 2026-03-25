@@ -22,9 +22,9 @@ class SettingsPage extends StatelessWidget {
         children: [
           Text(
             provider.t('settings'),
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 24),
           _SectionTitle(title: provider.t('basic_settings')),
@@ -181,9 +181,7 @@ class SettingsPage extends StatelessWidget {
                   }
 
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(provider.t('cache_cleared')),
-                    ),
+                    SnackBar(content: Text(provider.t('cache_cleared'))),
                   );
                 },
               ),
@@ -233,8 +231,9 @@ class SettingsPage extends StatelessWidget {
               for (int week = 15; week <= 30; week++)
                 ListTile(
                   title: Text('$week ${provider.t('weeks_suffix')}'),
-                  trailing:
-                      provider.totalWeeks == week ? const Icon(Icons.check) : null,
+                  trailing: provider.totalWeeks == week
+                      ? const Icon(Icons.check)
+                      : null,
                   onTap: () {
                     Navigator.of(sheetContext).pop(week);
                   },
@@ -363,9 +362,7 @@ class SettingsPage extends StatelessWidget {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(provider.t('all_local_data_cleared')),
-      ),
+      SnackBar(content: Text(provider.t('all_local_data_cleared'))),
     );
   }
 
@@ -374,7 +371,8 @@ class SettingsPage extends StatelessWidget {
     int? minutes,
     bool isEventReminder = false,
   }) {
-    final value = minutes ??
+    final value =
+        minutes ??
         (isEventReminder
             ? provider.eventReminderAdvanceMinutes
             : provider.reminderAdvanceMinutes);
@@ -395,9 +393,7 @@ class SettingsPage extends StatelessWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({
-    required this.title,
-  });
+  const _SectionTitle({required this.title});
 
   final String title;
 
@@ -408,18 +404,16 @@ class _SectionTitle extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Colors.black54,
-              fontWeight: FontWeight.w700,
-            ),
+          color: Colors.black54,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
 }
 
 class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({
-    required this.children,
-  });
+  const _SettingsCard({required this.children});
 
   final List<Widget> children;
 

@@ -1,23 +1,18 @@
-import 'dart:convert';
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/course.dart';
 import '../models/event.dart';
+import '../services/storage_service.dart';
 
 class CourseProvider extends ChangeNotifier {
-  static const String _coursesKey = 'courses.items';
-  static const String _eventsKey = 'events.items';
+  CourseProvider({required StorageService storageService})
+    : _storageService = storageService,
+      _courses = storageService.loadCourses(),
+      _events = storageService.loadEvents();
 
-  CourseProvider({
-    required SharedPreferences sharedPreferences,
-  }) : _sharedPreferences = sharedPreferences,
-       _courses = _loadInitialCourses(sharedPreferences),
-       _events = _loadInitialEvents(sharedPreferences);
-
-  final SharedPreferences _sharedPreferences;
+  final StorageService _storageService;
   final List<Course> _courses;
   final List<Event> _events;
   int _currentWeek = 1;
@@ -53,7 +48,7 @@ class CourseProvider extends ChangeNotifier {
   }
 
   Future<void> removeCourse(Course course) async {
-    _courses.remove(course);
+    _courses.removeWhere((item) => item.id == course.id);
     notifyListeners();
     await _persistCourses();
     await _refreshReminders();
@@ -63,7 +58,9 @@ class CourseProvider extends ChangeNotifier {
     required Course originalCourse,
     required Course updatedCourse,
   }) async {
-    final index = _courses.indexOf(originalCourse);
+    final index = _courses.indexWhere(
+      (course) => course.id == originalCourse.id,
+    );
     if (index == -1) {
       return;
     }
@@ -77,7 +74,7 @@ class CourseProvider extends ChangeNotifier {
   Future<void> clearAllCourses() async {
     _courses.clear();
     notifyListeners();
-    await _sharedPreferences.remove(_coursesKey);
+    await _storageService.clearCourses();
     await _refreshReminders();
   }
 
@@ -85,8 +82,7 @@ class CourseProvider extends ChangeNotifier {
     _courses.clear();
     _events.clear();
     notifyListeners();
-    await _sharedPreferences.remove(_coursesKey);
-    await _sharedPreferences.remove(_eventsKey);
+    await _storageService.clearAllTimetableData();
     await _refreshReminders();
   }
 
@@ -116,10 +112,7 @@ class CourseProvider extends ChangeNotifier {
     await _refreshReminders();
   }
 
-  void initializeRealDate({
-    required int week,
-    required int weekday,
-  }) {
+  void initializeRealDate({required int week, required int weekday}) {
     if (_hasInitializedRealDate) {
       return;
     }
@@ -150,10 +143,7 @@ class CourseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setCurrentWeekAndWeekday({
-    required int week,
-    required int weekday,
-  }) {
+  void setCurrentWeekAndWeekday({required int week, required int weekday}) {
     final safeWeek = week.clamp(1, 30).toInt();
     final safeWeekday = weekday.clamp(1, 7).toInt();
     if (safeWeek == _currentWeek && safeWeekday == _currentWeekday) {
@@ -165,41 +155,12 @@ class CourseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  static List<Course> _loadInitialCourses(SharedPreferences sharedPreferences) {
-    final List<String>? rawCourses = sharedPreferences.getStringList(_coursesKey);
-
-    if (rawCourses == null || rawCourses.isEmpty) {
-      return <Course>[];
-    }
-
-    return rawCourses.map((item) {
-      final Map<String, dynamic> map = jsonDecode(item) as Map<String, dynamic>;
-      return Course.fromJson(map);
-    }).toList();
-  }
-
-  static List<Event> _loadInitialEvents(SharedPreferences sharedPreferences) {
-    final rawEvents = sharedPreferences.getStringList(_eventsKey);
-    if (rawEvents == null || rawEvents.isEmpty) {
-      return <Event>[];
-    }
-
-    return rawEvents.map((item) {
-      final map = jsonDecode(item) as Map<String, dynamic>;
-      return Event.fromJson(map);
-    }).toList();
-  }
-
   Future<void> _persistCourses() async {
-    final List<String> rawCourses = _courses
-        .map((course) => jsonEncode(course.toJson()))
-        .toList();
-    await _sharedPreferences.setStringList(_coursesKey, rawCourses);
+    await _storageService.saveCourses(_courses);
   }
 
   Future<void> _persistEvents() async {
-    final rawEvents = _events.map((event) => jsonEncode(event.toJson())).toList();
-    await _sharedPreferences.setStringList(_eventsKey, rawEvents);
+    await _storageService.saveEvents(_events);
   }
 
   Future<void> _refreshReminders() async {

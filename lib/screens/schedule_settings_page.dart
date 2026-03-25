@@ -11,31 +11,32 @@ class ScheduleSettingsPage extends StatelessWidget {
     final provider = context.watch<SettingsProvider>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(provider.t('schedule_time_settings')),
-      ),
+      appBar: AppBar(title: Text(provider.t('schedule_time_settings'))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             _SettingsSection(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       provider.t('timeline_density'),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${provider.pixelsPerMinute.toStringAsFixed(1)} px / ${provider.t('minutes_suffix')}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.black54,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
                     ),
                     Slider(
                       value: provider.pixelsPerMinute,
@@ -164,10 +165,7 @@ class _SessionSection extends StatelessWidget {
               underline: const SizedBox.shrink(),
               items: [
                 for (int count = 0; count <= maxClasses; count++)
-                  DropdownMenuItem<int>(
-                    value: count,
-                    child: Text('$count'),
-                  ),
+                  DropdownMenuItem<int>(value: count, child: Text('$count')),
               ],
               onChanged: (newValue) {
                 if (newValue != null) {
@@ -189,9 +187,7 @@ class _SessionSection extends StatelessWidget {
 }
 
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({
-    required this.child,
-  });
+  const _SettingsSection({required this.child});
 
   final Widget child;
 
@@ -233,16 +229,16 @@ class _SliderSettingTile extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
             '$value $unit',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.black54,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
           ),
           Slider(
             value: value.toDouble(),

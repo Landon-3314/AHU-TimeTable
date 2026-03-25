@@ -5,10 +5,7 @@ class AppStrings {
     'notifications': {'zh': '提醒设置', 'en': 'Notifications'},
     'data_storage': {'zh': '高级与数据管理', 'en': 'Data & Storage'},
     'language': {'zh': '语言 / Language', 'en': 'Language / 语言'},
-    'semester_start_date': {
-      'zh': '第一周开始日期',
-      'en': 'First Week Start Date',
-    },
+    'semester_start_date': {'zh': '第一周开始日期', 'en': 'First Week Start Date'},
     'semester_total_weeks': {'zh': '学期总周数', 'en': 'Total Semester Weeks'},
     'schedule_time_settings': {
       'zh': '作息时间与节次设置',
@@ -18,14 +15,8 @@ class AppStrings {
       'zh': '编辑每天的上课节次和时间段',
       'en': 'Edit daily class periods and time ranges',
     },
-    'course_reminder_time': {
-      'zh': '课程提前提醒',
-      'en': 'Course Reminder',
-    },
-    'event_reminder_time': {
-      'zh': '日程提前提醒',
-      'en': 'Event Reminder',
-    },
+    'course_reminder_time': {'zh': '课程提前提醒', 'en': 'Course Reminder'},
+    'event_reminder_time': {'zh': '日程提前提醒', 'en': 'Event Reminder'},
     'reminder_time': {'zh': '课前提醒时间', 'en': 'Reminder Advance Time'},
     'no_reminder': {'zh': '不提醒', 'en': 'None'},
     'one_hour': {'zh': '提前 1 小时', 'en': 'Before 1 hour'},
@@ -37,11 +28,13 @@ class AppStrings {
     },
     'auto_mute_subtitle': {
       'zh': '上课自动切为震动，下课恢复正常铃声',
-      'en': 'Switch to vibrate during class and restore normal mode after class',
+      'en':
+          'Switch to vibrate during class and restore normal mode after class',
     },
     'auto_mute_permission_required': {
       'zh': '需要勿扰模式权限，请在系统设置中授权后再开启',
-      'en': 'Do Not Disturb access is required. Grant it in system settings first.',
+      'en':
+          'Do Not Disturb access is required. Grant it in system settings first.',
     },
     'auto_mute_not_supported': {
       'zh': '该功能目前仅支持 Android',
@@ -80,10 +73,7 @@ class AppStrings {
     'timetable': {'zh': '课表', 'en': 'Timetable'},
     'day_view': {'zh': '日视图', 'en': 'Day View'},
     'week_view': {'zh': '周视图', 'en': 'Week View'},
-    'import_from_system': {
-      'zh': '导入教务课表',
-      'en': 'Import from Academic System',
-    },
+    'import_from_system': {'zh': '导入教务课表', 'en': 'Import from Academic System'},
     'today': {'zh': '回到今日', 'en': 'Today'},
     'add_course': {'zh': '添加课程', 'en': 'Add Course'},
     'jump_to_week': {'zh': '跳转周次', 'en': 'Jump to Week'},
@@ -136,10 +126,7 @@ class AppStrings {
       'zh': '请输入课程名称',
       'en': 'Please enter a course name',
     },
-    'please_enter_location': {
-      'zh': '请输入地点',
-      'en': 'Please enter a location',
-    },
+    'please_enter_location': {'zh': '请输入地点', 'en': 'Please enter a location'},
     'please_enter_event_name': {
       'zh': '请输入日程名称',
       'en': 'Please enter an event name',

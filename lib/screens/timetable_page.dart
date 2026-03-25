@@ -1,7 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../models/clock_time.dart';
 import '../models/course.dart';
 import '../models/event.dart';
 import '../providers/course_provider.dart';
@@ -9,10 +10,7 @@ import '../providers/settings_provider.dart';
 import 'add_course_page.dart';
 import 'import_course_page.dart';
 
-enum _TimetableMode {
-  day,
-  week,
-}
+enum _TimetableMode { day, week }
 
 const int HOLIDAY_WEEK_INDEX = 999;
 
@@ -32,9 +30,7 @@ String _weekdayShortLabel(SettingsProvider provider, String key) {
 }
 
 String _weekLabel(SettingsProvider provider, int week) {
-  return provider
-      .t('week_label_format')
-      .replaceAll('{week}', week.toString());
+  return provider.t('week_label_format').replaceAll('{week}', week.toString());
 }
 
 String _periodRangeLabel(SettingsProvider provider, int start, int end) {
@@ -45,23 +41,7 @@ String _periodRangeLabel(SettingsProvider provider, int start, int end) {
 }
 
 bool _sameCourse(Course left, Course right) {
-  if (left.name != right.name ||
-      left.location != right.location ||
-      left.teacher != right.teacher ||
-      left.weekday != right.weekday ||
-      left.startPeriod != right.startPeriod ||
-      left.endPeriod != right.endPeriod ||
-      left.colorValue != right.colorValue ||
-      left.weeks.length != right.weeks.length) {
-    return false;
-  }
-
-  for (int index = 0; index < left.weeks.length; index += 1) {
-    if (left.weeks[index] != right.weeks[index]) {
-      return false;
-    }
-  }
-  return true;
+  return left.id == right.id;
 }
 
 void _openCourseDetailsIfAvailable(BuildContext context, Course course) {
@@ -74,7 +54,7 @@ void _openCourseDetailsIfAvailable(BuildContext context, Course course) {
   showCourseDetailsSheet(context, course);
 }
 
-String _formatTimeOfDay(TimeOfDay time) {
+String _formatClockTime(ClockTime time) {
   final hour = time.hour.toString().padLeft(2, '0');
   final minute = time.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
@@ -129,11 +109,12 @@ class _TimetablePageState extends State<TimetablePage> {
     super.initState();
     final settingsProvider = context.read<SettingsProvider>();
     final courseProvider = context.read<CourseProvider>();
-    final initialWeek = settingsProvider.currentRealWeek.clamp(
-      1,
-      settingsProvider.totalWeeks,
-    ).toInt();
-    final initialWeekday = settingsProvider.currentRealWeekday.clamp(1, 7).toInt();
+    final initialWeek = settingsProvider.currentRealWeek
+        .clamp(1, settingsProvider.totalWeeks)
+        .toInt();
+    final initialWeekday = settingsProvider.currentRealWeekday
+        .clamp(1, 7)
+        .toInt();
     _selectedWeekForWeekView = initialWeek;
 
     courseProvider.setCurrentWeekAndWeekday(
@@ -170,10 +151,9 @@ class _TimetablePageState extends State<TimetablePage> {
   Widget build(BuildContext context) {
     final courseProvider = context.watch<CourseProvider>();
     final settingsProvider = context.watch<SettingsProvider>();
-    final providerWeek = courseProvider.currentWeek.clamp(
-      1,
-      settingsProvider.totalWeeks,
-    ).toInt();
+    final providerWeek = courseProvider.currentWeek
+        .clamp(1, settingsProvider.totalWeeks)
+        .toInt();
     final currentWeek = _mode == _TimetableMode.week
         ? _selectedWeekForWeekView
         : providerWeek;
@@ -211,11 +191,9 @@ class _TimetablePageState extends State<TimetablePage> {
               final summaryMessage = settingsProvider.languageCode == 'en'
                   ? 'Successfully imported $importedCount courses'
                   : '总共添加了 $importedCount 门课';
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(summaryMessage),
-                ),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(summaryMessage)));
             },
             icon: const Icon(Icons.cloud_download_outlined),
             tooltip: settingsProvider.t('import_from_system'),
@@ -223,9 +201,7 @@ class _TimetablePageState extends State<TimetablePage> {
           IconButton(
             onPressed: () async {
               await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const AddCoursePage(),
-                ),
+                MaterialPageRoute<void>(builder: (_) => const AddCoursePage()),
               );
             },
             icon: const Icon(Icons.add),
@@ -298,7 +274,9 @@ class _TimetablePageState extends State<TimetablePage> {
       return;
     }
 
-    final targetWeek = selectedWeek.clamp(1, settingsProvider.totalWeeks).toInt();
+    final targetWeek = selectedWeek
+        .clamp(1, settingsProvider.totalWeeks)
+        .toInt();
     final targetWeekday = provider.currentWeekday.clamp(1, 7).toInt();
     setState(() {
       _selectedWeekForWeekView = targetWeek;
@@ -313,7 +291,9 @@ class _TimetablePageState extends State<TimetablePage> {
       }
 
       if (_dayPageController.hasClients) {
-        _dayPageController.jumpToPage((targetWeek - 1) * 7 + (targetWeekday - 1));
+        _dayPageController.jumpToPage(
+          (targetWeek - 1) * 7 + (targetWeekday - 1),
+        );
       }
     } finally {
       _isSyncingControllers = false;
@@ -323,19 +303,17 @@ class _TimetablePageState extends State<TimetablePage> {
   Future<void> _jumpToToday() async {
     final settingsProvider = context.read<SettingsProvider>();
     final provider = context.read<CourseProvider>();
-    final targetWeek = settingsProvider.currentRealWeek.clamp(
-      1,
-      settingsProvider.totalWeeks,
-    ).toInt();
-    final targetWeekday = settingsProvider.currentRealWeekday.clamp(1, 7).toInt();
+    final targetWeek = settingsProvider.currentRealWeek
+        .clamp(1, settingsProvider.totalWeeks)
+        .toInt();
+    final targetWeekday = settingsProvider.currentRealWeekday
+        .clamp(1, 7)
+        .toInt();
     setState(() {
       _selectedWeekForWeekView = targetWeek;
     });
 
-    provider.setCurrentWeekAndWeekday(
-      week: targetWeek,
-      weekday: targetWeekday,
-    );
+    provider.setCurrentWeekAndWeekday(week: targetWeek, weekday: targetWeekday);
 
     _isSyncingControllers = true;
     try {
@@ -344,7 +322,9 @@ class _TimetablePageState extends State<TimetablePage> {
       }
 
       if (_dayPageController.hasClients) {
-        _dayPageController.jumpToPage((targetWeek - 1) * 7 + (targetWeekday - 1));
+        _dayPageController.jumpToPage(
+          (targetWeek - 1) * 7 + (targetWeekday - 1),
+        );
       }
     } finally {
       _isSyncingControllers = false;
@@ -353,13 +333,15 @@ class _TimetablePageState extends State<TimetablePage> {
 
   void _handleAbsoluteDayChanged(int index) {
     final settingsProvider = context.read<SettingsProvider>();
-    final targetWeek = ((index ~/ 7) + 1).clamp(1, settingsProvider.totalWeeks).toInt();
+    final targetWeek = ((index ~/ 7) + 1)
+        .clamp(1, settingsProvider.totalWeeks)
+        .toInt();
     final targetWeekday = ((index % 7) + 1).clamp(1, 7).toInt();
 
     context.read<CourseProvider>().setCurrentWeekAndWeekday(
-          week: targetWeek,
-          weekday: targetWeekday,
-        );
+      week: targetWeek,
+      weekday: targetWeekday,
+    );
     _selectedWeekForWeekView = targetWeek;
 
     if (_isSyncingControllers) {
@@ -477,12 +459,14 @@ class _DayViewWidgetState extends State<DayViewWidget> {
     final courseProvider = context.watch<CourseProvider>();
     final courses = courseProvider.courses.toList();
     final events = courseProvider.events.toList();
-    final currentWeek = courseProvider.currentWeek.clamp(
-      1,
-      settingsProvider.totalWeeks,
-    ).toInt();
+    final currentWeek = courseProvider.currentWeek
+        .clamp(1, settingsProvider.totalWeeks)
+        .toInt();
     final dateFormat = DateFormat('MM/dd');
-    final currentDate = settingsProvider.getDateFor(currentWeek, _currentWeekday + 1);
+    final currentDate = settingsProvider.getDateFor(
+      currentWeek,
+      _currentWeekday + 1,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,9 +477,9 @@ class _DayViewWidgetState extends State<DayViewWidget> {
             '${_weekLabel(settingsProvider, currentWeek)} / '
             '${_weekdayLabel(settingsProvider, widget.weekdayKeys[_currentWeekday])} / '
             '${dateFormat.format(currentDate)}',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
         SizedBox(
@@ -512,10 +496,18 @@ class _DayViewWidgetState extends State<DayViewWidget> {
                       label: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(_weekdayShortLabel(settingsProvider, widget.weekdayKeys[index])),
+                          Text(
+                            _weekdayShortLabel(
+                              settingsProvider,
+                              widget.weekdayKeys[index],
+                            ),
+                          ),
                           Text(
                             dateFormat.format(
-                              settingsProvider.getDateFor(currentWeek, index + 1),
+                              settingsProvider.getDateFor(
+                                currentWeek,
+                                index + 1,
+                              ),
                             ),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
@@ -555,24 +547,36 @@ class _DayViewWidgetState extends State<DayViewWidget> {
             itemBuilder: (context, index) {
               final targetWeek = (index ~/ 7) + 1;
               final targetWeekday = (index % 7) + 1;
-              final pageDate = settingsProvider.getDateFor(targetWeek, targetWeekday);
-              final dayCourses = courses
-                  .where(
-                    (course) =>
-                        course.weekday == targetWeekday &&
-                        course.weeks.contains(targetWeek),
-                  )
-                  .toList()
-                ..sort((a, b) => a.startPeriod.compareTo(b.startPeriod));
-              final dayEvents = events
-                  .where((event) => DateUtils.isSameDay(event.dateTime, pageDate))
-                  .toList()
-                ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+              final pageDate = settingsProvider.getDateFor(
+                targetWeek,
+                targetWeekday,
+              );
+              final dayCourses =
+                  courses
+                      .where(
+                        (course) =>
+                            course.weekday == targetWeekday &&
+                            course.weeks.contains(targetWeek),
+                      )
+                      .toList()
+                    ..sort((a, b) => a.startPeriod.compareTo(b.startPeriod));
+              final dayEvents =
+                  events
+                      .where(
+                        (event) =>
+                            DateUtils.isSameDay(event.dateTime, pageDate),
+                      )
+                      .toList()
+                    ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
               final dayItems = <_DayScheduleItem>[
                 ...dayCourses.map(
                   (course) => _DayScheduleItem.course(
                     course,
-                    _courseStartDateTime(pageDate, course.startPeriod, settingsProvider),
+                    _courseStartDateTime(
+                      pageDate,
+                      course.startPeriod,
+                      settingsProvider,
+                    ),
                   ),
                 ),
                 ...dayEvents.map(
@@ -582,7 +586,10 @@ class _DayViewWidgetState extends State<DayViewWidget> {
 
               if (dayItems.isEmpty) {
                 return _EmptyDayState(
-                  title: _weekdayLabel(settingsProvider, widget.weekdayKeys[targetWeekday - 1]),
+                  title: _weekdayLabel(
+                    settingsProvider,
+                    widget.weekdayKeys[targetWeekday - 1],
+                  ),
                   subtitle:
                       '${settingsProvider.t('no_courses_for_day')} (${DateFormat('MM/dd').format(pageDate)} / ${_weekLabel(settingsProvider, targetWeek)})',
                 );
@@ -612,8 +619,9 @@ class _DayViewWidgetState extends State<DayViewWidget> {
                     child: item.when(
                       course: (course) => CourseListCard(
                         course: course,
-                        accentColor: course.color,
-                        onTap: () => _openCourseDetailsIfAvailable(context, course),
+                        accentColor: Color(course.colorValue),
+                        onTap: () =>
+                            _openCourseDetailsIfAvailable(context, course),
                       ),
                       event: (event) => EventListCard(
                         event: event,
@@ -632,10 +640,7 @@ class _DayViewWidgetState extends State<DayViewWidget> {
 }
 
 class _DayHeaderCard extends StatelessWidget {
-  const _DayHeaderCard({
-    required this.title,
-    required this.subtitle,
-  });
+  const _DayHeaderCard({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
@@ -653,16 +658,16 @@ class _DayHeaderCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.black54,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
           ),
         ],
       ),
@@ -715,14 +720,15 @@ class WeekViewWidget extends StatelessWidget {
             59,
             59,
           );
-          final holidayEvents = events
-              .where(
-                (event) =>
-                    event.dateTime.isBefore(semesterStart) ||
-                    event.dateTime.isAfter(semesterEnd),
-              )
-              .toList()
-            ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+          final holidayEvents =
+              events
+                  .where(
+                    (event) =>
+                        event.dateTime.isBefore(semesterStart) ||
+                        event.dateTime.isAfter(semesterEnd),
+                  )
+                  .toList()
+                ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
           return _buildHolidayListView(context, holidayEvents);
         }
@@ -730,7 +736,9 @@ class WeekViewWidget extends StatelessWidget {
         final week = index + 1;
         final weekStart = settingsProvider.getDateFor(week, 1);
         final weekEnd = settingsProvider.getDateFor(week, 7);
-        final weekCourses = courses.where((course) => course.weeks.contains(week)).toList();
+        final weekCourses = courses
+            .where((course) => course.weeks.contains(week))
+            .toList();
         final weekStartDateTime = DateTime(
           weekStart.year,
           weekStart.month,
@@ -744,50 +752,52 @@ class WeekViewWidget extends StatelessWidget {
           59,
           59,
         );
-        final weekEvents = events
-            .where(
-              (event) =>
-                  !event.dateTime.isBefore(weekStartDateTime) &&
-                  !event.dateTime.isAfter(weekEndDateTime),
-            )
-            .toList()
-          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+        final weekEvents =
+            events
+                .where(
+                  (event) =>
+                      !event.dateTime.isBefore(weekStartDateTime) &&
+                      !event.dateTime.isAfter(weekEndDateTime),
+                )
+                .toList()
+              ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
           children: [
             Text(
               _weekLabel(settingsProvider, week),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
             Text(
               '${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.black54,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
             ),
             const SizedBox(height: 16),
             for (int weekday = 1; weekday <= 7; weekday++) ...[
               _WeekdaySection(
                 title:
                     '${_weekdayLabel(settingsProvider, weekdayKeys[weekday - 1])} / ${dateFormat.format(settingsProvider.getDateFor(week, weekday))}',
-                courses: weekCourses
-                    .where((course) => course.weekday == weekday)
-                    .toList()
-                  ..sort((a, b) => a.startPeriod.compareTo(b.startPeriod)),
-                events: weekEvents
-                    .where(
-                      (event) =>
-                          DateUtils.isSameDay(
+                courses:
+                    weekCourses
+                        .where((course) => course.weekday == weekday)
+                        .toList()
+                      ..sort((a, b) => a.startPeriod.compareTo(b.startPeriod)),
+                events:
+                    weekEvents
+                        .where(
+                          (event) => DateUtils.isSameDay(
                             event.dateTime,
                             settingsProvider.getDateFor(week, weekday),
                           ),
-                    )
-                    .toList()
-                  ..sort((a, b) => a.dateTime.compareTo(b.dateTime)),
+                        )
+                        .toList()
+                      ..sort((a, b) => a.dateTime.compareTo(b.dateTime)),
               ),
               const SizedBox(height: 14),
             ],
@@ -797,7 +807,10 @@ class WeekViewWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildHolidayListView(BuildContext context, List<Event> holidayEvents) {
+  Widget _buildHolidayListView(
+    BuildContext context,
+    List<Event> holidayEvents,
+  ) {
     final provider = context.read<SettingsProvider>();
     if (holidayEvents.isEmpty) {
       return _EmptyDayState(
@@ -859,24 +872,24 @@ class _WeekdaySection extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           if (courses.isEmpty && events.isEmpty)
             Text(
               provider.t('no_courses_today'),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.black54,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
             ),
           for (final course in courses)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: CourseListCard(
                 course: course,
-                accentColor: course.color,
+                accentColor: Color(course.colorValue),
                 onTap: () => _openCourseDetailsIfAvailable(context, course),
               ),
             ),
@@ -892,9 +905,7 @@ class _WeekdaySection extends StatelessWidget {
 }
 
 class _WeekEventCard extends StatelessWidget {
-  const _WeekEventCard({
-    required this.event,
-  });
+  const _WeekEventCard({required this.event});
 
   final Event event;
 
@@ -922,9 +933,7 @@ class _WeekEventCard extends StatelessWidget {
 }
 
 class _HolidayEventCard extends StatelessWidget {
-  const _HolidayEventCard({
-    required this.event,
-  });
+  const _HolidayEventCard({required this.event});
 
   final Event event;
 
@@ -997,23 +1006,27 @@ class CourseListCard extends StatelessWidget {
                     Text(
                       course.name,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       _teacherLocationText(course),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.black87,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Colors.black87),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _periodRangeLabel(provider, course.startPeriod, course.endPeriod),
+                      _periodRangeLabel(
+                        provider,
+                        course.startPeriod,
+                        course.endPeriod,
+                      ),
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: accentColor.withOpacity(0.95),
-                            fontWeight: FontWeight.w700,
-                          ),
+                        color: accentColor.withOpacity(0.95),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -1037,11 +1050,7 @@ class CourseListCard extends StatelessWidget {
 }
 
 class EventListCard extends StatelessWidget {
-  const EventListCard({
-    super.key,
-    required this.event,
-    required this.onTap,
-  });
+  const EventListCard({super.key, required this.event, required this.onTap});
 
   final Event event;
   final VoidCallback onTap;
@@ -1082,25 +1091,25 @@ class EventListCard extends StatelessWidget {
                     Text(
                       '${provider.t('event_marker')} ${event.name}',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       event.location.isEmpty
                           ? provider.t('location_pending')
                           : event.location,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.black87,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Colors.black87),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       DateFormat('HH:mm').format(event.dateTime),
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: accentColor,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        color: accentColor,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -1114,10 +1123,7 @@ class EventListCard extends StatelessWidget {
 }
 
 class _EmptyDayState extends StatelessWidget {
-  const _EmptyDayState({
-    required this.title,
-    required this.subtitle,
-  });
+  const _EmptyDayState({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
@@ -1138,17 +1144,17 @@ class _EmptyDayState extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 10),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.black54,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
               ),
             ],
           ),
@@ -1206,9 +1212,9 @@ class _WeekJumpButton extends StatelessWidget {
             currentWeek == HOLIDAY_WEEK_INDEX
                 ? holidayLabel
                 : _weekLabel(provider, currentWeek),
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
       ),
@@ -1219,15 +1225,16 @@ class _WeekJumpButton extends StatelessWidget {
 Future<void> showCourseDetailsSheet(BuildContext context, Course course) async {
   final provider = context.read<SettingsProvider>();
   final timeSlots = provider.timeSlots;
-  final startSlot = course.startPeriod > 0 && course.startPeriod <= timeSlots.length
+  final startSlot =
+      course.startPeriod > 0 && course.startPeriod <= timeSlots.length
       ? timeSlots[course.startPeriod - 1]
       : null;
   final endSlot = course.endPeriod > 0 && course.endPeriod <= timeSlots.length
       ? timeSlots[course.endPeriod - 1]
       : null;
   final courseTimeText = startSlot != null && endSlot != null
-      ? '${provider.t('time')}: ${_formatTimeOfDay(startSlot.startTime)} - ${_formatTimeOfDay(endSlot.endTime)} '
-          '(${_periodRangeLabel(provider, course.startPeriod, course.endPeriod)})'
+      ? '${provider.t('time')}: ${_formatClockTime(startSlot.startTime)} - ${_formatClockTime(endSlot.endTime)} '
+            '(${_periodRangeLabel(provider, course.startPeriod, course.endPeriod)})'
       : _periodRangeLabel(provider, course.startPeriod, course.endPeriod);
 
   await showModalBottomSheet<void>(
@@ -1244,33 +1251,41 @@ Future<void> showCourseDetailsSheet(BuildContext context, Course course) async {
               Text(
                 course.name,
                 style: Theme.of(sheetContext).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 16),
               _DetailRow(
                 label: provider.t('teacher'),
-                value: course.teacher.isEmpty ? provider.t('not_set') : course.teacher,
+                value: course.teacher.isEmpty
+                    ? provider.t('not_set')
+                    : course.teacher,
               ),
               const SizedBox(height: 10),
               _DetailRow(
                 label: provider.t('location'),
-                value: course.location.isEmpty ? provider.t('not_set') : course.location,
+                value: course.location.isEmpty
+                    ? provider.t('not_set')
+                    : course.location,
               ),
               const SizedBox(height: 10),
               _DetailRow(
                 label: provider.t('periods'),
-                value: _periodRangeLabel(provider, course.startPeriod, course.endPeriod),
+                value: _periodRangeLabel(
+                  provider,
+                  course.startPeriod,
+                  course.endPeriod,
+                ),
               ),
               const SizedBox(height: 10),
-              _DetailRow(
-                label: provider.t('time'),
-                value: courseTimeText,
-              ),
+              _DetailRow(label: provider.t('time'), value: courseTimeText),
               const SizedBox(height: 10),
               _DetailRow(
                 label: provider.t('weekday'),
-                value: _weekdayLabel(provider, _TimetablePageState._weekdayKeys[course.weekday - 1]),
+                value: _weekdayLabel(
+                  provider,
+                  _TimetablePageState._weekdayKeys[course.weekday - 1],
+                ),
               ),
               const SizedBox(height: 10),
               _DetailRow(
@@ -1339,8 +1354,8 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
               Text(
                 event.name,
                 style: Theme.of(sheetContext).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 16),
               _DetailRow(
@@ -1350,12 +1365,16 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
               const SizedBox(height: 10),
               _DetailRow(
                 label: provider.t('location'),
-                value: event.location.isEmpty ? provider.t('not_set') : event.location,
+                value: event.location.isEmpty
+                    ? provider.t('not_set')
+                    : event.location,
               ),
               const SizedBox(height: 10),
               _DetailRow(
                 label: provider.t('alarm'),
-                value: event.enableAlarm ? provider.t('enabled') : provider.t('disabled'),
+                value: event.enableAlarm
+                    ? provider.t('enabled')
+                    : provider.t('disabled'),
               ),
               const SizedBox(height: 20),
               SizedBox(
@@ -1369,7 +1388,9 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
                     Navigator.of(sheetContext).pop();
 
                     Future.delayed(const Duration(milliseconds: 300), () async {
-                      await context.read<CourseProvider>().deleteEvent(event.id);
+                      await context.read<CourseProvider>().deleteEvent(
+                        event.id,
+                      );
                     });
                   },
                   child: Text(provider.t('delete_event')),
@@ -1384,11 +1405,7 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
 }
 
 class _DayScheduleItem {
-  const _DayScheduleItem._({
-    required this.sortTime,
-    this.course,
-    this.event,
-  });
+  const _DayScheduleItem._({required this.sortTime, this.course, this.event});
 
   factory _DayScheduleItem.course(Course course, DateTime sortTime) {
     return _DayScheduleItem._(course: course, sortTime: sortTime);
@@ -1414,10 +1431,7 @@ class _DayScheduleItem {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.label,
-    required this.value,
-  });
+  const _DetailRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1432,21 +1446,20 @@ class _DetailRow extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.black54,
-                  fontWeight: FontWeight.w600,
-                ),
+              color: Colors.black54,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
           ),
         ),
       ],
     );
   }
 }
-

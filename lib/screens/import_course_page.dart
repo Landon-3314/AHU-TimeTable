@@ -724,15 +724,15 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   Widget build(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
     return Scaffold(
-      appBar: AppBar(
-        title: Text(provider.t('academic_import')),
-      ),
+      appBar: AppBar(title: Text(provider.t('academic_import'))),
       body: WebViewWidget(controller: _controller),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isImporting ? null : _runExtractScript,
         icon: const Icon(Icons.download_for_offline_outlined),
         label: Text(
-          _isImporting ? provider.t('extracting') : provider.t('extract_timetable'),
+          _isImporting
+              ? provider.t('extracting')
+              : provider.t('extract_timetable'),
         ),
       ),
     );
@@ -781,10 +781,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red,
-            content: Text(rawMessage),
-          ),
+          SnackBar(backgroundColor: Colors.red, content: Text(rawMessage)),
         );
         return;
       }

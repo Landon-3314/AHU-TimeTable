@@ -3,22 +3,20 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'background_service.dart';
 import 'providers/course_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/main_scaffold.dart';
 import 'services/notification_service.dart';
+import 'services/storage_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final sharedPreferences = await SharedPreferences.getInstance();
+  final storageService = await StorageService.create();
   await NotificationService.instance.initialize();
 
-  runApp(
-    MainApp(sharedPreferences: sharedPreferences),
-  );
+  runApp(MainApp(storageService: storageService));
 }
 
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -26,18 +24,15 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Set<PointerDeviceKind> get dragDevices => {
-        PointerDeviceKind.touch,
-        PointerDeviceKind.mouse,
-      };
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+  };
 }
 
 class MainApp extends StatefulWidget {
-  const MainApp({
-    super.key,
-    required this.sharedPreferences,
-  });
+  const MainApp({super.key, required this.storageService});
 
-  final SharedPreferences sharedPreferences;
+  final StorageService storageService;
 
   @override
   State<MainApp> createState() => _MainAppState();
@@ -51,12 +46,8 @@ class _MainAppState extends State<MainApp> {
   void initState() {
     super.initState();
 
-    _settingsProvider = SettingsProvider(
-      sharedPreferences: widget.sharedPreferences,
-    );
-    _courseProvider = CourseProvider(
-      sharedPreferences: widget.sharedPreferences,
-    );
+    _settingsProvider = SettingsProvider(storageService: widget.storageService);
+    _courseProvider = CourseProvider(storageService: widget.storageService);
 
     Future<void> refreshReminders() {
       final courses = _courseProvider.courses.toList();
@@ -97,7 +88,9 @@ class _MainAppState extends State<MainApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<SettingsProvider>.value(value: _settingsProvider),
+        ChangeNotifierProvider<SettingsProvider>.value(
+          value: _settingsProvider,
+        ),
         ChangeNotifierProvider<CourseProvider>.value(value: _courseProvider),
       ],
       child: Consumer<SettingsProvider>(

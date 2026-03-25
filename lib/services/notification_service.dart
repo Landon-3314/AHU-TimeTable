@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -13,25 +13,25 @@ class NotificationService {
 
   static const AndroidNotificationChannel silentBgChannel =
       AndroidNotificationChannel(
-    'silent_bg_channel',
-    '后台静音服务',
-    description: 'Foreground service channel for background worker',
-    importance: Importance.min,
-    playSound: false,
-    enableVibration: false,
-    showBadge: false,
-  );
+        'silent_bg_channel',
+        '后台静音服务',
+        description: 'Foreground service channel for background worker',
+        importance: Importance.min,
+        playSound: false,
+        enableVibration: false,
+        showBadge: false,
+      );
 
   static const AndroidNotificationChannel courseReminderChannel =
       AndroidNotificationChannel(
-    'course_reminder_channel',
-    '课程提醒',
-    description: 'High priority course reminder notifications',
-    importance: Importance.max,
-    playSound: true,
-    enableVibration: true,
-    showBadge: true,
-  );
+        'course_reminder_channel',
+        '课程提醒',
+        description: 'High priority course reminder notifications',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        showBadge: true,
+      );
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -54,8 +54,10 @@ class NotificationService {
 
     await _plugin.initialize(settings: initializationSettings);
 
-    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     await androidPlugin?.createNotificationChannel(silentBgChannel);
     await androidPlugin?.createNotificationChannel(courseReminderChannel);
 
@@ -63,13 +65,11 @@ class NotificationService {
       await androidPlugin?.requestNotificationsPermission();
     }
 
-    final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>();
-    await iosPlugin?.requestPermissions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    final iosPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
+    await iosPlugin?.requestPermissions(alert: true, badge: true, sound: true);
 
     _initialized = true;
   }
@@ -81,7 +81,9 @@ class NotificationService {
     SettingsProvider settings,
   ) async {
     await initialize();
-    print('[NotificationService] scheduleAllCourseReminders skipped: migrated to background_service');
+    print(
+      '[NotificationService] scheduleAllCourseReminders skipped: migrated to background_service',
+    );
   }
 
   // Legacy API kept for compatibility.
@@ -90,7 +92,9 @@ class NotificationService {
     int advanceMinutes,
   ) async {
     await initialize();
-    print('[NotificationService] scheduleEventReminders skipped: migrated to background_service');
+    print(
+      '[NotificationService] scheduleEventReminders skipped: migrated to background_service',
+    );
   }
 
   // Legacy API kept for compatibility.
@@ -100,6 +104,8 @@ class NotificationService {
     required SettingsProvider settings,
   }) async {
     await initialize();
-    print('[NotificationService] refreshAllReminders skipped: migrated to background_service');
+    print(
+      '[NotificationService] refreshAllReminders skipped: migrated to background_service',
+    );
   }
 }

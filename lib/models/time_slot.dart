@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'clock_time.dart';
 
 class TimeSlot {
   const TimeSlot({
@@ -9,7 +9,7 @@ class TimeSlot {
   });
 
   final int periodNumber;
-  final TimeOfDay startTime;
-  final TimeOfDay endTime;
+  final ClockTime startTime;
+  final ClockTime endTime;
   final String label;
 }

@@ -1,17 +1,18 @@
-import 'package:flutter/material.dart';
-
 class Course {
-  const Course({
+  Course({
+    String? id,
     required this.name,
     required this.location,
     required this.teacher,
     required this.weekday,
-    required this.weeks,
+    required List<int> weeks,
     required this.startPeriod,
     required this.endPeriod,
     required this.colorValue,
-  });
+  }) : id = id ?? createId(),
+       weeks = List<int>.unmodifiable(weeks);
 
+  final String id;
   final String name;
   final String location;
   final String teacher;
@@ -21,9 +22,8 @@ class Course {
   final int endPeriod;
   final int colorValue;
 
-  Color get color => Color(colorValue);
-
   Course copyWith({
+    String? id,
     String? name,
     String? location,
     String? teacher,
@@ -34,6 +34,7 @@ class Course {
     int? colorValue,
   }) {
     return Course(
+      id: id ?? this.id,
       name: name ?? this.name,
       location: location ?? this.location,
       teacher: teacher ?? this.teacher,
@@ -47,6 +48,7 @@ class Course {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'location': location,
       'teacher': teacher,
@@ -58,25 +60,92 @@ class Course {
     };
   }
 
-  Map<String, dynamic> toMap() => toJson();
-
   factory Course.fromJson(Map<String, dynamic> map) {
-    final dynamic rawWeeks = map['weeks'];
-    final List<int> weeks = rawWeeks is List
-        ? rawWeeks.map((item) => item as int).toList()
-        : <int>[1];
+    final weeks = _parseWeeks(map['weeks']);
+    final name = (map['name'] as String?) ?? 'Untitled Course';
+    final location = (map['location'] as String?) ?? '';
+    final teacher = (map['teacher'] as String?) ?? '';
+    final weekday = (map['weekday'] as int?) ?? 1;
+    final startPeriod = (map['startPeriod'] as int?) ?? 1;
+    final endPeriod = (map['endPeriod'] as int?) ?? 2;
+    final colorValue = (map['colorValue'] as int?) ?? 0xFF7C9AF2;
 
     return Course(
-      name: (map['name'] as String?) ?? 'Untitled Course',
-      location: (map['location'] as String?) ?? '',
-      teacher: (map['teacher'] as String?) ?? '',
-      weekday: (map['weekday'] as int?) ?? 1,
+      id:
+          (map['id'] as String?) ??
+          createLegacyId(
+            name: name,
+            location: location,
+            teacher: teacher,
+            weekday: weekday,
+            weeks: weeks,
+            startPeriod: startPeriod,
+            endPeriod: endPeriod,
+            colorValue: colorValue,
+          ),
+      name: name,
+      location: location,
+      teacher: teacher,
+      weekday: weekday,
       weeks: weeks,
-      startPeriod: (map['startPeriod'] as int?) ?? 1,
-      endPeriod: (map['endPeriod'] as int?) ?? 2,
-      colorValue: (map['colorValue'] as int?) ?? 0xFF7C9AF2,
+      startPeriod: startPeriod,
+      endPeriod: endPeriod,
+      colorValue: colorValue,
     );
   }
 
-  factory Course.fromMap(Map<String, dynamic> map) => Course.fromJson(map);
+  static String createId() {
+    return 'course-${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  static String createLegacyId({
+    required String name,
+    required String location,
+    required String teacher,
+    required int weekday,
+    required List<int> weeks,
+    required int startPeriod,
+    required int endPeriod,
+    required int colorValue,
+  }) {
+    final source = [
+      name.trim(),
+      location.trim(),
+      teacher.trim(),
+      weekday,
+      weeks.join(','),
+      startPeriod,
+      endPeriod,
+      colorValue,
+    ].join('|');
+    return 'course-${_stableHash(source)}';
+  }
+
+  static List<int> _parseWeeks(Object? rawWeeks) {
+    if (rawWeeks is! List) {
+      return const <int>[1];
+    }
+
+    return rawWeeks
+        .map((item) {
+          if (item is int) {
+            return item;
+          }
+          if (item is num) {
+            return item.toInt();
+          }
+          return int.tryParse(item.toString());
+        })
+        .whereType<int>()
+        .toList();
+  }
+
+  static String _stableHash(String source) {
+    var hash = 0xcbf29ce484222325;
+    for (final codeUnit in source.codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * 0x100000001b3) & 0x7fffffffffffffff;
+    }
+    return hash.toRadixString(16);
+  }
 }

@@ -1,70 +1,53 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_localizations.dart';
+import '../models/clock_time.dart';
 import '../models/time_slot.dart';
 import '../services/auto_mute_service.dart';
+import '../services/storage_service.dart';
 
 class SettingsProvider extends ChangeNotifier {
-  SettingsProvider({
-    required SharedPreferences sharedPreferences,
-  }) : _sharedPreferences = sharedPreferences,
-       _pixelsPerMinute =
-           sharedPreferences.getDouble(_pixelsPerMinuteKey) ??
-           _defaultPixelsPerMinute,
-       _classDuration =
-           sharedPreferences.getInt(_classDurationKey) ?? _defaultClassDuration,
-       _shortBreak =
-           sharedPreferences.getInt(_shortBreakKey) ?? _defaultShortBreak,
-       _bigBreak =
-           sharedPreferences.getInt(_bigBreakKey) ?? _defaultBigBreak,
-       _morningStartTime =
-           sharedPreferences.getString(_morningStartTimeKey) ??
-           _defaultMorningStartTime,
-       _morningClasses =
-           sharedPreferences.getInt(_morningClassesKey) ?? _defaultMorningClasses,
-       _afternoonStartTime =
-           sharedPreferences.getString(_afternoonStartTimeKey) ??
-           _defaultAfternoonStartTime,
-       _afternoonClasses = sharedPreferences.getInt(_afternoonClassesKey) ??
-           _defaultAfternoonClasses,
-       _eveningStartTime =
-           sharedPreferences.getString(_eveningStartTimeKey) ??
-           _defaultEveningStartTime,
-       _eveningClasses =
-           sharedPreferences.getInt(_eveningClassesKey) ?? _defaultEveningClasses,
-       _semesterStartDate = _loadSemesterStartDate(sharedPreferences),
-       _totalWeeks = sharedPreferences.getInt(_totalWeeksKey) ?? _defaultTotalWeeks,
-       _reminderAdvanceMinutes =
-           sharedPreferences.getInt(_reminderAdvanceMinutesKey) ??
-           _defaultReminderAdvanceMinutes,
-       _eventReminderAdvanceMinutes =
-           sharedPreferences.getInt(_eventReminderAdvanceMinutesKey) ??
-           _defaultEventReminderAdvanceMinutes,
-       _languageCode = sharedPreferences.getString(_languageCodeKey) ?? 'zh',
-       _autoMuteEnabled =
-           sharedPreferences.getBool(_autoMuteEnabledKey) ?? false;
-
-  static const String _pixelsPerMinuteKey = 'settings.pixelsPerMinute';
-  static const String _classDurationKey = 'settings.classDuration';
-  static const String _shortBreakKey = 'settings.shortBreak';
-  static const String _bigBreakKey = 'settings.bigBreak';
-  static const String _morningStartTimeKey = 'settings.morningStartTime';
-  static const String _morningClassesKey = 'settings.morningClasses';
-  static const String _afternoonStartTimeKey = 'settings.afternoonStartTime';
-  static const String _afternoonClassesKey = 'settings.afternoonClasses';
-  static const String _eveningStartTimeKey = 'settings.eveningStartTime';
-  static const String _eveningClassesKey = 'settings.eveningClasses';
-  static const String _semesterStartDateKey = 'settings.semesterStartDate';
-  static const String _totalWeeksKey = 'settings.totalWeeks';
-  static const String _reminderAdvanceMinutesKey =
-      'settings.reminderAdvanceMinutes';
-  static const String _eventReminderAdvanceMinutesKey =
-      'settings.eventReminderAdvanceMinutes';
-  static const String _languageCodeKey = 'settings.languageCode';
-  static const String _autoMuteEnabledKey = 'settings.autoMuteEnabled';
+  SettingsProvider({required StorageService storageService})
+    : _storageService = storageService,
+      _pixelsPerMinute = storageService.readPixelsPerMinute(
+        fallback: _defaultPixelsPerMinute,
+      ),
+      _classDuration = storageService.readClassDuration(
+        fallback: _defaultClassDuration,
+      ),
+      _shortBreak = storageService.readShortBreak(fallback: _defaultShortBreak),
+      _bigBreak = storageService.readBigBreak(fallback: _defaultBigBreak),
+      _morningStartTime = storageService.readMorningStartTime(
+        fallback: _defaultMorningStartTime,
+      ),
+      _morningClasses = storageService.readMorningClasses(
+        fallback: _defaultMorningClasses,
+      ),
+      _afternoonStartTime = storageService.readAfternoonStartTime(
+        fallback: _defaultAfternoonStartTime,
+      ),
+      _afternoonClasses = storageService.readAfternoonClasses(
+        fallback: _defaultAfternoonClasses,
+      ),
+      _eveningStartTime = storageService.readEveningStartTime(
+        fallback: _defaultEveningStartTime,
+      ),
+      _eveningClasses = storageService.readEveningClasses(
+        fallback: _defaultEveningClasses,
+      ),
+      _semesterStartDate = _loadSemesterStartDate(storageService),
+      _totalWeeks = storageService.readTotalWeeks(fallback: _defaultTotalWeeks),
+      _reminderAdvanceMinutes = storageService.readReminderAdvanceMinutes(
+        fallback: _defaultReminderAdvanceMinutes,
+      ),
+      _eventReminderAdvanceMinutes = storageService
+          .readEventReminderAdvanceMinutes(
+            fallback: _defaultEventReminderAdvanceMinutes,
+          ),
+      _languageCode = storageService.readLanguageCode(fallback: 'zh'),
+      _autoMuteEnabled = storageService.readAutoMuteEnabled(fallback: false);
 
   static const double _defaultPixelsPerMinute = 1.2;
   static const int _defaultClassDuration = 45;
@@ -80,7 +63,7 @@ class SettingsProvider extends ChangeNotifier {
   static const int _defaultReminderAdvanceMinutes = 0;
   static const int _defaultEventReminderAdvanceMinutes = 0;
 
-  final SharedPreferences _sharedPreferences;
+  final StorageService _storageService;
 
   double _pixelsPerMinute;
   int _classDuration;
@@ -150,7 +133,7 @@ class SettingsProvider extends ChangeNotifier {
 
     _languageCode = code;
     notifyListeners();
-    await _sharedPreferences.setString(_languageCodeKey, code);
+    await _storageService.writeLanguageCode(code);
   }
 
   List<TimeSlot> generateTimeSlots() {
@@ -159,7 +142,7 @@ class SettingsProvider extends ChangeNotifier {
 
     periodNumber = _appendSessionSlots(
       slots: slots,
-      startTime: morningStartTime,
+      startTime: ClockTime.fromString(_morningStartTime),
       count: _morningClasses,
       periodNumber: periodNumber,
       label: 'Morning',
@@ -167,7 +150,7 @@ class SettingsProvider extends ChangeNotifier {
     );
     periodNumber = _appendSessionSlots(
       slots: slots,
-      startTime: afternoonStartTime,
+      startTime: ClockTime.fromString(_afternoonStartTime),
       count: _afternoonClasses,
       periodNumber: periodNumber,
       label: 'Afternoon',
@@ -175,7 +158,7 @@ class SettingsProvider extends ChangeNotifier {
     );
     _appendSessionSlots(
       slots: slots,
-      startTime: eveningStartTime,
+      startTime: ClockTime.fromString(_eveningStartTime),
       count: _eveningClasses,
       periodNumber: periodNumber,
       label: 'Evening',
@@ -192,7 +175,7 @@ class SettingsProvider extends ChangeNotifier {
 
     _pixelsPerMinute = value;
     notifyListeners();
-    await _sharedPreferences.setDouble(_pixelsPerMinuteKey, value);
+    await _storageService.writePixelsPerMinute(value);
   }
 
   Future<void> updateClassDuration(int value) async {
@@ -202,7 +185,7 @@ class SettingsProvider extends ChangeNotifier {
 
     _classDuration = value;
     notifyListeners();
-    await _sharedPreferences.setInt(_classDurationKey, value);
+    await _storageService.writeClassDuration(value);
     await _refreshReminders();
   }
 
@@ -213,7 +196,7 @@ class SettingsProvider extends ChangeNotifier {
 
     _shortBreak = value;
     notifyListeners();
-    await _sharedPreferences.setInt(_shortBreakKey, value);
+    await _storageService.writeShortBreak(value);
     await _refreshReminders();
   }
 
@@ -224,16 +207,16 @@ class SettingsProvider extends ChangeNotifier {
 
     _bigBreak = value;
     notifyListeners();
-    await _sharedPreferences.setInt(_bigBreakKey, value);
+    await _storageService.writeBigBreak(value);
     await _refreshReminders();
   }
 
   Future<void> updateMorningStartTime(TimeOfDay value) async {
     await _updateTime(
-      key: _morningStartTimeKey,
       currentValue: _morningStartTime,
       nextValue: value,
       apply: (formatted) => _morningStartTime = formatted,
+      persist: _storageService.writeMorningStartTime,
     );
   }
 
@@ -244,16 +227,16 @@ class SettingsProvider extends ChangeNotifier {
 
     _morningClasses = value;
     notifyListeners();
-    await _sharedPreferences.setInt(_morningClassesKey, value);
+    await _storageService.writeMorningClasses(value);
     await _refreshReminders();
   }
 
   Future<void> updateAfternoonStartTime(TimeOfDay value) async {
     await _updateTime(
-      key: _afternoonStartTimeKey,
       currentValue: _afternoonStartTime,
       nextValue: value,
       apply: (formatted) => _afternoonStartTime = formatted,
+      persist: _storageService.writeAfternoonStartTime,
     );
   }
 
@@ -264,16 +247,16 @@ class SettingsProvider extends ChangeNotifier {
 
     _afternoonClasses = value;
     notifyListeners();
-    await _sharedPreferences.setInt(_afternoonClassesKey, value);
+    await _storageService.writeAfternoonClasses(value);
     await _refreshReminders();
   }
 
   Future<void> updateEveningStartTime(TimeOfDay value) async {
     await _updateTime(
-      key: _eveningStartTimeKey,
       currentValue: _eveningStartTime,
       nextValue: value,
       apply: (formatted) => _eveningStartTime = formatted,
+      persist: _storageService.writeEveningStartTime,
     );
   }
 
@@ -284,7 +267,7 @@ class SettingsProvider extends ChangeNotifier {
 
     _eveningClasses = value;
     notifyListeners();
-    await _sharedPreferences.setInt(_eveningClassesKey, value);
+    await _storageService.writeEveningClasses(value);
     await _refreshReminders();
   }
 
@@ -296,10 +279,7 @@ class SettingsProvider extends ChangeNotifier {
 
     _semesterStartDate = aligned;
     notifyListeners();
-    await _sharedPreferences.setString(
-      _semesterStartDateKey,
-      aligned.toIso8601String(),
-    );
+    await _storageService.writeSemesterStartDate(aligned);
     await _refreshReminders();
   }
 
@@ -311,7 +291,7 @@ class SettingsProvider extends ChangeNotifier {
 
     _totalWeeks = safeValue;
     notifyListeners();
-    await _sharedPreferences.setInt(_totalWeeksKey, safeValue);
+    await _storageService.writeTotalWeeks(safeValue);
     await _refreshReminders();
   }
 
@@ -323,7 +303,7 @@ class SettingsProvider extends ChangeNotifier {
 
     _reminderAdvanceMinutes = safeValue;
     notifyListeners();
-    await _sharedPreferences.setInt(_reminderAdvanceMinutesKey, safeValue);
+    await _storageService.writeReminderAdvanceMinutes(safeValue);
     await _refreshReminders();
   }
 
@@ -335,7 +315,7 @@ class SettingsProvider extends ChangeNotifier {
 
     _eventReminderAdvanceMinutes = safeValue;
     notifyListeners();
-    await _sharedPreferences.setInt(_eventReminderAdvanceMinutesKey, safeValue);
+    await _storageService.writeEventReminderAdvanceMinutes(safeValue);
     await _refreshReminders();
   }
 
@@ -355,25 +335,19 @@ class SettingsProvider extends ChangeNotifier {
 
     _autoMuteEnabled = value;
     notifyListeners();
-    await _sharedPreferences.setBool(_autoMuteEnabledKey, value);
+    await _storageService.writeAutoMuteEnabled(value);
     await _refreshReminders();
   }
 
   Future<bool> toggleAutoMuteWithCheck(bool value) async {
     if (!value) {
-      await updateAutoMuteEnabled(
-        false,
-        fromUserAction: true,
-      );
+      await updateAutoMuteEnabled(false, fromUserAction: true);
       return true;
     }
 
     try {
       if (!Platform.isAndroid) {
-        await updateAutoMuteEnabled(
-          true,
-          fromUserAction: true,
-        );
+        await updateAutoMuteEnabled(true, fromUserAction: true);
         return true;
       }
 
@@ -384,38 +358,29 @@ class SettingsProvider extends ChangeNotifier {
       }
 
       if (!hasPermission) {
-        await updateAutoMuteEnabled(
-          false,
-          fromUserAction: true,
-        );
+        await updateAutoMuteEnabled(false, fromUserAction: true);
         return false;
       }
 
-      await updateAutoMuteEnabled(
-        true,
-        fromUserAction: true,
-      );
+      await updateAutoMuteEnabled(true, fromUserAction: true);
       return true;
     } catch (error, stackTrace) {
       print('[SettingsProvider] toggleAutoMuteWithCheck error: $error');
       print(stackTrace);
-      await updateAutoMuteEnabled(
-        false,
-        fromUserAction: true,
-      );
+      await updateAutoMuteEnabled(false, fromUserAction: true);
       return false;
     }
   }
 
   int _appendSessionSlots({
     required List<TimeSlot> slots,
-    required TimeOfDay startTime,
+    required ClockTime startTime,
     required int count,
     required int periodNumber,
     required String label,
     required bool hasBigBreak,
   }) {
-    int currentStartMinutes = _toMinutes(startTime);
+    int currentStartMinutes = startTime.toMinutes();
 
     for (int index = 1; index <= count; index++) {
       final int classStartMinutes = currentStartMinutes;
@@ -424,8 +389,8 @@ class SettingsProvider extends ChangeNotifier {
       slots.add(
         TimeSlot(
           periodNumber: periodNumber,
-          startTime: _fromMinutes(classStartMinutes),
-          endTime: _fromMinutes(classEndMinutes),
+          startTime: ClockTime.fromMinutes(classStartMinutes),
+          endTime: ClockTime.fromMinutes(classEndMinutes),
           label: label,
         ),
       );
@@ -446,10 +411,10 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> _updateTime({
-    required String key,
     required String currentValue,
     required TimeOfDay nextValue,
     required ValueChanged<String> apply,
+    required Future<void> Function(String value) persist,
   }) async {
     final formatted = _formatTime(nextValue);
     if (formatted == currentValue) {
@@ -458,7 +423,7 @@ class SettingsProvider extends ChangeNotifier {
 
     apply(formatted);
     notifyListeners();
-    await _sharedPreferences.setString(key, formatted);
+    await persist(formatted);
     await _refreshReminders();
   }
 
@@ -473,10 +438,7 @@ class SettingsProvider extends ChangeNotifier {
 
   TimeOfDay _parseTime(String value) {
     final parts = value.split(':');
-    return TimeOfDay(
-      hour: int.parse(parts[0]),
-      minute: int.parse(parts[1]),
-    );
+    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
   }
 
   String _formatTime(TimeOfDay time) {
@@ -485,27 +447,12 @@ class SettingsProvider extends ChangeNotifier {
     return '$hour:$minute';
   }
 
-  int _toMinutes(TimeOfDay time) => time.hour * 60 + time.minute;
-
-  TimeOfDay _fromMinutes(int totalMinutes) {
-    return TimeOfDay(
-      hour: totalMinutes ~/ 60,
-      minute: totalMinutes % 60,
-    );
-  }
-
-  static DateTime _loadSemesterStartDate(SharedPreferences sharedPreferences) {
-    final rawValue = sharedPreferences.getString(_semesterStartDateKey);
-    if (rawValue == null || rawValue.isEmpty) {
+  static DateTime _loadSemesterStartDate(StorageService storageService) {
+    final rawValue = storageService.readSemesterStartDate();
+    if (rawValue == null) {
       return _defaultSemesterStartDate();
     }
-
-    final parsed = DateTime.tryParse(rawValue);
-    if (parsed == null) {
-      return _defaultSemesterStartDate();
-    }
-
-    return _alignToMonday(parsed);
+    return _alignToMonday(rawValue);
   }
 
   static DateTime _defaultSemesterStartDate() {

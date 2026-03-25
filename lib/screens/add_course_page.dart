@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/course.dart';
@@ -7,17 +7,13 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 
 class AddCoursePage extends StatelessWidget {
-  const AddCoursePage({
-    super.key,
-    this.existingCourse,
-  });
+  const AddCoursePage({super.key, this.existingCourse});
 
   final Course? existingCourse;
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
-    final isEditMode = existingCourse != null;
 
     return DefaultTabController(
       length: 2,
@@ -42,9 +38,7 @@ class AddCoursePage extends StatelessWidget {
 }
 
 class _CourseForm extends StatefulWidget {
-  const _CourseForm({
-    this.existingCourse,
-  });
+  const _CourseForm({this.existingCourse});
 
   final Course? existingCourse;
 
@@ -187,9 +181,9 @@ class _CourseFormState extends State<_CourseForm> {
               const SizedBox(height: 20),
               Text(
                 provider.t('teaching_weeks'),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -223,7 +217,11 @@ class _CourseFormState extends State<_CourseForm> {
                         border: const OutlineInputBorder(),
                       ),
                       items: [
-                        for (int period = 1; period <= effectivePeriodCount; period++)
+                        for (
+                          int period = 1;
+                          period <= effectivePeriodCount;
+                          period++
+                        )
                           DropdownMenuItem<int>(
                             value: period,
                             child: Text(_periodLabel(provider, period)),
@@ -250,7 +248,11 @@ class _CourseFormState extends State<_CourseForm> {
                         border: const OutlineInputBorder(),
                       ),
                       items: [
-                        for (int period = 1; period <= effectivePeriodCount; period++)
+                        for (
+                          int period = 1;
+                          period <= effectivePeriodCount;
+                          period++
+                        )
                           DropdownMenuItem<int>(
                             value: period,
                             child: Text(_periodLabel(provider, period)),
@@ -270,9 +272,9 @@ class _CourseFormState extends State<_CourseForm> {
               const SizedBox(height: 20),
               Text(
                 provider.t('card_color'),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -294,12 +296,18 @@ class _CourseFormState extends State<_CourseForm> {
                         color: Color(colorValue),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isSelected ? Colors.black87 : Colors.transparent,
+                          color: isSelected
+                              ? Colors.black87
+                              : Colors.transparent,
                           width: 2.5,
                         ),
                       ),
                       child: isSelected
-                          ? const Icon(Icons.check, color: Colors.white, size: 20)
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 20,
+                            )
                           : null,
                     ),
                   );
@@ -317,7 +325,9 @@ class _CourseFormState extends State<_CourseForm> {
           child: Text(
             _isSaving
                 ? provider.t('saving')
-                : (_isEditMode ? provider.t('save_changes') : provider.t('save')),
+                : (_isEditMode
+                      ? provider.t('save_changes')
+                      : provider.t('save')),
           ),
         ),
       ),
@@ -355,6 +365,7 @@ class _CourseFormState extends State<_CourseForm> {
     });
 
     final course = Course(
+      id: widget.existingCourse?.id,
       name: _nameController.text.trim(),
       location: _locationController.text.trim(),
       teacher: _teacherController.text.trim(),
@@ -384,9 +395,9 @@ class _CourseFormState extends State<_CourseForm> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   int _boundedPeriod(int value, int max) {
@@ -606,7 +617,6 @@ class _EventFormState extends State<_EventForm> {
     });
 
     final event = Event(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: _nameController.text.trim(),
       location: _locationController.text.trim(),
       dateTime: _selectedDateTime!,
@@ -624,17 +634,9 @@ class _EventFormState extends State<_EventForm> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  String _formatDateTime(DateTime value) {
-    final month = value.month.toString().padLeft(2, '0');
-    final day = value.day.toString().padLeft(2, '0');
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    return '${value.year}/$month/$day $hour:$minute';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   String _formatDate(DateTime value) {
@@ -649,4 +651,3 @@ class _EventFormState extends State<_EventForm> {
     return '$hour:$minute';
   }
 }
-
