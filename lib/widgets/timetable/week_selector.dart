@@ -1,0 +1,58 @@
+import 'package:flutter/material.dart';
+
+import '../../models/timetable_view_data.dart';
+
+class WeekSelector extends StatelessWidget {
+  const WeekSelector({
+    super.key,
+    required this.currentWeek,
+    required this.options,
+    required this.tooltip,
+    required this.onSelected,
+  });
+
+  final int currentWeek;
+  final List<TimetableWeekOption> options;
+  final String tooltip;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    var currentLabel = options.first.label;
+    for (final option in options) {
+      if (option.value == currentWeek) {
+        currentLabel = option.label;
+        break;
+      }
+    }
+
+    return PopupMenuButton<int>(
+      tooltip: tooltip,
+      onSelected: onSelected,
+      itemBuilder: (context) => [
+        for (final option in options)
+          PopupMenuItem<int>(
+            value: option.value,
+            child: Row(
+              children: [
+                Expanded(child: Text(option.label)),
+                if (option.value == currentWeek)
+                  const Icon(Icons.check, size: 16),
+              ],
+            ),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Center(
+          child: Text(
+            currentLabel,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    );
+  }
+}

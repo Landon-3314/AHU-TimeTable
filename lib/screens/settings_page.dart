@@ -6,6 +6,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/settings/settings_section.dart';
 import 'schedule_settings_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -27,9 +28,9 @@ class SettingsPage extends StatelessWidget {
             ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 24),
-          _SectionTitle(title: provider.t('basic_settings')),
+          SettingsSectionTitle(title: provider.t('basic_settings')),
           const SizedBox(height: 10),
-          _SettingsCard(
+          SettingsSectionCard(
             children: [
               ListTile(
                 leading: const Icon(Icons.language_outlined),
@@ -89,9 +90,9 @@ class SettingsPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          _SectionTitle(title: provider.t('notifications')),
+          SettingsSectionTitle(title: provider.t('notifications')),
           const SizedBox(height: 10),
-          _SettingsCard(
+          SettingsSectionCard(
             children: [
               ListTile(
                 leading: const Icon(Icons.notifications_active_outlined),
@@ -166,9 +167,9 @@ class SettingsPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          _SectionTitle(title: provider.t('data_storage')),
+          SettingsSectionTitle(title: provider.t('data_storage')),
           const SizedBox(height: 10),
-          _SettingsCard(
+          SettingsSectionCard(
             children: [
               ListTile(
                 leading: const Icon(Icons.cookie_outlined),
@@ -389,42 +390,5 @@ class SettingsPage extends StatelessWidget {
       return provider.t('one_day');
     }
     return '${provider.t('advance_prefix')} $value ${provider.t('minutes_suffix')}';
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Colors.black54,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(children: children),
-    );
   }
 }

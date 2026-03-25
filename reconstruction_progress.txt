@@ -594,9 +594,36 @@ J. 本轮建档确认出的关键风险点
   - `NotificationService.initialize()` / `initializeForBackgroundIsolate()` / `ensurePermissions()` / `showCourseReminder(...)`
   - `AudioModeService.muteDevice()` / `restoreDeviceAudio()` / `applyMode(...)`
 
-[x] 4. 核心状态管理(Provider)拆分与解耦（已按当前执行顺序并入任务 2 完成）
-- 说明：
-  - 本项在当前重构顺序中已提前执行并完成，实际落地内容见任务 2 记录。
+[x] 4. 视图层(UI)纯净化改造与组件拆分（已按当前执行顺序完成）
+- 目标：
+  - 将 `timetable_page.dart` 与 `settings_page.dart` 收缩为“状态读取 + 组件装配 + 路由/Provider 调用”壳层
+  - 抽离页面内的数据过滤、日期映射、周/日页面装配与大体量视觉区块，落实 Dumb UI 模式
+- 本轮完成：
+  - 新增 `TimetableViewDataService`，统一承接日视图/周视图/假期页的数据过滤、排序、日期映射、课程事件混排与文案装配
+  - 新增 `TimetableNavigationController`，从 `TimetablePage` 抽离 PageController 联动、跳周、回到今天、日周同步等页面状态机逻辑
+  - `timetable_page.dart` 已收缩为主页面壳层，只负责读取 Provider、创建 `screenData`、绑定组件回调与处理路由跳转
+  - `settings_page.dart` 已去除内联区块组件，基础分组卡片与标题抽离到独立组件文件
+  - 课程/事件详情弹层已迁移到独立组件文件，避免主页面继续承载展示与删除交互细节
+- 新增核心 UI 组件树：
+  - `TimetablePage`
+  - `WeekSelector`
+  - `DayAgendaView`
+  - `TimetableGrid`
+  - `HolidayListView`
+  - `CourseCard`
+  - `EventCard` / `CompactEventCard` / `HolidayEventCard`
+  - `ScheduleHeaderCard`
+  - `EmptyScheduleState`
+  - `showCourseDetailsSheet(...)` / `showEventDetailsSheet(...)`
+  - `SettingsSectionTitle` / `SettingsSectionCard`
+- 当前对外核心接口：
+  - `TimetableViewDataService.build(...)`
+  - `TimetableNavigationController.setMode(...)`
+  - `TimetableNavigationController.jumpToWeek(...)`
+  - `TimetableNavigationController.jumpToToday()`
+  - `TimetableNavigationController.jumpToDay(...)`
+  - `TimetableNavigationController.handleAbsoluteDayChanged(...)`
+  - `TimetableNavigationController.handleWeekChanged(...)`
 
 [ ] 5. Timetable 页面状态机独立化
 - 目标：
