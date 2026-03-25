@@ -568,14 +568,31 @@ J. 本轮建档确认出的关键风险点
   - `ScheduleCalculator`
   - `AutoMuteToggleService`
 
-[ ] 3. 课表时间配置域重构
+[x] 3. 后台服务与系统通道(Service)独立封装（已按当前执行顺序完成）
 - 目标：
-  - 将学期换算、节次生成、日期映射从 SettingsProvider 中提纯
-  - 形成可复用的时间表领域服务
+  - 隔离 flutter_background_service、flutter_local_notifications、sound_mode 与 MethodChannel 调用
+  - 统一后台服务初始化入口，明确 UI 进程与后台 isolate 的运行边界
 - 输出方向：
-  - `ScheduleConfig`
-  - `TimeSlotFactory`
-  - `SemesterCalendarService`
+  - `AppServices`
+  - `BackgroundServiceCoordinator`
+  - `BackgroundRuntimeService`
+  - `NotificationService`
+  - `AudioModeService`
+  - `AutoMuteService`
+- 本轮完成：
+  - `main()` 已收口为 `AppServices.init()` 统一初始化入口，负责 `StorageService`、`NotificationService` 与 `BackgroundServiceCoordinator` 的启动装配
+  - `background_service.dart` 已收缩为兼容转发层，仅暴露 `initializeBackgroundServices()` / `requestBackgroundServiceSync()` / `stopBackgroundServiceIfRunning()`
+  - `BackgroundServiceCoordinator` 负责后台服务配置、启动、同步与停止命令编排
+  - `BackgroundRuntimeService` 负责后台 isolate 内的定时轮询、课程提醒判定、静音模式判定与前台服务通知刷新
+  - `NotificationService` 已整理为“通知渠道 + 权限 + 即时课程提醒发送”的独立服务，并支持后台 isolate 独立初始化
+  - `AudioModeService` 统一封装 `sound_mode`，`AutoMuteService` 保留 MethodChannel 权限能力封装
+  - 已确认当前 `pubspec.yaml` 未声明 `android_alarm_manager_plus`，该插件不在现阶段真实生效链路中
+- 当前对外核心接口：
+  - `AppServices.init()`
+  - `BackgroundServiceCoordinator.initialize()` / `requestSync()` / `stopIfRunning()`
+  - `BackgroundRuntimeService.start(...)`
+  - `NotificationService.initialize()` / `initializeForBackgroundIsolate()` / `ensurePermissions()` / `showCourseReminder(...)`
+  - `AudioModeService.muteDevice()` / `restoreDeviceAudio()` / `applyMode(...)`
 
 [x] 4. 核心状态管理(Provider)拆分与解耦（已按当前执行顺序并入任务 2 完成）
 - 说明：
@@ -601,7 +618,7 @@ J. 本轮建档确认出的关键风险点
   - `WeekExpressionParser`
   - `ImportDedupePolicy`
 
-[ ] 7. 后台服务与系统通道(Service)独立封装
+[x] 7. 后台服务与系统通道(Service)独立封装（已并入任务 3 完成）
 - 目标：
   - 拆解 background_service.dart 单体
   - 隔离服务配置、命令监听、静音引擎、提醒引擎、SharedPreferences 读取

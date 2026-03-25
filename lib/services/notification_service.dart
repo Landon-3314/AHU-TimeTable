@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -7,7 +8,8 @@ import '../models/event.dart';
 import '../providers/settings_provider.dart';
 
 class NotificationService {
-  NotificationService._();
+  NotificationService._({FlutterLocalNotificationsPlugin? plugin})
+    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   static final NotificationService instance = NotificationService._();
 
@@ -33,13 +35,69 @@ class NotificationService {
         showBadge: true,
       );
 
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  factory NotificationService.backgroundWorker() => NotificationService._();
+
+  final FlutterLocalNotificationsPlugin _plugin;
 
   bool _initialized = false;
 
   Future<void> initialize() async {
+    await _initialize(requestPermissions: true);
+  }
+
+  Future<void> initializeForBackgroundIsolate() async {
+    await _initialize(requestPermissions: false);
+  }
+
+  Future<void> ensurePermissions() async {
+    await initialize();
+    await _requestPlatformPermissions();
+  }
+
+  Future<void> showCourseReminder({
+    required Course course,
+    required int notificationId,
+  }) async {
+    await initializeForBackgroundIsolate();
+
+    final courseName = course.name.trim();
+    if (courseName.isEmpty) {
+      return;
+    }
+
+    final location = course.location.trim();
+    await _plugin.show(
+      id: notificationId,
+      title: '即将上课：$courseName',
+      body: location.isEmpty ? '请准备上课' : '地点：$location',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          courseReminderChannelId,
+          courseReminderChannelName,
+          channelDescription: courseReminderChannelDescription,
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+    );
+  }
+
+  static const String courseReminderChannelId = 'course_reminder_channel';
+  static const String courseReminderChannelName = '课程提醒';
+  static const String courseReminderChannelDescription =
+      'High priority course reminder notifications';
+
+  Future<void> _initialize({required bool requestPermissions}) async {
     if (_initialized) {
+      if (requestPermissions) {
+        await _requestPlatformPermissions();
+      }
       return;
     }
 
@@ -61,7 +119,18 @@ class NotificationService {
     await androidPlugin?.createNotificationChannel(silentBgChannel);
     await androidPlugin?.createNotificationChannel(courseReminderChannel);
 
+    _initialized = true;
+    if (requestPermissions) {
+      await _requestPlatformPermissions();
+    }
+  }
+
+  Future<void> _requestPlatformPermissions() async {
     if (Platform.isAndroid) {
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       await androidPlugin?.requestNotificationsPermission();
     }
 
@@ -70,8 +139,6 @@ class NotificationService {
           IOSFlutterLocalNotificationsPlugin
         >();
     await iosPlugin?.requestPermissions(alert: true, badge: true, sound: true);
-
-    _initialized = true;
   }
 
   // Legacy API kept for compatibility with existing call sites.
@@ -81,8 +148,9 @@ class NotificationService {
     SettingsProvider settings,
   ) async {
     await initialize();
-    print(
-      '[NotificationService] scheduleAllCourseReminders skipped: migrated to background_service',
+    developer.log(
+      'scheduleAllCourseReminders skipped: delegated to background service runtime',
+      name: 'NotificationService',
     );
   }
 
@@ -92,8 +160,9 @@ class NotificationService {
     int advanceMinutes,
   ) async {
     await initialize();
-    print(
-      '[NotificationService] scheduleEventReminders skipped: migrated to background_service',
+    developer.log(
+      'scheduleEventReminders skipped: event reminder pipeline is not active',
+      name: 'NotificationService',
     );
   }
 
@@ -104,8 +173,9 @@ class NotificationService {
     required SettingsProvider settings,
   }) async {
     await initialize();
-    print(
-      '[NotificationService] refreshAllReminders skipped: migrated to background_service',
+    developer.log(
+      'refreshAllReminders delegated to background service coordinator',
+      name: 'NotificationService',
     );
   }
 }

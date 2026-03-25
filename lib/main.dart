@@ -9,14 +9,12 @@ import 'providers/course_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/timetable_view_provider.dart';
 import 'screens/main_scaffold.dart';
+import 'services/app_services.dart';
 import 'services/notification_service.dart';
 import 'services/storage_service.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final storageService = await StorageService.create();
-  await NotificationService.instance.initialize();
-
+  final storageService = await AppServices.init();
   runApp(MainApp(storageService: storageService));
 }
 
@@ -55,14 +53,6 @@ class _MainAppState extends State<MainApp> {
     Future<void> refreshReminders() {
       final courses = _courseProvider.courses.toList();
       final events = _courseProvider.events.toList();
-
-      print(
-        '[Main] refreshReminders start: '
-        'courseReminderAdvanceMinutes=${_settingsProvider.reminderAdvanceMinutes}, '
-        'eventReminderAdvanceMinutes=${_settingsProvider.eventReminderAdvanceMinutes}, '
-        'courses=${courses.length}, events=${events.length}, '
-        'autoMuteEnabled=${_settingsProvider.autoMuteEnabled}',
-      );
 
       return Future.wait([
         NotificationService.instance.refreshAllReminders(
