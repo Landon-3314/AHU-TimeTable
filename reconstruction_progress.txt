@@ -396,17 +396,18 @@ F. 教务系统导入闭环
   - JS 侧用 `JSON.stringify(course)` 去重
 
 3. Dart 侧落库流程
-- `_handleImportedMessage(rawMessage)`
-  - DEBUG 消息只打印日志
-  - ERROR 消息直接弹 SnackBar
-  - 成功消息 jsonDecode -> `Course.fromJson(...)`
-  - 批量调用 `CourseProvider.addCourses(importedCourses)`
-  - pop(importedCourses.length) 返回导入数量
+- `ImportCoursePage._handleImportedHtml(rawMessage)`
+  - `ScheduleHtmlExtractor.extractTimetableHtmlScript` 仅负责从当前页面/iframe 提取课表表格 HTML
+  - 返回 `ERROR:` 前缀时，UI 转换为 `ScheduleParseException` 并统一弹出 SnackBar
+  - 成功消息直接传入 `ScheduleParserService.parse(rawHtml)`
+  - 解析结果批量调用 `CourseProvider.addCourses(importedCourses)`
+  - 导入成功后 `Navigator.pop(importedCourses.length)` 返回导入数量
 
 4. 当前效果
 - 教务系统导入已跑通
 - 并且已经具备对“复杂单元格结构、多段课程、纯文本降维解析”的兼容能力
-- 但解析器仍高度依赖页面结构，且整段 JS 全部嵌在页面文件内
+- 导入页面当前只负责 WebView 登录、HTML 提取、调用解析服务、触发 Provider 保存与展示提示
+- HTML 提取与课程解析已从页面层拆出，形成独立 Service 边界
 
 
 G. 后台自动静音与课程提醒闭环
@@ -648,16 +649,20 @@ J. 本轮建档确认出的关键风险点
   - `TimetableNavigationController`
   - `HolidayWeekPolicy`（当前假期页规则已内聚到控制器与视图数据装配层，后续若继续细分可再独立命名）
 
-[ ] 6. 导入解析器(Service)独立封装
+[x] 6. 导入解析器(Service)独立封装
 - 目标：
   - 将 import_course_page.dart 内嵌 JS 与解析规则抽离
   - 拆分“表格发现 / HTML 清洗 / 文本降维 / 周次解析 / 课块切分 / 去重”
-- 输出方向：
-  - `AcademicImportService`
-  - `AcademicImportScriptBuilder`
-  - `CourseHtmlParser`
-  - `WeekExpressionParser`
-  - `ImportDedupePolicy`
+- 本轮完成：
+  - 新增 `ScheduleHtmlExtractor`，统一承接教务登录入口常量与 `extractTimetableHtmlScript`
+  - 新增纯 Dart 解析引擎 `ScheduleParserService`，无损迁移课表表格发现、课块切分、周次解析、节次解析、地点/教师提取与课程去重逻辑
+  - 新增 `ScheduleParseException`，用于空源码、未找到课表表格、未识别到课程等显式失败场景
+  - `ImportCoursePage` 已收缩为 WebView 登录壳层，只负责执行脚本、调用解析器、写入 `CourseProvider`、弹出提示并返回导入结果
+- 当前对外核心接口：
+  - `ScheduleHtmlExtractor.academicLoginUrl`
+  - `ScheduleHtmlExtractor.extractTimetableHtmlScript`
+  - `ScheduleParserService.parse(String html)`
+  - `ScheduleParseException`
 
 [x] 7. 后台服务与系统通道(Service)独立封装（已并入任务 3 完成）
 - 目标：
