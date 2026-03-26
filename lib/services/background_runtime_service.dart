@@ -8,6 +8,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import '../models/clock_time.dart';
 import '../models/event.dart';
 import '../models/time_slot.dart';
+import '../core/app_constants.dart';
 import 'audio_mode_service.dart';
 import 'notification_service.dart';
 import 'schedule_calculator.dart';
@@ -106,7 +107,9 @@ class BackgroundRuntimeService {
     }
 
     final now = DateTime.now();
-    final totalWeeks = storageService.readTotalWeeks(fallback: 20).clamp(1, 30);
+    final totalWeeks = storageService
+        .readTotalWeeks(fallback: AppConstants.defaultSemesterTotalWeeks)
+        .clamp(1, 30);
     final semesterStartDate = _loadSemesterStartDate(storageService);
     final currentWeek = _scheduleCalculator.computeCurrentWeek(
       semesterStartDate: semesterStartDate,
@@ -198,7 +201,9 @@ class BackgroundRuntimeService {
     final dayKey = '${now.year}-${now.month}-${now.day}';
     _resetCourseNotificationDeduplication(dayKey);
 
-    final totalWeeks = storageService.readTotalWeeks(fallback: 20).clamp(1, 30);
+    final totalWeeks = storageService
+        .readTotalWeeks(fallback: AppConstants.defaultSemesterTotalWeeks)
+        .clamp(1, 30);
     final semesterStartDate = _loadSemesterStartDate(storageService);
     final currentWeek = _scheduleCalculator.computeCurrentWeek(
       semesterStartDate: semesterStartDate,

@@ -1,26 +1,49 @@
 import 'dart:collection';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 
 import '../models/course.dart';
 import '../models/event.dart';
+import '../services/background_service_manager.dart';
 import '../services/storage_service.dart';
 
 class CourseProvider extends ChangeNotifier {
-  CourseProvider({required StorageService storageService})
+  CourseProvider({
+    required StorageService storageService,
+    BackgroundServiceManager? backgroundServiceManager,
+  })
     : _storageService = storageService,
+      _backgroundServiceManager =
+          backgroundServiceManager ?? const BackgroundServiceManager(),
       _courses = storageService.loadCourses(),
       _events = storageService.loadEvents();
 
   final StorageService _storageService;
+  final BackgroundServiceManager _backgroundServiceManager;
   final List<Course> _courses;
   final List<Event> _events;
   Future<void> Function()? _reminderScheduler;
 
   UnmodifiableListView<Course> get courses => UnmodifiableListView(_courses);
   UnmodifiableListView<Event> get events => UnmodifiableListView(_events);
+  List<Course> get sortedUniqueCourses {
+    final byName = <String, Course>{};
+    for (final course in _courses) {
+      final key = course.name.trim().toLowerCase();
+      if (key.isEmpty || byName.containsKey(key)) {
+        continue;
+      }
+      byName[key] = course;
+    }
+
+    final result = byName.values.toList()
+      ..sort(
+        (a, b) => a.name.trim().toUpperCase().compareTo(
+          b.name.trim().toUpperCase(),
+        ),
+      );
+    return result;
+  }
 
   void bindReminderScheduler(Future<void> Function() callback) {
     _reminderScheduler = callback;
@@ -30,10 +53,7 @@ class CourseProvider extends ChangeNotifier {
     _courses.add(course);
     notifyListeners();
     await _persistCourses();
-    await _wakeBackgroundServiceIfNeeded(
-      shouldStart: _shouldKeepBackgroundServiceAlive(),
-      reason: 'addCourse',
-    );
+    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -45,10 +65,7 @@ class CourseProvider extends ChangeNotifier {
     _courses.addAll(courses);
     notifyListeners();
     await _persistCourses();
-    await _wakeBackgroundServiceIfNeeded(
-      shouldStart: _shouldKeepBackgroundServiceAlive(),
-      reason: 'addCourses',
-    );
+    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -56,10 +73,7 @@ class CourseProvider extends ChangeNotifier {
     _courses.removeWhere((item) => item.id == course.id);
     notifyListeners();
     await _persistCourses();
-    await _wakeBackgroundServiceIfNeeded(
-      shouldStart: _shouldKeepBackgroundServiceAlive(),
-      reason: 'removeCourse',
-    );
+    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -77,10 +91,7 @@ class CourseProvider extends ChangeNotifier {
     _courses[index] = updatedCourse;
     notifyListeners();
     await _persistCourses();
-    await _wakeBackgroundServiceIfNeeded(
-      shouldStart: _shouldKeepBackgroundServiceAlive(),
-      reason: 'updateCourse',
-    );
+    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -88,10 +99,7 @@ class CourseProvider extends ChangeNotifier {
     _courses.clear();
     notifyListeners();
     await _storageService.clearCourses();
-    await _wakeBackgroundServiceIfNeeded(
-      shouldStart: _shouldKeepBackgroundServiceAlive(),
-      reason: 'clearAllCourses',
-    );
+    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -100,10 +108,7 @@ class CourseProvider extends ChangeNotifier {
     _events.clear();
     notifyListeners();
     await _storageService.clearAllTimetableData();
-    await _wakeBackgroundServiceIfNeeded(
-      shouldStart: _shouldKeepBackgroundServiceAlive(),
-      reason: 'clearAllData',
-    );
+    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -111,10 +116,7 @@ class CourseProvider extends ChangeNotifier {
     _events.add(event);
     notifyListeners();
     await _persistEvents();
-    await _wakeBackgroundServiceIfNeeded(
-      shouldStart: _shouldKeepBackgroundServiceAlive(),
-      reason: 'addEvent',
-    );
+    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -122,10 +124,7 @@ class CourseProvider extends ChangeNotifier {
     _events.removeWhere((event) => event.id == eventId);
     notifyListeners();
     await _persistEvents();
-    await _wakeBackgroundServiceIfNeeded(
-      shouldStart: _shouldKeepBackgroundServiceAlive(),
-      reason: 'deleteEvent',
-    );
+    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -138,10 +137,7 @@ class CourseProvider extends ChangeNotifier {
     _events[index] = updatedEvent;
     notifyListeners();
     await _persistEvents();
-    await _wakeBackgroundServiceIfNeeded(
-      shouldStart: _shouldKeepBackgroundServiceAlive(),
-      reason: 'updateEvent',
-    );
+    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -156,40 +152,20 @@ class CourseProvider extends ChangeNotifier {
   Future<void> _refreshReminders() async {
     final scheduler = _reminderScheduler;
     if (scheduler == null) {
-      print('[CourseProvider] _refreshReminders skipped: scheduler is null');
       return;
     }
 
-    print(
-      '[CourseProvider] _refreshReminders called: '
-      'courses=${_courses.length}, events=${_events.length}',
-    );
     await scheduler();
   }
 
-  Future<void> _wakeBackgroundServiceIfNeeded({
-    required bool shouldStart,
-    required String reason,
-  }) async {
-    if (!shouldStart || !Platform.isAndroid) {
+  Future<void> _syncBackgroundRuntimeIfEnabled() async {
+    if (!_shouldKeepBackgroundServiceAlive()) {
       return;
     }
-
-    final service = FlutterBackgroundService();
-    print('[CourseProvider] startService requested from $reason');
-    await service.startService();
+    await _backgroundServiceManager.syncIfRunning();
   }
 
   bool _shouldKeepBackgroundServiceAlive() {
-    final autoMuteEnabled = _storageService.readAutoMuteEnabled(
-      fallback: false,
-    );
-    final reminderEnabled =
-        _storageService.readReminderAdvanceMinutes(fallback: 0) > 0 &&
-        _courses.isNotEmpty;
-    final eventReminderEnabled =
-        _storageService.readEventReminderAdvanceMinutes(fallback: 0) > 0 &&
-        _events.any((event) => event.enableAlarm);
-    return autoMuteEnabled || reminderEnabled || eventReminderEnabled;
+    return _storageService.readBackgroundServiceEnabled(fallback: false);
   }
 }

@@ -10,6 +10,7 @@ import '../providers/settings_provider.dart';
 import '../services/timetable_navigation_controller.dart';
 import '../services/timetable_view_data_service.dart';
 import '../widgets/timetable/holiday_list_view.dart';
+import '../widgets/timetable/course_overview_panel.dart';
 import '../widgets/timetable/timetable_detail_sheets.dart';
 import '../widgets/timetable/timetable_grid.dart';
 import '../widgets/timetable/week_selector.dart';
@@ -92,6 +93,15 @@ class _TimetablePageState extends State<TimetablePage> {
                   onPressed: _navigationController.jumpToToday,
                   icon: const Icon(Icons.today),
                   tooltip: settingsProvider.t('today'),
+                ),
+                TextButton(
+                  onPressed: () => _showCourseOverview(context),
+                  child: Text(
+                    '总览',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -234,5 +244,26 @@ class _TimetablePageState extends State<TimetablePage> {
         .t('period_range_format')
         .replaceAll('{start}', course.startPeriod.toString())
         .replaceAll('{end}', course.endPeriod.toString());
+  }
+
+  Future<void> _showCourseOverview(BuildContext context) async {
+    final courses = context.read<CourseProvider>().sortedUniqueCourses;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.8,
+          child: CourseOverviewPanel(
+            courses: courses,
+            coursePeriodTextBuilder: _buildCoursePeriodText,
+            onCourseTap: (course) {
+              showCourseDetailsSheet(sheetContext, course);
+            },
+          ),
+        );
+      },
+    );
   }
 }

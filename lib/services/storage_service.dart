@@ -31,6 +31,8 @@ class StorageService {
       'settings.eventReminderAdvanceMinutes';
   static const String _languageCodeKey = 'settings.languageCode';
   static const String _autoMuteEnabledKey = 'settings.autoMuteEnabled';
+  static const String _backgroundServiceEnabledKey =
+      'settings.backgroundServiceEnabled';
 
   static Future<StorageService> create() async {
     final sharedPreferences = await SharedPreferences.getInstance();
@@ -202,6 +204,14 @@ class StorageService {
 
   Future<void> writeAutoMuteEnabled(bool value) {
     return _sharedPreferences.setBool(_autoMuteEnabledKey, value);
+  }
+
+  bool readBackgroundServiceEnabled({required bool fallback}) {
+    return _sharedPreferences.getBool(_backgroundServiceEnabledKey) ?? fallback;
+  }
+
+  Future<void> writeBackgroundServiceEnabled(bool value) {
+    return _sharedPreferences.setBool(_backgroundServiceEnabledKey, value);
   }
 
   List<T> _decodeList<T>({

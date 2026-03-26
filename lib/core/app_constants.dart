@@ -4,6 +4,7 @@ class AppConstants {
   const AppConstants._();
 
   static const int holidayWeekIndex = 999;
+  static const int defaultSemesterTotalWeeks = 18;
 }
 
 class AppSpacing {

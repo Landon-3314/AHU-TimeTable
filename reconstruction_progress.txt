@@ -813,3 +813,7 @@ J. 本轮建档确认出的关键风险点
 [x] 终极重构闭环 (Production-Ready Polish)：完成了全局日志静音、通知汉化、静音执行层精简与诊断页降级。项目当前处于 Release 就绪状态。
 
 [Bugfix Patch 11 navigation state page-sync symmetry applied]
+
+[Settings Decoupling Patch applied: background service infrastructure and permission flow separated]
+
+[Feature Patch: default semester weeks set to 18 and course overview panel added with CourseCard reuse]

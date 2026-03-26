@@ -54,15 +54,8 @@ class _MainAppState extends State<MainApp> {
     Future<void> refreshReminders() {
       final courses = _courseProvider.courses.toList();
       final events = _courseProvider.events.toList();
-      final hasCourseReminderRuntime =
-          _settingsProvider.reminderAdvanceMinutes > 0 && courses.isNotEmpty;
-      final hasEventReminderRuntime =
-          _settingsProvider.eventReminderAdvanceMinutes > 0 &&
-          events.any((event) => event.enableAlarm);
       final shouldKeepBackgroundRuntime =
-          _settingsProvider.autoMuteEnabled ||
-          hasCourseReminderRuntime ||
-          hasEventReminderRuntime;
+          _settingsProvider.backgroundServiceEnabled;
 
       return Future.wait([
         NotificationService.instance.refreshAllReminders(

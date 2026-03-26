@@ -1,4 +1,3 @@
-import 'package:app_settings/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +8,9 @@ import '../core/app_constants.dart';
 import '../core/app_routes.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/settings/background_service_settings_section.dart';
+import '../widgets/settings/class_auto_mute_switch.dart';
+import '../widgets/settings/reminder_settings_section.dart';
 import '../widgets/settings/settings_section.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -90,79 +92,42 @@ class SettingsPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.xxxl),
-          SettingsSectionTitle(title: provider.t('notifications')),
+          BackgroundServiceSettingsSection(
+            provider: provider,
+            onServiceToggle: (value) async {
+              final result = await provider.toggleBackgroundService(value);
+              if (!context.mounted || result.success) {
+                return;
+              }
+              _showError(context, result.message ?? '操作失败');
+            },
+            onOpenBatteryOptimization: () =>
+                provider.openBatteryOptimizationSettings(),
+          ),
+          const SizedBox(height: AppSpacing.xxxl),
+          ReminderSettingsSection(
+            provider: provider,
+            reminderLabelBuilder: (minutes, {isEventReminder = false}) =>
+                _reminderLabel(
+                  provider,
+                  minutes: minutes,
+                  isEventReminder: isEventReminder,
+                ),
+            onPickCourseReminder: () => _pickReminderAdvance(context, provider),
+            onPickEventReminder: () =>
+                _pickEventReminderAdvance(context, provider),
+          ),
           const SizedBox(height: AppSpacing.md),
           SettingsSectionCard(
             children: [
-              ListTile(
-                leading: const Icon(Icons.notifications_active_outlined),
-                title: Text(provider.t('course_reminder_time')),
-                subtitle: Text(
-                  _reminderLabel(
-                    provider,
-                    minutes: provider.reminderAdvanceMinutes,
-                  ),
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _pickReminderAdvance(context, provider),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.event_note_outlined),
-                title: Text(provider.t('event_reminder_time')),
-                subtitle: Text(
-                  _reminderLabel(
-                    provider,
-                    minutes: provider.eventReminderAdvanceMinutes,
-                    isEventReminder: true,
-                  ),
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _pickEventReminderAdvance(context, provider),
-              ),
-              const Divider(height: 1),
-              SwitchListTile(
-                secondary: const Icon(Icons.phone_android_outlined),
-                title: Text(provider.t('auto_mute')),
-                subtitle: Text(provider.t('auto_mute_subtitle')),
-                value: provider.autoMuteEnabled,
+              ClassAutoMuteSwitch(
+                provider: provider,
                 onChanged: (value) async {
-                  final success = await provider.toggleAutoMuteWithCheck(value);
-                  if (!context.mounted) {
+                  final result = await provider.toggleAutoMuteWithCheck(value);
+                  if (!context.mounted || result.success) {
                     return;
                   }
-                  if (!success) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: AppColors.danger,
-                        content: Text(
-                          provider.languageCode == 'en'
-                              ? 'Failed to enable. Please grant DND permission.'
-                              : 'Failed to enable. Please grant DND permission.',
-                        ),
-                      ),
-                    );
-                  }
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.battery_alert_outlined),
-                title: Text(
-                  provider.languageCode == 'en'
-                      ? 'Battery Optimization'
-                      : '\u7535\u6c60\u4f18\u5316\u8bbe\u7f6e',
-                ),
-                subtitle: Text(
-                  provider.languageCode == 'en'
-                      ? 'Allow foreground service to stay alive in background'
-                      : '\u5f15\u5bfc\u7cfb\u7edf\u5141\u8bb8\u8bfe\u8868\u524d\u53f0\u670d\u52a1\u540e\u53f0\u5e38\u9a7b',
-                ),
-                trailing: const Icon(Icons.open_in_new),
-                onTap: () async {
-                  await AppSettings.openAppSettings(
-                    type: AppSettingsType.batteryOptimization,
-                  );
+                  _showError(context, result.message ?? '操作失败');
                 },
               ),
             ],
@@ -281,7 +246,11 @@ class SettingsPage extends StatelessWidget {
     );
 
     if (selectedValue != null) {
-      await provider.updateReminderAdvanceMinutes(selectedValue);
+      final result = await provider.updateReminderAdvanceMinutes(selectedValue);
+      if (!context.mounted || result.success) {
+        return;
+      }
+      _showError(context, result.message ?? '操作失败');
     }
   }
 
@@ -321,7 +290,13 @@ class SettingsPage extends StatelessWidget {
     );
 
     if (selectedValue != null) {
-      await provider.updateEventReminderAdvanceMinutes(selectedValue);
+      final result = await provider.updateEventReminderAdvanceMinutes(
+        selectedValue,
+      );
+      if (!context.mounted || result.success) {
+        return;
+      }
+      _showError(context, result.message ?? '操作失败');
     }
   }
 
@@ -391,5 +366,11 @@ class SettingsPage extends StatelessWidget {
       return provider.t('one_day');
     }
     return '${provider.t('advance_prefix')} $value ${provider.t('minutes_suffix')}';
+  }
+
+  void _showError(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(backgroundColor: AppColors.danger, content: Text(message)),
+    );
   }
 }

@@ -76,7 +76,6 @@ class BackgroundServiceCoordinator {
       return;
     }
 
-    await NotificationService.instance.ensurePermissions();
     await initialize();
     final service = FlutterBackgroundService();
     final running = await service.isRunning();
