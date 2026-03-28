@@ -1,39 +1,76 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:app_settings/app_settings.dart';
-
-import 'auto_mute_service.dart';
-import 'notification_service.dart';
+import 'package:flutter/services.dart';
+import 'package:sound_mode/permission_handler.dart';
 
 class PermissionService {
-  PermissionService({
-    NotificationService? notificationService,
-    AutoMuteService? autoMuteService,
-  }) : _notificationService = notificationService ?? NotificationService.instance,
-       _autoMuteService = autoMuteService ?? AutoMuteService.instance;
-
-  final NotificationService _notificationService;
-  final AutoMuteService _autoMuteService;
+  static const MethodChannel _permissionsChannel = MethodChannel('app.permissions');
 
   Future<bool> ensureNotificationPermission() async {
     if (!Platform.isAndroid) {
       return true;
     }
-    final status = await _notificationService.ensurePermissions();
-    return status.notificationsGranted;
+
+    try {
+      final hasPermission =
+          await _permissionsChannel.invokeMethod<bool>('hasNotificationPermission');
+      if (hasPermission == true) {
+        return true;
+      }
+      final granted =
+          await _permissionsChannel.invokeMethod<bool>('requestNotificationPermission');
+      return granted ?? false;
+    } on MissingPluginException {
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> ensureExactAlarmPermission() async {
+    return true;
+  }
+
+  Future<bool> hasNotificationPermission() async {
+    if (!Platform.isAndroid) {
+      return true;
+    }
+    try {
+      final result =
+          await _permissionsChannel.invokeMethod<bool>('hasNotificationPermission');
+      return result ?? false;
+    } on MissingPluginException {
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> ensureDndPermission() async {
     if (!Platform.isAndroid) {
       return true;
     }
+    final granted = await PermissionHandler.permissionsGranted;
+    return granted ?? false;
+  }
 
-    var hasPermission = await _autoMuteService.hasPermission();
-    if (!hasPermission) {
-      await _autoMuteService.openPermissionSettings();
-      hasPermission = await _autoMuteService.hasPermission();
+  Future<bool> ensureSoundModePermission() async {
+    return ensureDndPermission();
+  }
+
+  Future<void> openAppOrAlarmSettings() async {
+    if (!Platform.isAndroid) {
+      return;
     }
-    return hasPermission;
+    await AppSettings.openAppSettings(type: AppSettingsType.notification);
+  }
+
+  Future<void> openSystemDndSettings() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    await PermissionHandler.openDoNotDisturbSetting();
   }
 
   Future<void> openBatteryOptimizationSettings() async {
@@ -43,4 +80,3 @@ class PermissionService {
     await AppSettings.openAppSettings(type: AppSettingsType.batteryOptimization);
   }
 }
-

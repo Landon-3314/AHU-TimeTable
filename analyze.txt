@@ -1,0 +1,23 @@
+Analyzing timetable...                                          
+
+  error - Target of URI doesn't exist: '../services/background_service_manager.dart' - lib\providers\course_provider.dart:7:8 - uri_does_not_exist
+  error - Undefined class 'BackgroundServiceManager' - lib\providers\course_provider.dart:13:5 - undefined_class
+  error - The name 'BackgroundServiceManager' isn't a class - lib\providers\course_provider.dart:17:45 - creation_with_non_type
+  error - Undefined class 'BackgroundServiceManager' - lib\providers\course_provider.dart:22:9 - undefined_class
+  error - Undefined name '_reminderScheduler' - lib\providers\settings_provider.dart:148:5 - undefined_identifier
+  error - Undefined name '_reminderScheduler' - lib\providers\settings_provider.dart:414:23 - undefined_identifier
+   info - The imported package 'flutter_background_service' isn't a dependency of the importing package - lib\screens\developer_diagnostics_page.dart:4:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:flutter_background_service/flutter_background_service.dart' - lib\screens\developer_diagnostics_page.dart:4:8 - uri_does_not_exist
+  error - The method 'FlutterBackgroundService' isn't defined for the type '_DeveloperDiagnosticsPageState' - lib\screens\developer_diagnostics_page.dart:114:21 - undefined_method
+  error - The name 'openBatteryOptimizationSettings' is already defined - lib\services\permission_service.dart:58:16 - duplicate_definition
+  error - The method 'format' isn't defined for the type 'ClockTime' - lib\services\system_schedule_manager.dart:87:65 - undefined_method
+  error - The method 'format' isn't defined for the type 'ClockTime' - lib\services\system_schedule_manager.dart:87:93 - undefined_method
+   info - Unnecessary use of string interpolation - lib\services\system_schedule_manager.dart:127:24 - unnecessary_string_interpolations
+  error - The named parameter 'id' is required, but there's no corresponding argument - lib\services\system_schedule_manager.dart:148:31 - missing_required_argument
+  error - The named parameter 'notificationDetails' is required, but there's no corresponding argument - lib\services\system_schedule_manager.dart:148:31 - missing_required_argument
+  error - The named parameter 'scheduledDate' is required, but there's no corresponding argument - lib\services\system_schedule_manager.dart:148:31 - missing_required_argument
+  error - Too many positional arguments: 0 expected, but 5 found - lib\services\system_schedule_manager.dart:149:7 - extra_positional_arguments_could_be_named
+  error - The named parameter 'uiLocalNotificationDateInterpretation' isn't defined - lib\services\system_schedule_manager.dart:163:7 - undefined_named_parameter
+  error - Undefined name 'UILocalNotificationDateInterpretation' - lib\services\system_schedule_manager.dart:164:11 - undefined_identifier
+
+19 issues found. (ran in 12.3s)

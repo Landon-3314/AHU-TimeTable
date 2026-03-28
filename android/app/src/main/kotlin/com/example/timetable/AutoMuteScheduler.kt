@@ -1,24 +1,14 @@
-package com.example.timetable
+﻿package com.example.timetable
 
-import android.app.AlarmManager
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
-import android.os.Build
-import org.json.JSONArray
-import org.json.JSONObject
+import android.util.Log
 
 private const val AUTO_MUTE_PREFS = "auto_mute_prefs"
-private const val AUTO_MUTE_TASKS_KEY = "scheduled_tasks"
-private const val EXTRA_MODE = "mode"
-
-data class AutoMuteTask(
-    val id: Int,
-    val timestamp: Long,
-    val mode: String,
-)
+private const val SAVED_MUSIC_VOLUME_KEY = "saved_music_volume"
+private const val HAS_SAVED_VOLUME_KEY = "has_saved_volume"
 
 object AutoMuteScheduler {
     fun isNotificationPolicyGranted(context: Context): Boolean {
@@ -34,128 +24,77 @@ object AutoMuteScheduler {
     }
 
     fun setMode(context: Context, mode: String) {
+        Log.d("DND_DEBUG_NATIVE", "setMode invoked, mode=$mode")
         if (!isNotificationPolicyGranted(context)) {
+            Log.e("DND_DEBUG_NATIVE", "setMode aborted: DND permission missing")
             return
         }
 
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioManager.ringerMode = when (mode) {
-            "vibrate" -> AudioManager.RINGER_MODE_VIBRATE
-            else -> AudioManager.RINGER_MODE_NORMAL
+        when (mode) {
+            "silent" -> enableClassMute(context, audioManager)
+            else -> disableClassMute(context, audioManager)
         }
     }
 
-    fun replaceTasks(context: Context, tasks: List<AutoMuteTask>) {
-        cancelStoredTasks(context)
-        scheduleTasks(context, tasks)
-        saveTasks(context, tasks)
-    }
+    private fun enableClassMute(
+        context: Context,
+        audioManager: AudioManager,
+    ) {
+        Log.d("DND_DEBUG_NATIVE", "Step A: preparing to set ringerMode=SILENT")
+        audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+        Log.d("DND_DEBUG_NATIVE", "Step A done: ringerMode=SILENT")
 
-    fun rescheduleStoredTasks(context: Context) {
-        val tasks = loadTasks(context).filter { it.timestamp > System.currentTimeMillis() }
-        if (tasks.isEmpty()) {
-            clearStoredTasks(context)
-            return
-        }
-
-        scheduleTasks(context, tasks)
-        saveTasks(context, tasks)
-    }
-
-    private fun scheduleTasks(context: Context, tasks: List<AutoMuteTask>) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-        tasks.forEach { task ->
-            if (task.timestamp <= System.currentTimeMillis()) {
-                return@forEach
-            }
-
-            val pendingIntent = buildPendingIntent(context, task)
-            when {
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        task.timestamp,
-                        pendingIntent,
-                    )
-                }
-
-                else -> {
-                    alarmManager.setExact(
-                        AlarmManager.RTC_WAKEUP,
-                        task.timestamp,
-                        pendingIntent,
-                    )
-                }
-            }
-        }
-    }
-
-    private fun cancelStoredTasks(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        loadTasks(context).forEach { task ->
-            alarmManager.cancel(buildPendingIntent(context, task))
-        }
-        clearStoredTasks(context)
-    }
-
-    private fun buildPendingIntent(context: Context, task: AutoMuteTask): PendingIntent {
-        val intent = Intent(context, AutoMuteReceiver::class.java).apply {
-            putExtra(EXTRA_MODE, task.mode)
-        }
-
-        return PendingIntent.getBroadcast(
-            context,
-            task.id,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-    }
-
-    private fun saveTasks(context: Context, tasks: List<AutoMuteTask>) {
-        val array = JSONArray()
-        tasks.forEach { task ->
-            array.put(
-                JSONObject().apply {
-                    put("id", task.id)
-                    put("timestamp", task.timestamp)
-                    put("mode", task.mode)
-                },
+        val prefs = context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
+        val currentMusic = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        if (currentMusic > 0) {
+            prefs.edit()
+                .putInt(SAVED_MUSIC_VOLUME_KEY, currentMusic)
+                .putBoolean(HAS_SAVED_VOLUME_KEY, true)
+                .apply()
+            Log.d("DND_DEBUG_NATIVE", "Step B: saved current STREAM_MUSIC volume=$currentMusic")
+        } else {
+            Log.d(
+                "DND_DEBUG_NATIVE",
+                "Step B: current STREAM_MUSIC already 0, skip overwrite saved volume",
             )
         }
 
-        context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(AUTO_MUTE_TASKS_KEY, array.toString())
-            .apply()
+        Log.d("DND_DEBUG_NATIVE", "Step B: preparing to set STREAM_MUSIC volume=0")
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+        Log.d("DND_DEBUG_NATIVE", "Step B done: STREAM_MUSIC muted to 0")
     }
 
-    private fun loadTasks(context: Context): List<AutoMuteTask> {
-        val raw = context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
-            .getString(AUTO_MUTE_TASKS_KEY, null)
-            ?: return emptyList()
+    private fun disableClassMute(
+        context: Context,
+        audioManager: AudioManager,
+    ) {
+        Log.d("DND_DEBUG_NATIVE", "Restore A: preparing to set ringerMode=NORMAL")
+        audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
+        Log.d("DND_DEBUG_NATIVE", "Restore A done: ringerMode=NORMAL")
 
-        return runCatching {
-            val array = JSONArray(raw)
-            buildList {
-                for (index in 0 until array.length()) {
-                    val item = array.getJSONObject(index)
-                    add(
-                        AutoMuteTask(
-                            id = item.getInt("id"),
-                            timestamp = item.getLong("timestamp"),
-                            mode = item.getString("mode"),
-                        ),
-                    )
-                }
-            }
-        }.getOrDefault(emptyList())
-    }
+        val prefs = context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
+        val hasSavedVolume = prefs.getBoolean(HAS_SAVED_VOLUME_KEY, false)
+        val fallbackMusic =
+            (audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) * 0.4f).toInt()
+                .coerceAtLeast(1)
+        val restoreMusic = if (hasSavedVolume) {
+            prefs.getInt(SAVED_MUSIC_VOLUME_KEY, fallbackMusic)
+        } else {
+            fallbackMusic
+        }
 
-    private fun clearStoredTasks(context: Context) {
-        context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .remove(AUTO_MUTE_TASKS_KEY)
+        Log.d(
+            "DND_DEBUG_NATIVE",
+            "Restore B: preparing to restore STREAM_MUSIC volume=$restoreMusic",
+        )
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, restoreMusic, 0)
+        Log.d("DND_DEBUG_NATIVE", "Restore B done: STREAM_MUSIC volume restored")
+
+        prefs.edit()
+            .remove(SAVED_MUSIC_VOLUME_KEY)
+            .putBoolean(HAS_SAVED_VOLUME_KEY, false)
             .apply()
+        Log.d("DND_DEBUG_NATIVE", "Restore cleanup done")
     }
 }

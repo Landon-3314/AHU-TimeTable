@@ -4,22 +4,17 @@ import 'package:flutter/material.dart';
 
 import '../models/course.dart';
 import '../models/event.dart';
-import '../services/background_service_manager.dart';
+
 import '../services/storage_service.dart';
 
 class CourseProvider extends ChangeNotifier {
   CourseProvider({
     required StorageService storageService,
-    BackgroundServiceManager? backgroundServiceManager,
-  })
-    : _storageService = storageService,
-      _backgroundServiceManager =
-          backgroundServiceManager ?? const BackgroundServiceManager(),
-      _courses = storageService.loadCourses(),
-      _events = storageService.loadEvents();
+  })  : _storageService = storageService,
+        _courses = storageService.loadCourses(),
+        _events = storageService.loadEvents();
 
   final StorageService _storageService;
-  final BackgroundServiceManager _backgroundServiceManager;
   final List<Course> _courses;
   final List<Event> _events;
   Future<void> Function()? _reminderScheduler;
@@ -159,13 +154,6 @@ class CourseProvider extends ChangeNotifier {
   }
 
   Future<void> _syncBackgroundRuntimeIfEnabled() async {
-    if (!_shouldKeepBackgroundServiceAlive()) {
-      return;
-    }
-    await _backgroundServiceManager.syncIfRunning();
-  }
-
-  bool _shouldKeepBackgroundServiceAlive() {
-    return _storageService.readBackgroundServiceEnabled(fallback: false);
+    // Background service is now replaced by SystemScheduleManager
   }
 }

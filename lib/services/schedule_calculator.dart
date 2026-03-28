@@ -36,6 +36,7 @@ class ScheduleCalculator {
     required int classDuration,
     required int shortBreak,
     required int bigBreak,
+    required int bigBreakAfterPeriod,
     required ClockTime morningStartTime,
     required int morningClasses,
     required ClockTime afternoonStartTime,
@@ -53,6 +54,7 @@ class ScheduleCalculator {
       classDuration: classDuration,
       shortBreak: shortBreak,
       bigBreak: bigBreak,
+      bigBreakAfterPeriod: bigBreakAfterPeriod,
       periodNumber: periodNumber,
       label: 'Morning',
       hasBigBreak: true,
@@ -64,6 +66,7 @@ class ScheduleCalculator {
       classDuration: classDuration,
       shortBreak: shortBreak,
       bigBreak: bigBreak,
+      bigBreakAfterPeriod: bigBreakAfterPeriod,
       periodNumber: periodNumber,
       label: 'Afternoon',
       hasBigBreak: true,
@@ -75,6 +78,7 @@ class ScheduleCalculator {
       classDuration: classDuration,
       shortBreak: shortBreak,
       bigBreak: bigBreak,
+      bigBreakAfterPeriod: bigBreakAfterPeriod,
       periodNumber: periodNumber,
       label: 'Evening',
       hasBigBreak: false,
@@ -99,6 +103,7 @@ class ScheduleCalculator {
     required int classDuration,
     required int shortBreak,
     required int bigBreak,
+    required int bigBreakAfterPeriod,
     required int periodNumber,
     required String label,
     required bool hasBigBreak,
@@ -125,7 +130,8 @@ class ScheduleCalculator {
         continue;
       }
 
-      currentStartMinutes += hasBigBreak && index == 2 ? bigBreak : shortBreak;
+      currentStartMinutes +=
+          hasBigBreak && index == bigBreakAfterPeriod ? bigBreak : shortBreak;
     }
 
     return periodNumber;

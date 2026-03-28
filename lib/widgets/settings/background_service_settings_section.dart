@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../providers/settings_provider.dart';
 import 'settings_section.dart';
@@ -7,50 +7,36 @@ class BackgroundServiceSettingsSection extends StatelessWidget {
   const BackgroundServiceSettingsSection({
     super.key,
     required this.provider,
-    required this.onServiceToggle,
+    required this.onForegroundServiceChanged,
     required this.onOpenBatteryOptimization,
   });
 
   final SettingsProvider provider;
-  final Future<void> Function(bool value) onServiceToggle;
-  final Future<void> Function() onOpenBatteryOptimization;
+  final Future<void> Function(bool value) onForegroundServiceChanged;
+  final VoidCallback onOpenBatteryOptimization;
 
   @override
   Widget build(BuildContext context) {
-    final isEnglish = provider.languageCode == 'en';
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SettingsSectionTitle(
-          title: isEnglish ? 'Background Service' : '后台自动服务',
-        ),
+        const SettingsSectionTitle(title: '基础模块'),
         const SizedBox(height: 12),
         SettingsSectionCard(
           children: [
             SwitchListTile(
-              secondary: const Icon(Icons.memory_outlined),
-              title: Text(isEnglish ? 'Foreground Service' : '常驻前台服务'),
-              subtitle: Text(
-                isEnglish
-                    ? 'Keep timetable runtime active in background'
-                    : '保持课表后台运行环境可用',
-              ),
+              secondary: const Icon(Icons.run_circle_outlined),
+              title: const Text('常驻前台服务'),
+              subtitle: const Text('仅用于维持通知权限与系统可见性'),
               value: provider.backgroundServiceEnabled,
-              onChanged: onServiceToggle,
+              onChanged: onForegroundServiceChanged,
             ),
             const Divider(height: 1),
             ListTile(
-              leading: const Icon(Icons.battery_alert_outlined),
-              title: Text(
-                isEnglish ? 'Battery Optimization' : '电池优化设置',
-              ),
-              subtitle: Text(
-                isEnglish
-                    ? 'Allow service to stay alive under system restrictions'
-                    : '引导系统允许课表服务后台常驻',
-              ),
-              trailing: const Icon(Icons.open_in_new),
+              leading: const Icon(Icons.battery_saver_outlined),
+              title: const Text('电池优化设置'),
+              subtitle: const Text('建议关闭该应用电池优化以减少系统拦截'),
+              trailing: const Icon(Icons.chevron_right),
               onTap: onOpenBatteryOptimization,
             ),
           ],
@@ -59,4 +45,3 @@ class BackgroundServiceSettingsSection extends StatelessWidget {
     );
   }
 }
-

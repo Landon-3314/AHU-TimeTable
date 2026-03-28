@@ -4,7 +4,7 @@ import '../app_localizations.dart';
 import '../core/app_constants.dart';
 import '../models/clock_time.dart';
 import '../models/time_slot.dart';
-import '../services/background_service_manager.dart';
+
 import '../services/permission_service.dart';
 import '../services/schedule_calculator.dart';
 import '../services/storage_service.dart';
@@ -27,12 +27,9 @@ class SettingsProvider extends ChangeNotifier {
     required StorageService storageService,
     ScheduleCalculator? scheduleCalculator,
     PermissionService? permissionService,
-    BackgroundServiceManager? backgroundServiceManager,
   }) : _storageService = storageService,
        _scheduleCalculator = scheduleCalculator ?? const ScheduleCalculator(),
        _permissionService = permissionService ?? PermissionService(),
-       _backgroundServiceManager =
-           backgroundServiceManager ?? const BackgroundServiceManager(),
        _pixelsPerMinute = storageService.readPixelsPerMinute(
          fallback: _defaultPixelsPerMinute,
        ),
@@ -43,6 +40,9 @@ class SettingsProvider extends ChangeNotifier {
          fallback: _defaultShortBreak,
        ),
        _bigBreak = storageService.readBigBreak(fallback: _defaultBigBreak),
+       _bigBreakAfterPeriod = storageService.readBigBreakAfterPeriod(
+         fallback: _defaultBigBreakAfterPeriod,
+       ),
        _morningStartTime = storageService.readMorningStartTime(
          fallback: _defaultMorningStartTime,
        ),
@@ -85,6 +85,7 @@ class SettingsProvider extends ChangeNotifier {
   static const int _defaultClassDuration = 45;
   static const int _defaultShortBreak = 5;
   static const int _defaultBigBreak = 15;
+  static const int _defaultBigBreakAfterPeriod = 2;
   static const String _defaultMorningStartTime = '08:00';
   static const int _defaultMorningClasses = 5;
   static const String _defaultAfternoonStartTime = '14:00';
@@ -98,12 +99,12 @@ class SettingsProvider extends ChangeNotifier {
   final StorageService _storageService;
   final ScheduleCalculator _scheduleCalculator;
   final PermissionService _permissionService;
-  final BackgroundServiceManager _backgroundServiceManager;
 
   double _pixelsPerMinute;
   int _classDuration;
   int _shortBreak;
   int _bigBreak;
+  int _bigBreakAfterPeriod;
   String _morningStartTime;
   int _morningClasses;
   String _afternoonStartTime;
@@ -123,6 +124,7 @@ class SettingsProvider extends ChangeNotifier {
   int get classDuration => _classDuration;
   int get shortBreak => _shortBreak;
   int get bigBreak => _bigBreak;
+  int get bigBreakAfterPeriod => _bigBreakAfterPeriod;
   TimeOfDay get morningStartTime => _parseTime(_morningStartTime);
   int get morningClasses => _morningClasses;
   TimeOfDay get afternoonStartTime => _parseTime(_afternoonStartTime);
@@ -136,6 +138,7 @@ class SettingsProvider extends ChangeNotifier {
   String get languageCode => _languageCode;
   bool get autoMuteEnabled => _autoMuteEnabled;
   bool get backgroundServiceEnabled => _backgroundServiceEnabled;
+  bool get courseReminderEnabled => _reminderAdvanceMinutes > 0;
   List<TimeSlot> get timeSlots => generateTimeSlots();
   String t(String key) => AppStrings.get(key, _languageCode);
 
@@ -174,6 +177,7 @@ class SettingsProvider extends ChangeNotifier {
       classDuration: _classDuration,
       shortBreak: _shortBreak,
       bigBreak: _bigBreak,
+      bigBreakAfterPeriod: _bigBreakAfterPeriod,
       morningStartTime: ClockTime.fromString(_morningStartTime),
       morningClasses: _morningClasses,
       afternoonStartTime: ClockTime.fromString(_afternoonStartTime),
@@ -223,6 +227,18 @@ class SettingsProvider extends ChangeNotifier {
     _bigBreak = value;
     notifyListeners();
     await _storageService.writeBigBreak(value);
+    await _refreshReminders();
+  }
+
+  Future<void> updateBigBreakAfterPeriod(int value) async {
+    final safeValue = value.clamp(1, 6).toInt();
+    if (safeValue == _bigBreakAfterPeriod) {
+      return;
+    }
+
+    _bigBreakAfterPeriod = safeValue;
+    notifyListeners();
+    await _storageService.writeBigBreakAfterPeriod(safeValue);
     await _refreshReminders();
   }
 
@@ -316,23 +332,32 @@ class SettingsProvider extends ChangeNotifier {
       return SettingsActionResult.success();
     }
 
-    if (safeValue > 0 && !_backgroundServiceEnabled) {
-      return SettingsActionResult.failure('该功能依赖后台常驻服务，请先在设置中开启');
-    }
     if (safeValue > 0) {
-      final permissionGranted = await _permissionService
-          .ensureNotificationPermission();
-      if (!permissionGranted) {
-        return SettingsActionResult.failure('开启提醒失败：请先授予通知权限');
+      final notifOk = await _permissionService.ensureNotificationPermission();
+      if (!notifOk) {
+        return SettingsActionResult.failure('NOTIFICATION_REQUIRED');
+      }
+      final alarmOk = await _permissionService.ensureExactAlarmPermission();
+      if (!alarmOk) {
+        return SettingsActionResult.failure('EXACT_ALARM_REQUIRED');
       }
     }
 
     _reminderAdvanceMinutes = safeValue;
     notifyListeners();
     await _storageService.writeReminderAdvanceMinutes(safeValue);
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
     return SettingsActionResult.success();
+  }
+
+  Future<SettingsActionResult> toggleCourseReminder(bool value) async {
+    if (!value) {
+      return updateReminderAdvanceMinutes(0);
+    }
+    if (_reminderAdvanceMinutes > 0) {
+      return SettingsActionResult.success();
+    }
+    return updateReminderAdvanceMinutes(10);
   }
 
   Future<SettingsActionResult> updateEventReminderAdvanceMinutes(int value) async {
@@ -341,21 +366,20 @@ class SettingsProvider extends ChangeNotifier {
       return SettingsActionResult.success();
     }
 
-    if (safeValue > 0 && !_backgroundServiceEnabled) {
-      return SettingsActionResult.failure('该功能依赖后台常驻服务，请先在设置中开启');
-    }
     if (safeValue > 0) {
-      final permissionGranted = await _permissionService
-          .ensureNotificationPermission();
-      if (!permissionGranted) {
-        return SettingsActionResult.failure('开启提醒失败：请先授予通知权限');
+      final notifOk = await _permissionService.ensureNotificationPermission();
+      if (!notifOk) {
+        return SettingsActionResult.failure('NOTIFICATION_REQUIRED');
+      }
+      final alarmOk = await _permissionService.ensureExactAlarmPermission();
+      if (!alarmOk) {
+        return SettingsActionResult.failure('EXACT_ALARM_REQUIRED');
       }
     }
 
     _eventReminderAdvanceMinutes = safeValue;
     notifyListeners();
     await _storageService.writeEventReminderAdvanceMinutes(safeValue);
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
     return SettingsActionResult.success();
   }
@@ -375,7 +399,6 @@ class SettingsProvider extends ChangeNotifier {
     _autoMuteEnabled = value;
     notifyListeners();
     await _storageService.writeAutoMuteEnabled(value);
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -385,40 +408,90 @@ class SettingsProvider extends ChangeNotifier {
       return SettingsActionResult.success();
     }
 
-    if (!_backgroundServiceEnabled) {
-      return SettingsActionResult.failure('该功能依赖后台常驻服务，请先在设置中开启');
+    final alarmOk = await _permissionService.ensureExactAlarmPermission();
+    if (!alarmOk) {
+      return SettingsActionResult.failure('EXACT_ALARM_REQUIRED');
     }
-    final canEnable = await _permissionService.ensureDndPermission();
-    if (!canEnable) {
-      await updateAutoMuteEnabled(false, fromUserAction: true);
-      return SettingsActionResult.failure('开启自动静音失败：请先授予勿扰权限');
+
+    final dndOk = await _permissionService.ensureDndPermission();
+    if (!dndOk) {
+      return SettingsActionResult.failure('DND_PERMISSION_REQUIRED');
     }
 
     await updateAutoMuteEnabled(true, fromUserAction: true);
     return SettingsActionResult.success();
   }
 
-  Future<SettingsActionResult> toggleBackgroundService(bool enabled) async {
-    if (enabled == _backgroundServiceEnabled) {
+  Future<SettingsActionResult> toggleBackgroundServiceWithCheck(bool value) async {
+    if (!value) {
+      if (!_backgroundServiceEnabled) {
+        return SettingsActionResult.success();
+      }
+      _backgroundServiceEnabled = false;
+      notifyListeners();
+      await _storageService.writeBackgroundServiceEnabled(false);
+      await _refreshReminders();
       return SettingsActionResult.success();
     }
 
-    if (enabled) {
-      final permissionGranted = await _permissionService
-          .ensureNotificationPermission();
-      if (!permissionGranted) {
-        return SettingsActionResult.failure('开启后台服务失败：请先授予通知权限');
-      }
-      await _backgroundServiceManager.start();
-    } else {
-      await _backgroundServiceManager.stop();
+    final notifOk = await _permissionService.ensureNotificationPermission();
+    if (!notifOk) {
+      return SettingsActionResult.failure('NOTIFICATION_REQUIRED');
     }
 
-    _backgroundServiceEnabled = enabled;
+    if (_backgroundServiceEnabled) {
+      return SettingsActionResult.success();
+    }
+    _backgroundServiceEnabled = true;
     notifyListeners();
-    await _storageService.writeBackgroundServiceEnabled(enabled);
+    await _storageService.writeBackgroundServiceEnabled(true);
     await _refreshReminders();
     return SettingsActionResult.success();
+  }
+
+  Future<SettingsActionResult> toggleAutoMuteServiceSwitch(bool value) async {
+    if (value) {
+      final dndOk = await _permissionService.ensureDndPermission();
+      if (!dndOk) {
+        return SettingsActionResult.failure('DND_PERMISSION_REQUIRED');
+      }
+    }
+
+    _autoMuteEnabled = value;
+    _backgroundServiceEnabled = value;
+    notifyListeners();
+    await _storageService.writeAutoMuteEnabled(value);
+    await _storageService.writeBackgroundServiceEnabled(value);
+    await _refreshReminders();
+    return SettingsActionResult.success();
+  }
+
+  Future<bool> ensureDndPermission() => _permissionService.ensureDndPermission();
+
+  Future<bool> ensureNotificationPermission() =>
+      _permissionService.ensureNotificationPermission();
+
+  Future<bool> ensureSoundModePermission() =>
+      _permissionService.ensureSoundModePermission();
+
+  Future<void> setAutoMuteServiceEnabled(bool value) async {
+    if (_autoMuteEnabled == value && _backgroundServiceEnabled == value) {
+      return;
+    }
+    _autoMuteEnabled = value;
+    _backgroundServiceEnabled = value;
+    notifyListeners();
+    await _storageService.writeAutoMuteEnabled(value);
+    await _storageService.writeBackgroundServiceEnabled(value);
+    await _refreshReminders();
+  }
+
+  Future<void> openAppOrAlarmSettings() async {
+    await _permissionService.openAppOrAlarmSettings();
+  }
+
+  Future<void> openSystemDndSettings() async {
+    await _permissionService.openSystemDndSettings();
   }
 
   Future<void> openBatteryOptimizationSettings() async {
@@ -451,12 +524,7 @@ class SettingsProvider extends ChangeNotifier {
     await scheduler();
   }
 
-  Future<void> _syncBackgroundRuntimeIfEnabled() async {
-    if (!_backgroundServiceEnabled) {
-      return;
-    }
-    await _backgroundServiceManager.syncIfRunning();
-  }
+
 
   TimeOfDay _parseTime(String value) {
     final parts = value.split(':');

@@ -1,0 +1,6 @@
+Analyzing timetable...                                          
+
+  error - The getter 'developerDiagnostics' isn't defined for the type 'AppRoutes' - lib\screens\main_scaffold.dart:80:47 - undefined_getter
+   info - Unnecessary use of string interpolation - lib\services\system_schedule_manager.dart:126:24 - unnecessary_string_interpolations
+
+2 issues found. (ran in 12.6s)

@@ -1,218 +1,78 @@
-import 'dart:convert';
-
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:sound_mode/sound_mode.dart';
+import 'package:sound_mode/utils/ringer_mode_statuses.dart';
 
-import '../models/event.dart';
-import '../services/notification/immediate_reminder_notifier.dart';
-import '../services/notification/notification_channel_registrar.dart';
-import '../services/notification_service.dart';
-import '../services/storage_service.dart';
-
-class DeveloperDiagnosticsPage extends StatefulWidget {
+class DeveloperDiagnosticsPage extends StatelessWidget {
   const DeveloperDiagnosticsPage({super.key});
-
-  @override
-  State<DeveloperDiagnosticsPage> createState() =>
-      _DeveloperDiagnosticsPageState();
-}
-
-class _DeveloperDiagnosticsPageState extends State<DeveloperDiagnosticsPage> {
-  static const JsonEncoder _prettyJson = JsonEncoder.withIndent('  ');
-
-  bool _isBusy = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Developer Diagnostics')),
+      appBar: AppBar(title: const Text('开发者诊断')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
-          _DiagnosticsActionTile(
-            title: 'Foreground notification test',
-            subtitle: 'Send a local Event notification through the notifier.',
-            onTap: _isBusy ? null : _runForegroundNotificationTest,
-          ),
-          _DiagnosticsActionTile(
-            title: 'Background IPC test - mute',
-            subtitle: 'Invoke test_mute on the background service.',
-            onTap: _isBusy ? null : _invokeBackgroundCommandMute,
-          ),
-          _DiagnosticsActionTile(
-            title: 'Background IPC test - unmute',
-            subtitle: 'Invoke test_unmute on the background service.',
-            onTap: _isBusy ? null : _invokeBackgroundCommandUnmute,
-          ),
-          _DiagnosticsActionTile(
-            title: 'Storage read test',
-            subtitle: 'Read all stored Event rows and print them as JSON.',
-            onTap: _isBusy ? null : _showStoredEvents,
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => _simulateMute(context),
+                    icon: const Icon(Icons.volume_off_outlined),
+                    label: const Text('模拟上课静音'),
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: () => _simulateUnmute(context),
+                    icon: const Icon(Icons.volume_up_outlined),
+                    label: const Text('模拟下课取消静音'),
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: () => _runOneMinuteSelfTest(context),
+                    icon: const Icon(Icons.schedule_outlined),
+                    label: const Text('执行 1 分钟后静音测试'),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _runForegroundNotificationTest() async {
-    await _runBusyAction(() async {
-      final permissionStatus = await NotificationService.instance
-          .ensurePermissions();
-      final notifier = await _createImmediateNotifier();
-      final event = Event(
-        id: 'dev-diagnostics-event',
-        name: 'Developer diagnostics notification',
-        location: 'ImmediateReminderNotifier',
-        dateTime: DateTime.now().add(const Duration(minutes: 1)),
-        enableAlarm: true,
-      );
-      await notifier.showEventReminder(event: event, notificationId: 900001);
-
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            permissionStatus.notificationsGranted
-                ? 'Test notification dispatched.'
-                : 'Notification permission is not granted yet.',
-          ),
-        ),
-      );
-    });
-  }
-
-  Future<void> _invokeBackgroundCommandMute() async {
-    await _runBusyAction(() async {
-      await _invokeBackgroundCommand(command: 'test_mute');
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sent test_mute to background service.')),
-      );
-    });
-  }
-
-  Future<void> _invokeBackgroundCommandUnmute() async {
-    await _runBusyAction(() async {
-      await _invokeBackgroundCommand(command: 'test_unmute');
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sent test_unmute to background service.'),
-        ),
-      );
-    });
-  }
-
-  Future<void> _invokeBackgroundCommand({required String command}) async {
-    final service = FlutterBackgroundService();
-    service.invoke(command);
-  }
-
-  Future<void> _showStoredEvents() async {
-    await _runBusyAction(() async {
-      final storageService = await StorageService.create();
-      final events = storageService.loadEvents();
-      final payload = events.map((event) => event.toJson()).toList();
-      await _showTextDialog(
-        title: 'Stored Event rows',
-        content: payload.isEmpty ? '[]' : _prettyJson.convert(payload),
-      );
-    });
-  }
-
-  Future<void> _runBusyAction(Future<void> Function() action) async {
-    if (_isBusy) {
+  Future<void> _simulateMute(BuildContext context) async {
+    await SoundMode.setSoundMode(RingerModeStatus.silent);
+    if (!context.mounted) {
       return;
     }
-
-    setState(() {
-      _isBusy = true;
-    });
-
-    try {
-      await action();
-    } catch (error, stackTrace) {
-      await _showTextDialog(
-        title: 'Diagnostics action failed',
-        content: '$error\n\n$stackTrace',
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isBusy = false;
-        });
-      }
-    }
-  }
-
-  Future<ImmediateReminderNotifier> _createImmediateNotifier() async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    const initializationSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      iOS: DarwinInitializationSettings(
-        requestAlertPermission: false,
-        requestBadgePermission: false,
-        requestSoundPermission: false,
-      ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已触发 sound_mode 静音')),
     );
-    await plugin.initialize(settings: initializationSettings);
-    await NotificationChannelRegistrar(plugin).registerChannels();
-    return ImmediateReminderNotifier(plugin);
   }
 
-  Future<void> _showTextDialog({
-    required String title,
-    required String content,
-  }) async {
-    if (!mounted) {
+  Future<void> _simulateUnmute(BuildContext context) async {
+    await SoundMode.setSoundMode(RingerModeStatus.normal);
+    if (!context.mounted) {
       return;
     }
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(title),
-          content: SingleChildScrollView(child: SelectableText(content)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已触发 sound_mode 恢复')),
     );
   }
-}
 
-class _DiagnosticsActionTile extends StatelessWidget {
-  const _DiagnosticsActionTile({
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
-      ),
+  Future<void> _runOneMinuteSelfTest(BuildContext context) async {
+    FlutterBackgroundService().invoke('test_1_min_mute');
+    debugPrint('[DND Debug - UI] 已向后台服务发送 1 分钟测试指令');
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('测试指令已发送到后台服务，请息屏等待1分钟观察')),
     );
   }
 }

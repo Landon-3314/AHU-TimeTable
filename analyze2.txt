@@ -1,0 +1,12 @@
+Analyzing timetable...                                          
+
+  error - Target of URI doesn't exist: '../screens/developer_diagnostics_page.dart' - lib\core\app_routes.dart:5:8 - uri_does_not_exist
+  error - The name 'DeveloperDiagnosticsPage' isn't a class - lib\core\app_routes.dart:47:33 - creation_with_non_type
+  error - Undefined class 'BackgroundServiceManager' - lib\providers\course_provider.dart:13:5 - undefined_class
+  error - '_backgroundServiceManager' isn't a field in the enclosing class - lib\providers\course_provider.dart:16:7 - initializer_for_non_existent_field
+  error - The name 'BackgroundServiceManager' isn't a class - lib\providers\course_provider.dart:17:45 - creation_with_non_type
+  error - Undefined name '_backgroundServiceManager' - lib\providers\course_provider.dart:164:11 - undefined_identifier
+warning - Unused import: '../models/time_slot.dart' - lib\services\system_schedule_manager.dart:7:8 - unused_import
+   info - Unnecessary use of string interpolation - lib\services\system_schedule_manager.dart:127:24 - unnecessary_string_interpolations
+
+8 issues found. (ran in 12.9s)

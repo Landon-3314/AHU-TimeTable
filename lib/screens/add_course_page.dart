@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_colors.dart';
@@ -380,6 +381,7 @@ class _CourseFormState extends State<_CourseForm> {
     } else {
       await courseProvider.addCourse(course);
     }
+    FlutterBackgroundService().invoke('refresh_schedule');
 
     if (!mounted) {
       return;
@@ -622,6 +624,7 @@ class _EventFormState extends State<_EventForm> {
     );
 
     await context.read<CourseProvider>().addEvent(event);
+    FlutterBackgroundService().invoke('refresh_schedule');
 
     if (!mounted) {
       return;

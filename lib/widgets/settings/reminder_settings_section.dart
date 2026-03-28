@@ -8,12 +8,14 @@ class ReminderSettingsSection extends StatelessWidget {
     super.key,
     required this.provider,
     required this.reminderLabelBuilder,
+    required this.onToggleCourseReminder,
     required this.onPickCourseReminder,
     required this.onPickEventReminder,
   });
 
   final SettingsProvider provider;
   final String Function(int minutes, {bool isEventReminder}) reminderLabelBuilder;
+  final Future<void> Function(bool value) onToggleCourseReminder;
   final Future<void> Function() onPickCourseReminder;
   final Future<void> Function() onPickEventReminder;
 
@@ -22,18 +24,29 @@ class ReminderSettingsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SettingsSectionTitle(title: provider.t('notifications')),
+        const SettingsSectionTitle(title: '业务模块'),
         const SizedBox(height: 12),
         SettingsSectionCard(
           children: [
-            ListTile(
-              leading: const Icon(Icons.notifications_active_outlined),
-              title: Text(provider.t('course_reminder_time')),
+            SwitchListTile(
+              secondary: const Icon(Icons.notifications_active_outlined),
+              title: const Text('课前提醒'),
               subtitle: Text(
-                reminderLabelBuilder(provider.reminderAdvanceMinutes),
+                provider.courseReminderEnabled
+                    ? reminderLabelBuilder(provider.reminderAdvanceMinutes)
+                    : '未开启',
               ),
+              value: provider.courseReminderEnabled,
+              onChanged: onToggleCourseReminder,
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.tune_outlined),
+              title: const Text('课前提醒提前时间'),
+              subtitle: Text(reminderLabelBuilder(provider.reminderAdvanceMinutes)),
               trailing: const Icon(Icons.chevron_right),
-              onTap: onPickCourseReminder,
+              enabled: provider.courseReminderEnabled,
+              onTap: provider.courseReminderEnabled ? onPickCourseReminder : null,
             ),
             const Divider(height: 1),
             ListTile(
@@ -54,4 +67,3 @@ class ReminderSettingsSection extends StatelessWidget {
     );
   }
 }
-

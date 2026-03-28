@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -86,6 +87,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
       final importedCourses = _parserService.parse(rawMessage);
       await context.read<CourseProvider>().addCourses(importedCourses);
+      FlutterBackgroundService().invoke('refresh_schedule');
 
       if (!mounted) {
         return;

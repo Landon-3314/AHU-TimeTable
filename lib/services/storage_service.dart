@@ -17,6 +17,7 @@ class StorageService {
   static const String _classDurationKey = 'settings.classDuration';
   static const String _shortBreakKey = 'settings.shortBreak';
   static const String _bigBreakKey = 'settings.bigBreak';
+  static const String _bigBreakAfterPeriodKey = 'settings.bigBreakAfterPeriod';
   static const String _morningStartTimeKey = 'settings.morningStartTime';
   static const String _morningClassesKey = 'settings.morningClasses';
   static const String _afternoonStartTimeKey = 'settings.afternoonStartTime';
@@ -100,6 +101,14 @@ class StorageService {
 
   Future<void> writeBigBreak(int value) {
     return _sharedPreferences.setInt(_bigBreakKey, value);
+  }
+
+  int readBigBreakAfterPeriod({required int fallback}) {
+    return _sharedPreferences.getInt(_bigBreakAfterPeriodKey) ?? fallback;
+  }
+
+  Future<void> writeBigBreakAfterPeriod(int value) {
+    return _sharedPreferences.setInt(_bigBreakAfterPeriodKey, value);
   }
 
   String readMorningStartTime({required String fallback}) {
