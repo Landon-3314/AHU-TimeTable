@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -153,7 +153,8 @@ class _ScheduleBrain {
     await refresh(trigger: 'start');
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(minutes: 5), (_) async {
-      await refresh(trigger: 'heartbeat');
+      final now = DateTime.now();
+      await refresh(trigger: 'heartbeat', now: now);
     });
   }
 
@@ -162,29 +163,19 @@ class _ScheduleBrain {
     _testMuteTimer = Timer(const Duration(minutes: 1), () async {
       debugPrint('[DND Debug - Background] 1 分钟倒计时结束，准备执行静音');
       await _setSilentMode();
-      await _updateForeground('上课中，已自动为您静音（测试触发）');
+      _mutedByService = true;
+      await refresh(trigger: 'test_1_min_mute');
     });
   }
 
-  Future<void> refresh({required String trigger}) async {
+  Future<void> refresh({required String trigger, DateTime? now}) async {
+    final effectiveNow = now ?? DateTime.now();
     final snapshot = await _loadSnapshot();
-
-    if (!snapshot.backgroundServiceEnabled || !snapshot.autoMuteEnabled) {
-      if (_mutedByService) {
-        await _setNormalMode();
-        _mutedByService = false;
-      }
-      await _updateForeground('自动静音已关闭');
-      _preciseTimer?.cancel();
-      return;
-    }
-
-    final now = DateTime.now();
-    final today = _buildTodayWindows(now: now, snapshot: snapshot);
+    final today = _buildTodayWindows(now: effectiveNow, snapshot: snapshot);
 
     debugPrint('=== 后台调度器状态更新 ===');
     debugPrint('触发来源: $trigger');
-    debugPrint('当前时间: $now');
+    debugPrint('当前时间: $effectiveNow');
     debugPrint('今日课程数量: ${today.length}');
     if (today.isNotEmpty) {
       debugPrint('首节课时间: ${today.first.start} - ${today.first.end}');
@@ -194,19 +185,39 @@ class _ScheduleBrain {
     _CourseWindow? current;
     for (final course in today) {
       final inClass =
-          (now.isAfter(course.start) || now.isAtSameMomentAs(course.start)) &&
-              now.isBefore(course.end);
+          (effectiveNow.isAfter(course.start) ||
+              effectiveNow.isAtSameMomentAs(course.start)) &&
+          effectiveNow.isBefore(course.end);
       if (inClass) {
         current = course;
         break;
       }
     }
 
+    final next = today
+        .where((e) => e.start.isAfter(effectiveNow))
+        .fold<_CourseWindow?>(null, (best, item) {
+          if (best == null || item.start.isBefore(best.start)) {
+            return item;
+          }
+          return best;
+        });
+
     if (current != null) {
-      await _setSilentMode();
-      _mutedByService = true;
-      await _updateForeground('上课中，已自动为您静音');
-      _schedulePrecise(current.end.difference(now));
+      if (snapshot.autoMuteEnabled) {
+        await _setSilentMode();
+        _mutedByService = true;
+      } else if (_mutedByService) {
+        await _setNormalMode();
+        _mutedByService = false;
+      }
+
+      await _updateForegroundState(
+        title: '上课中: ${current.course.name}',
+        content:
+            '${_formatLocation(current.course.location)} | ${_formatTime(current.end)} 下课',
+      );
+      _schedulePrecise(current.end.difference(effectiveNow));
       return;
     }
 
@@ -215,26 +226,18 @@ class _ScheduleBrain {
       _mutedByService = false;
     }
 
-    final next = today.where((e) => e.start.isAfter(now)).fold<_CourseWindow?>(
-      null,
-      (best, item) {
-        if (best == null || item.start.isBefore(best.start)) {
-          return item;
-        }
-        return best;
-      },
-    );
-
-    if (next == null) {
-      await _updateForeground('下一节课：今日已无课程');
-      _preciseTimer?.cancel();
+    if (next != null) {
+      await _updateForegroundState(
+        title: '下一节课: ${next.course.name}',
+        content:
+            '${_formatLocation(next.course.location)} | ${_formatTime(next.start)}',
+      );
+      _schedulePrecise(next.start.difference(effectiveNow));
       return;
     }
 
-    final hh = next.start.hour.toString().padLeft(2, '0');
-    final mm = next.start.minute.toString().padLeft(2, '0');
-    await _updateForeground('下一节课：${next.course.name} $hh:$mm');
-    _schedulePrecise(next.start.difference(now));
+    await _updateForegroundState(title: '今日已无课程', content: '静候佳音，祝你心情愉快。');
+    _preciseTimer?.cancel();
   }
 
   Future<void> _setSilentMode() async {
@@ -260,13 +263,27 @@ class _ScheduleBrain {
     });
   }
 
-  Future<void> _updateForeground(String content) async {
+  Future<void> _updateForegroundState({
+    required String title,
+    required String content,
+  }) async {
     if (_service case AndroidServiceInstance androidService) {
       await androidService.setForegroundNotificationInfo(
-        title: _serviceTitle,
+        title: title,
         content: content,
       );
     }
+  }
+
+  String _formatLocation(String location) {
+    final trimmed = location.trim();
+    return trimmed.isEmpty ? '地点待定' : trimmed;
+  }
+
+  String _formatTime(DateTime time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 
   Future<_Snapshot> _loadSnapshot() async {
@@ -276,7 +293,8 @@ class _ScheduleBrain {
     final semesterStart = semesterRaw == null
         ? _calculator.defaultSemesterStartDate()
         : _calculator.alignToMonday(
-            DateTime.tryParse(semesterRaw) ?? _calculator.defaultSemesterStartDate(),
+            DateTime.tryParse(semesterRaw) ??
+                _calculator.defaultSemesterStartDate(),
           );
 
     final timeSlots = _calculator.generateTimeSlots(
@@ -313,7 +331,8 @@ class _ScheduleBrain {
       semesterStartDate: semesterStart,
       totalWeeks: prefs.getInt(_totalWeeksKey) ?? 18,
       autoMuteEnabled: prefs.getBool(_autoMuteEnabledKey) ?? false,
-      backgroundServiceEnabled: prefs.getBool(_backgroundServiceEnabledKey) ?? false,
+      backgroundServiceEnabled:
+          prefs.getBool(_backgroundServiceEnabledKey) ?? false,
       timeSlots: timeSlots,
     );
   }
@@ -330,15 +349,18 @@ class _ScheduleBrain {
 
     final windows = <_CourseWindow>[];
     for (final course in snapshot.courses) {
-      if (course.weekday != today.weekday || !course.weeks.contains(weekIndex)) {
+      if (course.weekday != today.weekday ||
+          !course.weeks.contains(weekIndex)) {
         continue;
       }
-      if (course.startPeriod < 1 || course.startPeriod > snapshot.timeSlots.length) {
+      if (course.startPeriod < 1 ||
+          course.startPeriod > snapshot.timeSlots.length) {
         continue;
       }
 
       final startSlot = snapshot.timeSlots[course.startPeriod - 1];
-      final endIndex = course.endPeriod.clamp(1, snapshot.timeSlots.length).toInt() - 1;
+      final endIndex =
+          course.endPeriod.clamp(1, snapshot.timeSlots.length).toInt() - 1;
       final endSlot = snapshot.timeSlots[endIndex];
       windows.add(
         _CourseWindow(
@@ -366,9 +388,15 @@ class _ScheduleBrain {
   }
 
   int? _weekIndexOf(DateTime date, DateTime semesterStartDate) {
-    final diff = date.difference(
-      DateTime(semesterStartDate.year, semesterStartDate.month, semesterStartDate.day),
-    ).inDays;
+    final diff = date
+        .difference(
+          DateTime(
+            semesterStartDate.year,
+            semesterStartDate.month,
+            semesterStartDate.day,
+          ),
+        )
+        .inDays;
     if (diff < 0) {
       return null;
     }

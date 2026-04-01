@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models/course.dart';
@@ -9,7 +9,9 @@ class NativeAlarmService {
   NativeAlarmService._();
 
   static final NativeAlarmService instance = NativeAlarmService._();
-  static const MethodChannel _channel = MethodChannel('com.timetable/native_alarm');
+  static const MethodChannel _channel = MethodChannel(
+    'com.timetable/native_alarm',
+  );
 
   Future<bool> ensureExactAlarmPermission() async {
     try {
@@ -30,22 +32,28 @@ class NativeAlarmService {
 
   Future<bool> ensureIgnoreBatteryOptimizations() async {
     try {
-      final ignoring = await _channel.invokeMethod<bool>(
-            'isIgnoringBatteryOptimizations',
-          ) ??
+      final ignoring =
+          await _channel.invokeMethod<bool>('isIgnoringBatteryOptimizations') ??
           true;
       if (ignoring) {
         return true;
       }
       await _channel.invokeMethod<void>('requestIgnoreBatteryOptimizations');
-      final recheck = await _channel.invokeMethod<bool>(
-            'isIgnoringBatteryOptimizations',
-          ) ??
+      final recheck =
+          await _channel.invokeMethod<bool>('isIgnoringBatteryOptimizations') ??
           false;
       return recheck;
     } catch (e) {
       debugPrint('[NativeAlarm] ensureIgnoreBatteryOptimizations failed: $e');
       return false;
+    }
+  }
+
+  Future<void> requestIgnoreBatteryOptimization() async {
+    try {
+      await _channel.invokeMethod<void>('requestIgnoreBatteryOptimizations');
+    } catch (e) {
+      debugPrint('[NativeAlarm] requestIgnoreBatteryOptimization failed: $e');
     }
   }
 
@@ -59,18 +67,24 @@ class NativeAlarmService {
       final now = DateTime.now();
       final timeSlots = settings.timeSlots;
       final payload = <Map<String, dynamic>>[];
+      var courseIndex = 0;
 
       for (int dayOffset = 0; dayOffset < horizonDays; dayOffset++) {
-        final day = DateTime(now.year, now.month, now.day).add(
-          Duration(days: dayOffset),
-        );
+        final day = DateTime(
+          now.year,
+          now.month,
+          now.day,
+        ).add(Duration(days: dayOffset));
         final weekIndex = _weekIndexOf(day, settings.semesterStartDate);
-        if (weekIndex == null || weekIndex < 1 || weekIndex > settings.totalWeeks) {
+        if (weekIndex == null ||
+            weekIndex < 1 ||
+            weekIndex > settings.totalWeeks) {
           continue;
         }
 
         for (final course in courses) {
-          if (course.weekday != day.weekday || !course.weeks.contains(weekIndex)) {
+          if (course.weekday != day.weekday ||
+              !course.weeks.contains(weekIndex)) {
             continue;
           }
           if (course.startPeriod < 1 || course.startPeriod > timeSlots.length) {
@@ -112,11 +126,13 @@ class NativeAlarmService {
           }
 
           payload.add({
+            'courseIndex': courseIndex++,
             'silentAtMillis': startTime.millisecondsSinceEpoch,
             'restoreAtMillis': endTime.millisecondsSinceEpoch,
             'reminderAtMillis': reminderAtMillis,
-            'title': '即将上课: ${course.name}',
-            'content': '上课地点: ${course.location.isEmpty ? "未知" : course.location}',
+            'title': '\u5373\u5c06\u4e0a\u8bfe: ${course.name}',
+            'content':
+                '\u4e0a\u8bfe\u5730\u70b9: ${course.location.isEmpty ? "\u672a\u77e5" : course.location}',
             'reminderAction': 'com.timetable.ACTION_REMIND_CLASS',
           });
         }
@@ -140,13 +156,14 @@ class NativeAlarmService {
           }
 
           payload.add({
+            'courseIndex': courseIndex++,
             'silentAtMillis': eventTime.millisecondsSinceEpoch,
             'restoreAtMillis': eventTime.millisecondsSinceEpoch,
             'reminderAtMillis': reminderAt.millisecondsSinceEpoch,
-            'title': '日程提醒: ${event.name}',
+            'title': '\u65e5\u7a0b\u63d0\u9192: ${event.name}',
             'content': event.location.isEmpty
-                ? '即将开始，请注意时间'
-                : '地点: ${event.location}',
+                ? '\u5373\u5c06\u5f00\u59cb\uff0c\u8bf7\u6ce8\u610f\u65f6\u95f4'
+                : '\u5730\u70b9: ${event.location}',
             'reminderAction': 'com.timetable.ACTION_REMIND_SCHEDULE',
           });
         }

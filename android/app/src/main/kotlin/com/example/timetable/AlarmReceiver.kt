@@ -18,9 +18,7 @@ import androidx.core.content.ContextCompat
 class AlarmReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "AlarmReceiver"
-        private const val PREFS = "native_alarm_prefs"
-        private const val SAVED_MUSIC_VOLUME_KEY = "saved_music_volume"
-        private const val HAS_SAVED_VOLUME_KEY = "has_saved_volume"
+        private const val AUTO_MUTE_PREFS = "auto_mute_prefs"
 
         private const val REMINDER_CHANNEL_ID = "reminder_channel"
         private const val REMINDER_CHANNEL_NAME = "课程与日程提醒"
@@ -36,8 +34,8 @@ class AlarmReceiver : BroadcastReceiver() {
 
         try {
             when (intent.action) {
-                NativeAlarmScheduler.ACTION_SILENT -> applySilent(context)
-                NativeAlarmScheduler.ACTION_RESTORE -> applyRestore(context)
+                NativeAlarmScheduler.ACTION_SILENT -> applySilent(context, intent)
+                NativeAlarmScheduler.ACTION_RESTORE -> applyRestore(context, intent)
                 NativeAlarmScheduler.ACTION_REMIND_CLASS,
                 NativeAlarmScheduler.ACTION_REMIND_SCHEDULE,
                 -> showReminderNotification(context, intent)
@@ -53,54 +51,55 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun applySilent(context: Context) {
+    private fun applySilent(context: Context, intent: Intent) {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
+        val index = intent.getIntExtra(NativeAlarmScheduler.EXTRA_COURSE_INDEX, -1)
+        val key = "app_did_mute_$index"
 
-        val currentMusic = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        if (currentMusic > 0) {
-            prefs.edit()
-                .putInt(SAVED_MUSIC_VOLUME_KEY, currentMusic)
-                .putBoolean(HAS_SAVED_VOLUME_KEY, true)
-                .apply()
+        if (!notificationManager.isNotificationPolicyAccessGranted) {
+            prefs.edit().putBoolean(key, false).apply()
+            Log.w(TAG, "Notification policy access missing, skip silent for index=$index")
+            return
         }
 
-        if (notificationManager.isNotificationPolicyAccessGranted) {
-            audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+        val currentMode = audioManager.ringerMode
+        if (currentMode != AudioManager.RINGER_MODE_NORMAL) {
+            prefs.edit().putBoolean(key, false).apply()
+            Log.d(TAG, "Device already silent/vibrate, skip auto mute for index=$index")
+            return
         }
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
-        Log.d(TAG, "Applied silent mode via native alarm")
+
+        prefs.edit().putBoolean(key, true).apply()
+        audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+        Log.d(TAG, "App auto-muted device for index=$index")
     }
 
-    private fun applyRestore(context: Context) {
+    private fun applyRestore(context: Context, intent: Intent) {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
+        val index = intent.getIntExtra(NativeAlarmScheduler.EXTRA_COURSE_INDEX, -1)
+        val key = "app_did_mute_$index"
+        val wasMutedByApp = prefs.getBoolean(key, false)
 
-        if (notificationManager.isNotificationPolicyAccessGranted) {
+        if (!notificationManager.isNotificationPolicyAccessGranted) {
+            prefs.edit().remove(key).apply()
+            Log.w(TAG, "Notification policy access missing, skip restore for index=$index")
+            return
+        }
+
+        if (wasMutedByApp) {
             audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
-        }
-
-        val hasSaved = prefs.getBoolean(HAS_SAVED_VOLUME_KEY, false)
-        val fallback = (audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) * 0.4f)
-            .toInt()
-            .coerceAtLeast(1)
-        val restoreVolume = if (hasSaved) {
-            prefs.getInt(SAVED_MUSIC_VOLUME_KEY, fallback)
+            Log.d(TAG, "App restored normal mode for index=$index")
         } else {
-            fallback
+            Log.d(TAG, "Skip restore because app did not mute index=$index")
         }
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, restoreVolume, 0)
 
-        prefs.edit()
-            .remove(SAVED_MUSIC_VOLUME_KEY)
-            .putBoolean(HAS_SAVED_VOLUME_KEY, false)
-            .apply()
-
-        Log.d(TAG, "Restored normal mode via native alarm")
+        prefs.edit().remove(key).apply()
     }
 
     private fun showReminderNotification(context: Context, intent: Intent) {

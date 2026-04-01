@@ -11,17 +11,18 @@ object NativeAlarmScheduler {
     const val ACTION_REMIND_CLASS = "com.timetable.ACTION_REMIND_CLASS"
     const val ACTION_REMIND_SCHEDULE = "com.timetable.ACTION_REMIND_SCHEDULE"
 
+    const val EXTRA_COURSE_INDEX = "course_index"
     const val EXTRA_TITLE = "extra_title"
     const val EXTRA_CONTENT = "extra_content"
 
     private const val PREFS = "native_alarm_prefs"
     private const val LAST_COUNT_KEY = "last_scheduled_count"
 
-    private const val BASE_CODE_SILENT = 10000
-    private const val BASE_CODE_RESTORE = 20000
+    private const val RESTORE_CODE_OFFSET = 10000
     private const val BASE_CODE_REMINDER = 30000
 
     data class AlarmItem(
+        val index: Int,
         val silentAtMillis: Long,
         val restoreAtMillis: Long,
         val reminderAtMillis: Long?,
@@ -35,11 +36,10 @@ object NativeAlarmScheduler {
         items: List<AlarmItem>,
     ) {
         cancelAll(context)
-        items.forEachIndexed { index, item ->
+        items.forEach { item ->
             scheduleClass(
                 context = context,
                 item = item,
-                index = index,
             )
         }
 
@@ -52,28 +52,28 @@ object NativeAlarmScheduler {
     fun scheduleClass(
         context: Context,
         item: AlarmItem,
-        index: Int,
     ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val index = item.index
 
         val silentIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_SILENT
-            putExtra("index", index)
+            putExtra(EXTRA_COURSE_INDEX, index)
         }
         val restoreIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_RESTORE
-            putExtra("index", index)
+            putExtra(EXTRA_COURSE_INDEX, index)
         }
 
         val silentPendingIntent = PendingIntent.getBroadcast(
             context,
-            BASE_CODE_SILENT + index,
+            index,
             silentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val restorePendingIntent = PendingIntent.getBroadcast(
             context,
-            BASE_CODE_RESTORE + index,
+            index + RESTORE_CODE_OFFSET,
             restoreIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -87,7 +87,7 @@ object NativeAlarmScheduler {
                 action = item.reminderAction
                 putExtra(EXTRA_TITLE, item.title ?: "提醒")
                 putExtra(EXTRA_CONTENT, item.content ?: "时间到了")
-                putExtra("index", index)
+                putExtra(EXTRA_COURSE_INDEX, index)
             }
             val reminderPendingIntent = PendingIntent.getBroadcast(
                 context,
@@ -105,8 +105,8 @@ object NativeAlarmScheduler {
             .getInt(LAST_COUNT_KEY, 0)
 
         for (index in 0 until lastCount) {
-            cancelByAction(context, alarmManager, ACTION_SILENT, BASE_CODE_SILENT + index, index)
-            cancelByAction(context, alarmManager, ACTION_RESTORE, BASE_CODE_RESTORE + index, index)
+            cancelByAction(context, alarmManager, ACTION_SILENT, index, index)
+            cancelByAction(context, alarmManager, ACTION_RESTORE, index + RESTORE_CODE_OFFSET, index)
             cancelByAction(context, alarmManager, ACTION_REMIND_CLASS, BASE_CODE_REMINDER + index, index)
             cancelByAction(context, alarmManager, ACTION_REMIND_SCHEDULE, BASE_CODE_REMINDER + index, index)
         }
@@ -126,7 +126,7 @@ object NativeAlarmScheduler {
     ) {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             this.action = action
-            putExtra("index", index)
+            putExtra(EXTRA_COURSE_INDEX, index)
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,

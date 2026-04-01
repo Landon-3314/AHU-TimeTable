@@ -58,10 +58,12 @@ class MainActivity : FlutterActivity() {
                         val entry = row as? Map<*, *> ?: return@mapNotNull null
                         val silent = (entry["silentAtMillis"] as? Number)?.toLong()
                         val restore = (entry["restoreAtMillis"] as? Number)?.toLong()
-                        if (silent == null || restore == null) {
+                        val index = (entry["courseIndex"] as? Number)?.toInt()
+                        if (silent == null || restore == null || index == null) {
                             null
                         } else {
                             NativeAlarmScheduler.AlarmItem(
+                                index = index,
                                 silentAtMillis = silent,
                                 restoreAtMillis = restore,
                                 reminderAtMillis = (entry["reminderAtMillis"] as? Number)?.toLong(),
