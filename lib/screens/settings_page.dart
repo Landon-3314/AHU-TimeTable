@@ -1,37 +1,55 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../core/app_constants.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/long_screenshot_scroll_capture.dart';
 import 'reminder_settings_page.dart';
 import 'timetable_time_settings_page.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
 
     return SafeArea(
-      child: ListView(
-        padding: AppSpacing.pagePadding,
-        children: [
-          Text(
-            provider.t('settings'),
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          _buildAutomationAndNotificationSection(context),
-          const SizedBox(height: AppSpacing.xl),
-          _buildTimetableParamsSection(context),
-          const SizedBox(height: AppSpacing.xl),
-          _buildDataSection(context),
-        ],
+      child: LongScreenshotScrollCapture(
+        controller: _scrollController,
+        child: ListView(
+          controller: _scrollController,
+          padding: AppSpacing.pagePadding,
+          children: [
+            Text(
+              provider.t('settings'),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            _buildAutomationAndNotificationSection(context),
+            const SizedBox(height: AppSpacing.xl),
+            _buildTimetableParamsSection(context),
+            const SizedBox(height: AppSpacing.xl),
+            _buildDataSection(context),
+          ],
+        ),
       ),
     );
   }
@@ -80,9 +98,9 @@ class SettingsPage extends StatelessWidget {
           children: [
             Text(
               '数据管理',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -169,8 +187,8 @@ class SettingsPage extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('全部数据已删除')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('全部数据已删除')));
   }
 }

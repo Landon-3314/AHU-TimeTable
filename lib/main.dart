@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,9 +9,11 @@ import 'providers/course_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/timetable_view_provider.dart';
 import 'services/app_services.dart';
+import 'services/long_screenshot_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  LongScreenshotService.instance.initialize();
   final initFuture = _initAppSafely();
   runApp(MainApp(initFuture: initFuture));
 }
@@ -60,10 +62,8 @@ class AppScrollBehavior extends MaterialScrollBehavior {
   const AppScrollBehavior();
 
   @override
-  Set<PointerDeviceKind> get dragDevices => {
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-  };
+  Set<PointerDeviceKind> get dragDevices =>
+      Set<PointerDeviceKind>.from(PointerDeviceKind.values);
 }
 
 class MainApp extends StatelessWidget {
@@ -77,7 +77,8 @@ class MainApp extends StatelessWidget {
       future: initFuture,
       builder: (context, snapshot) {
         final bundle = snapshot.data;
-        if (snapshot.connectionState != ConnectionState.done || bundle == null) {
+        if (snapshot.connectionState != ConnectionState.done ||
+            bundle == null) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(),

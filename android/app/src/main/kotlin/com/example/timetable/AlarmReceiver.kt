@@ -18,35 +18,37 @@ import androidx.core.content.ContextCompat
 class AlarmReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "AlarmReceiver"
-        private const val AUTO_MUTE_PREFS = "auto_mute_prefs"
-
         private const val REMINDER_CHANNEL_ID = "reminder_channel"
         private const val REMINDER_CHANNEL_NAME = "课程与日程提醒"
+        private const val WAKE_LOCK_TAG = "AHUTimeTable:AlarmWakeLock"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
-            "Timetable::NativeAlarmWakeLock",
+            WAKE_LOCK_TAG,
         )
-        wakeLock.acquire(5000L)
+        wakeLock.acquire(10_000L)
 
         try {
-            when (intent.action) {
+            val action = intent.action.orEmpty()
+            when (action) {
                 NativeAlarmScheduler.ACTION_SILENT -> applySilent(context, intent)
                 NativeAlarmScheduler.ACTION_RESTORE -> applyRestore(context, intent)
                 NativeAlarmScheduler.ACTION_REMIND_CLASS,
                 NativeAlarmScheduler.ACTION_REMIND_SCHEDULE,
                 -> showReminderNotification(context, intent)
 
-                else -> Log.w(TAG, "Unknown alarm action: ${intent.action}")
+                else -> Log.w(TAG, "Unknown alarm action: $action")
             }
         } catch (e: Exception) {
             Log.e(TAG, "AlarmReceiver execution failed: ${e.message}", e)
         } finally {
-            if (wakeLock.isHeld) {
-                wakeLock.release()
+            runCatching {
+                if (wakeLock.isHeld) {
+                    wakeLock.release()
+                }
             }
         }
     }
@@ -55,25 +57,27 @@ class AlarmReceiver : BroadcastReceiver() {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val prefs = context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
         val index = intent.getIntExtra(NativeAlarmScheduler.EXTRA_COURSE_INDEX, -1)
-        val key = "app_did_mute_$index"
+        NativeStateStore.recordAlarmAction(context, NativeAlarmScheduler.ACTION_SILENT, index)
 
         if (!notificationManager.isNotificationPolicyAccessGranted) {
-            prefs.edit().putBoolean(key, false).apply()
+            NativeStateStore.setMutedByApp(context, index, false)
+            NativeStateStore.recordRingerMode(context, audioManager.ringerMode)
             Log.w(TAG, "Notification policy access missing, skip silent for index=$index")
             return
         }
 
         val currentMode = audioManager.ringerMode
         if (currentMode != AudioManager.RINGER_MODE_NORMAL) {
-            prefs.edit().putBoolean(key, false).apply()
+            NativeStateStore.setMutedByApp(context, index, false)
+            NativeStateStore.recordRingerMode(context, currentMode)
             Log.d(TAG, "Device already silent/vibrate, skip auto mute for index=$index")
             return
         }
 
-        prefs.edit().putBoolean(key, true).apply()
         audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+        NativeStateStore.setMutedByApp(context, index, true)
+        NativeStateStore.recordRingerMode(context, audioManager.ringerMode)
         Log.d(TAG, "App auto-muted device for index=$index")
     }
 
@@ -81,13 +85,13 @@ class AlarmReceiver : BroadcastReceiver() {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val prefs = context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
         val index = intent.getIntExtra(NativeAlarmScheduler.EXTRA_COURSE_INDEX, -1)
-        val key = "app_did_mute_$index"
-        val wasMutedByApp = prefs.getBoolean(key, false)
+        val wasMutedByApp = NativeStateStore.wasMutedByApp(context, index)
+        NativeStateStore.recordAlarmAction(context, NativeAlarmScheduler.ACTION_RESTORE, index)
 
         if (!notificationManager.isNotificationPolicyAccessGranted) {
-            prefs.edit().remove(key).apply()
+            NativeStateStore.clearMutedByApp(context, index)
+            NativeStateStore.recordRingerMode(context, audioManager.ringerMode)
             Log.w(TAG, "Notification policy access missing, skip restore for index=$index")
             return
         }
@@ -99,38 +103,39 @@ class AlarmReceiver : BroadcastReceiver() {
             Log.d(TAG, "Skip restore because app did not mute index=$index")
         }
 
-        prefs.edit().remove(key).apply()
+        NativeStateStore.clearMutedByApp(context, index)
+        NativeStateStore.recordRingerMode(context, audioManager.ringerMode)
     }
 
     private fun showReminderNotification(context: Context, intent: Intent) {
         ensureReminderChannel(context)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) == PackageManager.PERMISSION_GRANTED
+            val granted =
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                ) == PackageManager.PERMISSION_GRANTED
             if (!granted) {
                 Log.w(TAG, "POST_NOTIFICATIONS not granted, skip reminder notification")
                 return
             }
         }
 
-        val title =
-            intent.getStringExtra(NativeAlarmScheduler.EXTRA_TITLE) ?: "提醒"
-        val content =
-            intent.getStringExtra(NativeAlarmScheduler.EXTRA_CONTENT) ?: "时间到了"
+        val title = intent.getStringExtra(NativeAlarmScheduler.EXTRA_TITLE) ?: "提醒"
+        val content = intent.getStringExtra(NativeAlarmScheduler.EXTRA_CONTENT) ?: "时间到了"
 
-        val notification = NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(content)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(content))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .build()
+        val notification =
+            NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(title)
+                .setContentText(content)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(content))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
 
-        val notificationId = (System.currentTimeMillis() and 0xFFFFFFF).toInt()
+        val notificationId = (System.currentTimeMillis() and 0x0FFFFFFF).toInt()
         NotificationManagerCompat.from(context).notify(notificationId, notification)
         Log.d(TAG, "Reminder notification sent: $title")
     }
@@ -140,13 +145,15 @@ class AlarmReceiver : BroadcastReceiver() {
             return
         }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channel = NotificationChannel(
-            REMINDER_CHANNEL_ID,
-            REMINDER_CHANNEL_NAME,
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = "课程与日程提醒通知"
-        }
+        val channel =
+            NotificationChannel(
+                REMINDER_CHANNEL_ID,
+                REMINDER_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "课程与日程提醒通知"
+            }
         manager.createNotificationChannel(channel)
     }
 }
+

@@ -31,6 +31,9 @@
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
+            <meta-data
+                android:name="io.flutter.embedding.android.SplashScreenDrawable"
+                android:resource="@drawable/launch_background" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -42,21 +45,23 @@
             android:value="2" />
 
         <service
-            android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="specialUse"
+            android:name=".TimetableForegroundService"
             android:exported="false"
-            tools:replace="android:exported">
+            android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="background auto mute support" />
+                android:value="background timetable status refresh" />
         </service>
 
         <receiver
             android:name=".AlarmReceiver"
+            android:directBootAware="true"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.timetable.ACTION_SILENT"/>
                 <action android:name="com.timetable.ACTION_RESTORE"/>
+                <action android:name="com.timetable.ACTION_REMIND_CLASS"/>
+                <action android:name="com.timetable.ACTION_REMIND_SCHEDULE"/>
             </intent-filter>
         </receiver>
     </application>
@@ -68,3 +73,4 @@
         </intent>
     </queries>
 </manifest>
+

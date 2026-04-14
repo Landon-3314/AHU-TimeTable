@@ -4,10 +4,24 @@ import 'package:provider/provider.dart';
 import '../core/app_colors.dart';
 import '../core/app_constants.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/settings/settings_section.dart';
 
-class ScheduleSettingsPage extends StatelessWidget {
+class ScheduleSettingsPage extends StatefulWidget {
   const ScheduleSettingsPage({super.key});
+
+  @override
+  State<ScheduleSettingsPage> createState() => _ScheduleSettingsPageState();
+}
+
+class _ScheduleSettingsPageState extends State<ScheduleSettingsPage> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,105 +30,108 @@ class ScheduleSettingsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(provider.t('schedule_time_settings'))),
       body: SafeArea(
-        child: ListView(
-          padding: AppSpacing.pagePadding,
-          children: [
-            _SettingsSection(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl,
-                  vertical: AppSpacing.lg,
+        child: LongScreenshotScrollCapture(
+          controller: _scrollController,
+          child: ListView(
+            controller: _scrollController,
+            padding: AppSpacing.pagePadding,
+            children: [
+              _SettingsSection(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                    vertical: AppSpacing.lg,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        provider.t('timeline_density'),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        '${provider.pixelsPerMinute.toStringAsFixed(1)} px / ${provider.t('minutes_suffix')}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Slider(
+                        value: provider.pixelsPerMinute,
+                        min: 0.6,
+                        max: 2.0,
+                        divisions: 14,
+                        label:
+                            '${provider.pixelsPerMinute.toStringAsFixed(1)} px/${provider.t('minutes_suffix')}',
+                        onChanged: provider.updatePixelsPerMinute,
+                      ),
+                    ],
+                  ),
                 ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              _SettingsSection(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      provider.t('timeline_density'),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                    _SliderSettingTile(
+                      title: provider.t('class_duration'),
+                      value: provider.classDuration,
+                      min: 30,
+                      max: 60,
+                      unit: provider.t('minutes_suffix'),
+                      onChanged: provider.updateClassDuration,
                     ),
-                    const SizedBox(height: AppSpacing.xxs),
-                    Text(
-                      '${provider.pixelsPerMinute.toStringAsFixed(1)} px / ${provider.t('minutes_suffix')}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    const Divider(height: 1),
+                    _SliderSettingTile(
+                      title: provider.t('short_break'),
+                      value: provider.shortBreak,
+                      min: 0,
+                      max: 20,
+                      unit: provider.t('minutes_suffix'),
+                      onChanged: provider.updateShortBreak,
                     ),
-                    Slider(
-                      value: provider.pixelsPerMinute,
-                      min: 0.6,
-                      max: 2.0,
-                      divisions: 14,
-                      label:
-                          '${provider.pixelsPerMinute.toStringAsFixed(1)} px/${provider.t('minutes_suffix')}',
-                      onChanged: provider.updatePixelsPerMinute,
+                    const Divider(height: 1),
+                    _SliderSettingTile(
+                      title: provider.t('big_break'),
+                      value: provider.bigBreak,
+                      min: 10,
+                      max: 30,
+                      unit: provider.t('minutes_suffix'),
+                      onChanged: provider.updateBigBreak,
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            _SettingsSection(
-              child: Column(
-                children: [
-                  _SliderSettingTile(
-                    title: provider.t('class_duration'),
-                    value: provider.classDuration,
-                    min: 30,
-                    max: 60,
-                    unit: provider.t('minutes_suffix'),
-                    onChanged: provider.updateClassDuration,
-                  ),
-                  const Divider(height: 1),
-                  _SliderSettingTile(
-                    title: provider.t('short_break'),
-                    value: provider.shortBreak,
-                    min: 0,
-                    max: 20,
-                    unit: provider.t('minutes_suffix'),
-                    onChanged: provider.updateShortBreak,
-                  ),
-                  const Divider(height: 1),
-                  _SliderSettingTile(
-                    title: provider.t('big_break'),
-                    value: provider.bigBreak,
-                    min: 10,
-                    max: 30,
-                    unit: provider.t('minutes_suffix'),
-                    onChanged: provider.updateBigBreak,
-                  ),
-                ],
+              const SizedBox(height: AppSpacing.xl),
+              _SessionSection(
+                title: provider.t('morning'),
+                startTime: provider.morningStartTime,
+                classCount: provider.morningClasses,
+                onTimeChanged: provider.updateMorningStartTime,
+                onCountChanged: provider.updateMorningClasses,
+                maxClasses: 8,
               ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            _SessionSection(
-              title: provider.t('morning'),
-              startTime: provider.morningStartTime,
-              classCount: provider.morningClasses,
-              onTimeChanged: provider.updateMorningStartTime,
-              onCountChanged: provider.updateMorningClasses,
-              maxClasses: 8,
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            _SessionSection(
-              title: provider.t('afternoon'),
-              startTime: provider.afternoonStartTime,
-              classCount: provider.afternoonClasses,
-              onTimeChanged: provider.updateAfternoonStartTime,
-              onCountChanged: provider.updateAfternoonClasses,
-              maxClasses: 8,
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            _SessionSection(
-              title: provider.t('evening'),
-              startTime: provider.eveningStartTime,
-              classCount: provider.eveningClasses,
-              onTimeChanged: provider.updateEveningStartTime,
-              onCountChanged: provider.updateEveningClasses,
-              maxClasses: 6,
-            ),
-          ],
+              const SizedBox(height: AppSpacing.xl),
+              _SessionSection(
+                title: provider.t('afternoon'),
+                startTime: provider.afternoonStartTime,
+                classCount: provider.afternoonClasses,
+                onTimeChanged: provider.updateAfternoonStartTime,
+                onCountChanged: provider.updateAfternoonClasses,
+                maxClasses: 8,
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              _SessionSection(
+                title: provider.t('evening'),
+                startTime: provider.eveningStartTime,
+                classCount: provider.eveningClasses,
+                onTimeChanged: provider.updateEveningStartTime,
+                onCountChanged: provider.updateEveningClasses,
+                maxClasses: 6,
+              ),
+            ],
+          ),
         ),
       ),
     );

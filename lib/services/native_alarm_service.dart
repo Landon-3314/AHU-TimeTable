@@ -57,6 +57,42 @@ class NativeAlarmService {
     }
   }
 
+  Future<void> setForegroundServiceEnabled(bool enabled) async {
+    try {
+      await _channel.invokeMethod<void>('setForegroundServiceEnabled', {
+        'enabled': enabled,
+      });
+    } catch (e) {
+      debugPrint('[NativeAlarm] setForegroundServiceEnabled failed: $e');
+    }
+  }
+
+  Future<void> refreshForegroundService() async {
+    try {
+      await _channel.invokeMethod<void>('refreshForegroundService');
+    } catch (e) {
+      debugPrint('[NativeAlarm] refreshForegroundService failed: $e');
+    }
+  }
+
+  Future<bool> openRomPermissionSettings() async {
+    try {
+      return await _channel.invokeMethod<bool>('openRomPermissionSettings') ??
+          false;
+    } catch (e) {
+      debugPrint('[NativeAlarm] openRomPermissionSettings failed: $e');
+      return false;
+    }
+  }
+
+  Future<void> runOneMinuteMuteTest() async {
+    try {
+      await _channel.invokeMethod<void>('runOneMinuteMuteTest');
+    } catch (e) {
+      debugPrint('[NativeAlarm] runOneMinuteMuteTest failed: $e');
+    }
+  }
+
   Future<void> scheduleClasses({
     required List<Course> courses,
     required List<Event> events,
@@ -65,16 +101,14 @@ class NativeAlarmService {
   }) async {
     try {
       final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
       final timeSlots = settings.timeSlots;
       final payload = <Map<String, dynamic>>[];
+      final todayCourses = <Map<String, dynamic>>[];
       var courseIndex = 0;
 
       for (int dayOffset = 0; dayOffset < horizonDays; dayOffset++) {
-        final day = DateTime(
-          now.year,
-          now.month,
-          now.day,
-        ).add(Duration(days: dayOffset));
+        final day = today.add(Duration(days: dayOffset));
         final weekIndex = _weekIndexOf(day, settings.semesterStartDate);
         if (weekIndex == null ||
             weekIndex < 1 ||
@@ -110,13 +144,24 @@ class NativeAlarmService {
             endSlot.endTime.hour,
             endSlot.endTime.minute,
           );
+          final locationText = course.location.trim();
+
+          if (dayOffset == 0) {
+            todayCourses.add({
+              'courseName': course.name,
+              'location': locationText,
+              'startAtMillis': startTime.millisecondsSinceEpoch,
+              'endAtMillis': endTime.millisecondsSinceEpoch,
+            });
+          }
 
           if (!endTime.isAfter(now)) {
             continue;
           }
 
           int? reminderAtMillis;
-          if (settings.reminderAdvanceMinutes > 0) {
+          if (settings.courseReminderEnabled &&
+              settings.reminderAdvanceMinutes > 0) {
             final reminderAt = startTime.subtract(
               Duration(minutes: settings.reminderAdvanceMinutes),
             );
@@ -127,16 +172,29 @@ class NativeAlarmService {
 
           payload.add({
             'courseIndex': courseIndex++,
-            'silentAtMillis': startTime.millisecondsSinceEpoch,
-            'restoreAtMillis': endTime.millisecondsSinceEpoch,
+            'scheduleType': 'course',
+            'courseName': course.name,
+            'location': locationText,
+            'windowStartAtMillis': startTime.millisecondsSinceEpoch,
+            'windowEndAtMillis': endTime.millisecondsSinceEpoch,
+            'silentAtMillis': settings.autoMuteEnabled
+                ? startTime.millisecondsSinceEpoch
+                : null,
+            'restoreAtMillis': settings.autoMuteEnabled
+                ? endTime.millisecondsSinceEpoch
+                : null,
             'reminderAtMillis': reminderAtMillis,
-            'title': '\u5373\u5c06\u4e0a\u8bfe: ${course.name}',
-            'content':
-                '\u4e0a\u8bfe\u5730\u70b9: ${course.location.isEmpty ? "\u672a\u77e5" : course.location}',
+            'title': '即将上课: ${course.name}',
+            'content': '上课地点: ${locationText.isEmpty ? '未知' : locationText}',
             'reminderAction': 'com.timetable.ACTION_REMIND_CLASS',
           });
         }
       }
+
+      todayCourses.sort(
+        (a, b) =>
+            (a['startAtMillis'] as int).compareTo(b['startAtMillis'] as int),
+      );
 
       if (settings.eventReminderAdvanceMinutes > 0) {
         for (final event in events) {
@@ -157,13 +215,18 @@ class NativeAlarmService {
 
           payload.add({
             'courseIndex': courseIndex++,
-            'silentAtMillis': eventTime.millisecondsSinceEpoch,
-            'restoreAtMillis': eventTime.millisecondsSinceEpoch,
+            'scheduleType': 'event',
+            'courseName': event.name,
+            'location': event.location.trim(),
+            'windowStartAtMillis': null,
+            'windowEndAtMillis': null,
+            'silentAtMillis': null,
+            'restoreAtMillis': null,
             'reminderAtMillis': reminderAt.millisecondsSinceEpoch,
-            'title': '\u65e5\u7a0b\u63d0\u9192: ${event.name}',
-            'content': event.location.isEmpty
-                ? '\u5373\u5c06\u5f00\u59cb\uff0c\u8bf7\u6ce8\u610f\u65f6\u95f4'
-                : '\u5730\u70b9: ${event.location}',
+            'title': '日程提醒: ${event.name}',
+            'content': event.location.trim().isEmpty
+                ? '即将开始，请注意时间'
+                : '地点: ${event.location.trim()}',
             'reminderAction': 'com.timetable.ACTION_REMIND_SCHEDULE',
           });
         }
@@ -171,6 +234,7 @@ class NativeAlarmService {
 
       await _channel.invokeMethod<void>('scheduleAllClasses', {
         'classes': payload,
+        'todayCourses': todayCourses,
       });
     } catch (e) {
       debugPrint('[NativeAlarm] scheduleClasses failed: $e');

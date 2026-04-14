@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +7,7 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_services.dart';
 import '../services/native_alarm_service.dart';
+import '../widgets/long_screenshot_scroll_capture.dart';
 
 class ReminderSettingsPage extends StatefulWidget {
   const ReminderSettingsPage({super.key});
@@ -17,6 +17,14 @@ class ReminderSettingsPage extends StatefulWidget {
 }
 
 class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
@@ -33,155 +41,141 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
         : 10;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('\u4e0a\u8bfe\u9759\u97f3\u4e0e\u63d0\u9192'),
-      ),
-      body: ListView(
-        padding: AppSpacing.pagePadding,
-        children: [
-          Card(
-            child: SwitchListTile(
-              secondary: const Icon(Icons.shield_outlined),
-              title: const Text('\u524d\u53f0\u4fdd\u6d3b\u670d\u52a1'),
-              subtitle: const Text(
-                '\u7528\u4e8e\u964d\u4f4e\u606f\u5c4f\u6216\u7cfb\u7edf\u9650\u5236\u5bf9\u63d0\u9192\u4e0e\u9759\u97f3\u89e6\u53d1\u7684\u5f71\u54cd',
+      appBar: AppBar(title: const Text('上课静音与提醒')),
+      body: LongScreenshotScrollCapture(
+        controller: _scrollController,
+        child: ListView(
+          controller: _scrollController,
+          padding: AppSpacing.pagePadding,
+          children: [
+            Card(
+              child: SwitchListTile(
+                secondary: const Icon(Icons.shield_outlined),
+                title: const Text('前台保活服务'),
+                subtitle: const Text('用于降低息屏或系统限制对提醒与静音触发的影响'),
+                value: provider.backgroundServiceEnabled,
+                onChanged: (value) =>
+                    _onForegroundServiceToggled(provider, value),
               ),
-              value: provider.backgroundServiceEnabled,
-              onChanged: (value) =>
-                  _onForegroundServiceToggled(provider, value),
             ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: SwitchListTile(
-              secondary: const Icon(Icons.volume_off_outlined),
-              title: const Text('\u4e0a\u8bfe\u81ea\u52a8\u9759\u97f3'),
-              subtitle: const Text(
-                '\u4ec5\u5728\u9700\u8981\u7684\u8bfe\u7a0b\u65f6\u95f4\u5185\u6267\u884c\u81ea\u52a8\u9759\u97f3\u4e0e\u6062\u590d',
-              ),
-              value: provider.autoMuteEnabled,
-              onChanged: (value) => _onAutoMuteToggled(provider, value),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  secondary: const Icon(Icons.notifications_active_outlined),
-                  title: const Text('\u5f00\u542f\u8bfe\u524d\u63d0\u9192'),
-                  subtitle: Text(
-                    provider.courseReminderEnabled
-                        ? '\u5df2\u5f00\u542f\uff0c\u63d0\u524d ${provider.reminderAdvanceMinutes} \u5206\u949f\u63d0\u9192'
-                        : '\u5173\u95ed',
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.volume_off_outlined),
+                    title: const Text('上课自动静音'),
+                    subtitle: const Text('仅在需要的课程时间内执行自动静音与恢复'),
+                    value: provider.autoMuteEnabled,
+                    onChanged: (value) => _onAutoMuteToggled(provider, value),
                   ),
-                  value: provider.courseReminderEnabled,
-                  onChanged: (value) =>
-                      _onCourseReminderChanged(context, provider, value),
-                ),
-                if (provider.courseReminderEnabled) ...[
                   const Divider(height: 1),
                   ListTile(
-                    leading: const Icon(Icons.timer_outlined),
-                    title: const Text('\u63d0\u524d\u63d0\u9192\u65f6\u95f4'),
-                    subtitle: Text(
-                      '\u5f53\u524d\uff1a\u63d0\u524d ${provider.reminderAdvanceMinutes} \u5206\u949f',
-                    ),
-                    trailing: DropdownButton<int>(
-                      value: courseOffsetValue,
-                      underline: const SizedBox.shrink(),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 5,
-                          child: Text('\u63d0\u524d 5 \u5206\u949f'),
-                        ),
-                        DropdownMenuItem(
-                          value: 10,
-                          child: Text('\u63d0\u524d 10 \u5206\u949f'),
-                        ),
-                        DropdownMenuItem(
-                          value: 15,
-                          child: Text('\u63d0\u524d 15 \u5206\u949f'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          _onCourseReminderOffsetChanged(
-                            context,
-                            provider,
-                            value,
-                          );
-                        }
-                      },
-                    ),
+                    leading: const Icon(Icons.security_update_warning_outlined),
+                    title: const Text('如果静音失效，点此开启后台权限'),
+                    subtitle: const Text('将尝试打开自启动管理或后台高耗电允许页面'),
+                    onTap: _openRomPermissionHelp,
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  secondary: const Icon(Icons.event_note_outlined),
-                  title: const Text('\u65e5\u7a0b\u63d0\u9192\u5f00\u5173'),
-                  subtitle: Text(
-                    provider.eventReminderAdvanceMinutes > 0
-                        ? '\u5df2\u5f00\u542f\uff0c\u63d0\u524d ${provider.eventReminderAdvanceMinutes} \u5206\u949f\u63d0\u9192'
-                        : '\u5173\u95ed',
-                  ),
-                  value: provider.eventReminderAdvanceMinutes > 0,
-                  onChanged: (value) =>
-                      _onEventReminderChanged(context, provider, value),
-                ),
-                if (provider.eventReminderAdvanceMinutes > 0) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.schedule_send_outlined),
-                    title: const Text(
-                      '\u65e5\u7a0b\u63d0\u524d\u63d0\u9192\u65f6\u95f4',
-                    ),
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.notifications_active_outlined),
+                    title: const Text('开启课前提醒'),
                     subtitle: Text(
-                      '\u5f53\u524d\uff1a\u63d0\u524d ${provider.eventReminderAdvanceMinutes} \u5206\u949f',
+                      provider.courseReminderEnabled
+                          ? '已开启，提前 ${provider.reminderAdvanceMinutes} 分钟提醒'
+                          : '关闭',
                     ),
-                    trailing: DropdownButton<int>(
-                      value: eventOffsetValue,
-                      underline: const SizedBox.shrink(),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 5,
-                          child: Text('\u63d0\u524d 5 \u5206\u949f'),
-                        ),
-                        DropdownMenuItem(
-                          value: 10,
-                          child: Text('\u63d0\u524d 10 \u5206\u949f'),
-                        ),
-                        DropdownMenuItem(
-                          value: 15,
-                          child: Text('\u63d0\u524d 15 \u5206\u949f'),
-                        ),
-                        DropdownMenuItem(
-                          value: 30,
-                          child: Text('\u63d0\u524d 30 \u5206\u949f'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          _onEventReminderOffsetChanged(
-                            context,
-                            provider,
-                            value,
-                          );
-                        }
-                      },
-                    ),
+                    value: provider.courseReminderEnabled,
+                    onChanged: (value) =>
+                        _onCourseReminderChanged(context, provider, value),
                   ),
+                  if (provider.courseReminderEnabled) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.timer_outlined),
+                      title: const Text('提前提醒时间'),
+                      subtitle: Text(
+                        '当前：提前 ${provider.reminderAdvanceMinutes} 分钟',
+                      ),
+                      trailing: DropdownButton<int>(
+                        value: courseOffsetValue,
+                        underline: const SizedBox.shrink(),
+                        items: const [
+                          DropdownMenuItem(value: 5, child: Text('提前 5 分钟')),
+                          DropdownMenuItem(value: 10, child: Text('提前 10 分钟')),
+                          DropdownMenuItem(value: 15, child: Text('提前 15 分钟')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            _onCourseReminderOffsetChanged(
+                              context,
+                              provider,
+                              value,
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.event_note_outlined),
+                    title: const Text('日程提醒开关'),
+                    subtitle: Text(
+                      provider.eventReminderAdvanceMinutes > 0
+                          ? '已开启，提前 ${provider.eventReminderAdvanceMinutes} 分钟提醒'
+                          : '关闭',
+                    ),
+                    value: provider.eventReminderAdvanceMinutes > 0,
+                    onChanged: (value) =>
+                        _onEventReminderChanged(context, provider, value),
+                  ),
+                  if (provider.eventReminderAdvanceMinutes > 0) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.schedule_send_outlined),
+                      title: const Text('日程提前提醒时间'),
+                      subtitle: Text(
+                        '当前：提前 ${provider.eventReminderAdvanceMinutes} 分钟',
+                      ),
+                      trailing: DropdownButton<int>(
+                        value: eventOffsetValue,
+                        underline: const SizedBox.shrink(),
+                        items: const [
+                          DropdownMenuItem(value: 5, child: Text('提前 5 分钟')),
+                          DropdownMenuItem(value: 10, child: Text('提前 10 分钟')),
+                          DropdownMenuItem(value: 15, child: Text('提前 15 分钟')),
+                          DropdownMenuItem(value: 30, child: Text('提前 30 分钟')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            _onEventReminderOffsetChanged(
+                              context,
+                              provider,
+                              value,
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -206,6 +200,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     return NativeAlarmService.instance.ensureExactAlarmPermission();
   }
 
+  Future<void> _openRomPermissionHelp() async {
+    await NativeAlarmService.instance.openRomPermissionSettings();
+    _showSnackBar('已尝试打开后台权限页面，请在系统页面中允许自启动或后台运行');
+  }
+
   Future<void> _onForegroundServiceToggled(
     SettingsProvider provider,
     bool value,
@@ -213,51 +212,27 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     if (value) {
       final notifOk = await _ensureNotificationPermission();
       if (!notifOk) {
-        _showSnackBar(
-          '\u8bf7\u5148\u6388\u4e88\u901a\u77e5\u6743\u9650\u518d\u5f00\u542f\u4fdd\u6d3b\u670d\u52a1',
-        );
+        _showSnackBar('请先授予通知权限再开启保活服务');
         return;
       }
 
       await NativeAlarmService.instance.requestIgnoreBatteryOptimization();
 
-      try {
-        final service = FlutterBackgroundService();
-        final isRunning = await service.isRunning();
-        if (!isRunning) {
-          await service.startService();
-        }
-
-        final result = await provider.toggleBackgroundServiceWithCheck(true);
-        if (!result.success) {
-          _showSnackBar(
-            '\u5f00\u542f\u4fdd\u6d3b\u670d\u52a1\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u901a\u77e5\u6743\u9650',
-          );
-          return;
-        }
-        await _refreshSchedules(provider);
-      } catch (e) {
-        _showSnackBar(
-          '\u542f\u52a8\u524d\u53f0\u4fdd\u6d3b\u670d\u52a1\u5931\u8d25\uff1a$e',
-        );
+      final result = await provider.toggleBackgroundServiceWithCheck(true);
+      if (!result.success) {
+        _showSnackBar('开启保活服务失败，请检查通知权限');
+        return;
       }
+      await _refreshSchedules(provider);
       return;
     }
 
-    try {
-      final service = FlutterBackgroundService();
-      final isRunning = await service.isRunning();
-      if (isRunning) {
-        service.invoke('stop_service');
-      }
-
-      await provider.toggleBackgroundServiceWithCheck(false);
-      await _refreshSchedules(provider);
-    } catch (e) {
-      _showSnackBar(
-        '\u5173\u95ed\u524d\u53f0\u4fdd\u6d3b\u670d\u52a1\u5931\u8d25\uff1a$e',
-      );
+    final result = await provider.toggleBackgroundServiceWithCheck(false);
+    if (!result.success) {
+      _showSnackBar('关闭保活服务失败');
+      return;
     }
+    await _refreshSchedules(provider);
   }
 
   Future<void> _onAutoMuteToggled(SettingsProvider provider, bool value) async {
@@ -269,25 +244,19 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
 
     final notifOk = await _ensureNotificationPermission();
     if (!notifOk) {
-      _showSnackBar(
-        '\u8bf7\u5148\u6388\u4e88\u901a\u77e5\u6743\u9650\u518d\u5f00\u542f\u81ea\u52a8\u9759\u97f3',
-      );
+      _showSnackBar('请先授予通知权限再开启自动静音');
       return;
     }
 
     final alarmOk = await _ensureExactAlarmPermission();
     if (!alarmOk) {
-      _showSnackBar(
-        '\u8bf7\u5148\u6388\u4e88\u7cbe\u786e\u95f9\u949f\u6743\u9650',
-      );
+      _showSnackBar('请先授予精确闹钟权限');
       return;
     }
 
     final dndOk = await _ensureDndPermission();
     if (!dndOk) {
-      _showSnackBar(
-        '\u8bf7\u5148\u6388\u4e88\u52ff\u6270\u6743\u9650\u518d\u5f00\u542f\u81ea\u52a8\u9759\u97f3',
-      );
+      _showSnackBar('请先授予勿扰权限再开启自动静音');
       return;
     }
 
@@ -295,9 +264,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
 
     final result = await provider.toggleAutoMuteWithCheck(true);
     if (!result.success) {
-      _showSnackBar(
-        '\u5f00\u542f\u4e0a\u8bfe\u81ea\u52a8\u9759\u97f3\u5931\u8d25',
-      );
+      _showSnackBar('开启上课自动静音失败');
       return;
     }
 
@@ -312,16 +279,12 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     if (value) {
       final notifOk = await _ensureNotificationPermission();
       if (!notifOk) {
-        _showSnackBar(
-          '\u8bf7\u5148\u6388\u4e88\u901a\u77e5\u6743\u9650\u518d\u5f00\u542f\u8bfe\u524d\u63d0\u9192',
-        );
+        _showSnackBar('请先授予通知权限再开启课前提醒');
         return;
       }
       final alarmOk = await _ensureExactAlarmPermission();
       if (!alarmOk) {
-        _showSnackBar(
-          '\u8bf7\u5148\u6388\u4e88\u7cbe\u786e\u95f9\u949f\u6743\u9650',
-        );
+        _showSnackBar('请先授予精确闹钟权限');
         return;
       }
       await _offerForegroundServiceEnableIfNeeded(provider);
@@ -332,9 +295,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
       return;
     }
     if (!result.success) {
-      _showSnackBar(
-        '\u5f00\u542f\u8bfe\u524d\u63d0\u9192\u5931\u8d25\uff0c\u8bf7\u5148\u5b8c\u6210\u6743\u9650\u6388\u6743',
-      );
+      _showSnackBar('开启课前提醒失败，请先完成权限授权');
       return;
     }
     await _refreshSchedules(provider);
@@ -350,9 +311,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
       return;
     }
     if (!result.success) {
-      _showSnackBar(
-        '\u66f4\u65b0\u8bfe\u524d\u63d0\u9192\u65f6\u95f4\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u6743\u9650',
-      );
+      _showSnackBar('更新课前提醒时间失败，请检查权限');
       return;
     }
     await _refreshSchedules(provider);
@@ -366,16 +325,12 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     if (value) {
       final notifOk = await _ensureNotificationPermission();
       if (!notifOk) {
-        _showSnackBar(
-          '\u8bf7\u5148\u6388\u4e88\u901a\u77e5\u6743\u9650\u518d\u5f00\u542f\u65e5\u7a0b\u63d0\u9192',
-        );
+        _showSnackBar('请先授予通知权限再开启日程提醒');
         return;
       }
       final alarmOk = await _ensureExactAlarmPermission();
       if (!alarmOk) {
-        _showSnackBar(
-          '\u8bf7\u5148\u6388\u4e88\u7cbe\u786e\u95f9\u949f\u6743\u9650',
-        );
+        _showSnackBar('请先授予精确闹钟权限');
         return;
       }
       await _offerForegroundServiceEnableIfNeeded(provider);
@@ -388,9 +343,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
       return;
     }
     if (!result.success) {
-      _showSnackBar(
-        '\u5f00\u542f\u65e5\u7a0b\u63d0\u9192\u5931\u8d25\uff0c\u8bf7\u5148\u5b8c\u6210\u6743\u9650\u6388\u6743',
-      );
+      _showSnackBar('开启日程提醒失败，请先完成权限授权');
       return;
     }
     await _refreshSchedules(provider);
@@ -406,9 +359,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
       return;
     }
     if (!result.success) {
-      _showSnackBar(
-        '\u66f4\u65b0\u65e5\u7a0b\u63d0\u9192\u65f6\u95f4\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u6743\u9650',
-      );
+      _showSnackBar('更新日程提醒时间失败，请检查权限');
       return;
     }
     await _refreshSchedules(provider);
@@ -425,18 +376,16 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('\u5efa\u8bae\u5f00\u542f\u4fdd\u6d3b\u670d\u52a1'),
-          content: const Text(
-            '\u4e3a\u4e86\u786e\u4fdd\u606f\u5c4f\u72b6\u6001\u4e0b\u63d0\u9192\u548c\u9759\u97f3\u80fd\u51c6\u65f6\u89e6\u53d1\uff0c\u5efa\u8bae\u5f00\u542f\u524d\u53f0\u4fdd\u6d3b\u670d\u52a1\u4ee5\u9632\u6b62\u7cfb\u7edf\u6740\u540e\u53f0\u3002',
-          ),
+          title: const Text('建议开启保活服务'),
+          content: const Text('为了确保息屏状态下提醒和静音能准时触发，建议开启前台保活服务以防止系统杀后台。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('\u6682\u4e0d\u5f00\u542f'),
+              child: const Text('暂不开启'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('\u53bb\u5f00\u542f'),
+              child: const Text('去开启'),
             ),
           ],
         );

@@ -22,12 +22,13 @@ class AppServices {
     required List<Event> events,
     required SettingsProvider settings,
   }) async {
-    final shouldScheduleNativeAlarms =
+    final shouldSyncNativeSchedule =
         settings.autoMuteEnabled ||
         settings.courseReminderEnabled ||
-        settings.eventReminderAdvanceMinutes > 0;
+        settings.eventReminderAdvanceMinutes > 0 ||
+        settings.backgroundServiceEnabled;
 
-    if (shouldScheduleNativeAlarms) {
+    if (shouldSyncNativeSchedule) {
       await NativeAlarmService.instance.scheduleClasses(
         courses: courses,
         events: events,

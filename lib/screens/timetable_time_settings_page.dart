@@ -5,9 +5,24 @@ import '../core/app_constants.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/native_alarm_service.dart';
+import '../widgets/long_screenshot_scroll_capture.dart';
 
-class TimetableTimeSettingsPage extends StatelessWidget {
+class TimetableTimeSettingsPage extends StatefulWidget {
   const TimetableTimeSettingsPage({super.key});
+
+  @override
+  State<TimetableTimeSettingsPage> createState() =>
+      _TimetableTimeSettingsPageState();
+}
+
+class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,123 +30,127 @@ class TimetableTimeSettingsPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('学期与时间配置')),
-      body: ListView(
-        padding: AppSpacing.pagePadding,
-        children: [
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.date_range_outlined),
-                  title: const Text('学期起始日期'),
-                  subtitle: Text(_formatDate(provider.semesterStartDate)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _pickSemesterStartDate(context, provider),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.calendar_view_week_outlined),
-                  title: const Text('上课周数'),
-                  subtitle: Text('${provider.totalWeeks} 周'),
-                  trailing: DropdownButton<int>(
-                    value: provider.totalWeeks,
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      for (int week = 12; week <= 30; week++)
-                        DropdownMenuItem<int>(
-                          value: week,
-                          child: Text('$week'),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        _updateAndRefresh(
-                          context,
-                          provider,
-                          () => provider.updateTotalWeeks(value),
-                        );
-                      }
-                    },
+      body: LongScreenshotScrollCapture(
+        controller: _scrollController,
+        child: ListView(
+          controller: _scrollController,
+          padding: AppSpacing.pagePadding,
+          children: [
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.date_range_outlined),
+                    title: const Text('学期起始日期'),
+                    subtitle: Text(_formatDate(provider.semesterStartDate)),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _pickSemesterStartDate(context, provider),
                   ),
-                ),
-              ],
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.calendar_view_week_outlined),
+                    title: const Text('上课周数'),
+                    subtitle: Text('${provider.totalWeeks} 周'),
+                    trailing: DropdownButton<int>(
+                      value: provider.totalWeeks,
+                      underline: const SizedBox.shrink(),
+                      items: [
+                        for (int week = 12; week <= 30; week++)
+                          DropdownMenuItem<int>(
+                            value: week,
+                            child: Text('$week'),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          _updateAndRefresh(
+                            context,
+                            provider,
+                            () => provider.updateTotalWeeks(value),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Card(
-            child: Column(
-              children: [
-                _durationTile(
-                  context: context,
-                  icon: Icons.timelapse_outlined,
-                  title: '每节课时长',
-                  value: provider.classDuration,
-                  min: 30,
-                  max: 60,
-                  onChanged: (v) => _updateAndRefresh(
-                    context,
-                    provider,
-                    () => provider.updateClassDuration(v),
+            const SizedBox(height: AppSpacing.xl),
+            Card(
+              child: Column(
+                children: [
+                  _durationTile(
+                    context: context,
+                    icon: Icons.timelapse_outlined,
+                    title: '每节课时长',
+                    value: provider.classDuration,
+                    min: 30,
+                    max: 60,
+                    onChanged: (v) => _updateAndRefresh(
+                      context,
+                      provider,
+                      () => provider.updateClassDuration(v),
+                    ),
                   ),
-                ),
-                const Divider(height: 1),
-                _durationTile(
-                  context: context,
-                  icon: Icons.coffee_outlined,
-                  title: '课间时长',
-                  value: provider.shortBreak,
-                  min: 0,
-                  max: 30,
-                  onChanged: (v) => _updateAndRefresh(
-                    context,
-                    provider,
-                    () => provider.updateShortBreak(v),
+                  const Divider(height: 1),
+                  _durationTile(
+                    context: context,
+                    icon: Icons.coffee_outlined,
+                    title: '课间时长',
+                    value: provider.shortBreak,
+                    min: 0,
+                    max: 30,
+                    onChanged: (v) => _updateAndRefresh(
+                      context,
+                      provider,
+                      () => provider.updateShortBreak(v),
+                    ),
                   ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.schedule_outlined),
-                  title: const Text('大课间发生在第几节课后'),
-                  subtitle: Text('第 ${provider.bigBreakAfterPeriod} 节后'),
-                  trailing: DropdownButton<int>(
-                    value: provider.bigBreakAfterPeriod,
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      for (int period = 1; period <= 6; period++)
-                        DropdownMenuItem<int>(
-                          value: period,
-                          child: Text('第$period节后'),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        _updateAndRefresh(
-                          context,
-                          provider,
-                          () => provider.updateBigBreakAfterPeriod(value),
-                        );
-                      }
-                    },
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.schedule_outlined),
+                    title: const Text('大课间发生在第几节课后'),
+                    subtitle: Text('第 ${provider.bigBreakAfterPeriod} 节后'),
+                    trailing: DropdownButton<int>(
+                      value: provider.bigBreakAfterPeriod,
+                      underline: const SizedBox.shrink(),
+                      items: [
+                        for (int period = 1; period <= 6; period++)
+                          DropdownMenuItem<int>(
+                            value: period,
+                            child: Text('第$period节后'),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          _updateAndRefresh(
+                            context,
+                            provider,
+                            () => provider.updateBigBreakAfterPeriod(value),
+                          );
+                        }
+                      },
+                    ),
                   ),
-                ),
-                const Divider(height: 1),
-                _durationTile(
-                  context: context,
-                  icon: Icons.wb_sunny_outlined,
-                  title: '大课间时长',
-                  value: provider.bigBreak,
-                  min: 5,
-                  max: 60,
-                  onChanged: (v) => _updateAndRefresh(
-                    context,
-                    provider,
-                    () => provider.updateBigBreak(v),
+                  const Divider(height: 1),
+                  _durationTile(
+                    context: context,
+                    icon: Icons.wb_sunny_outlined,
+                    title: '大课间时长',
+                    value: provider.bigBreak,
+                    min: 5,
+                    max: 60,
+                    onChanged: (v) => _updateAndRefresh(
+                      context,
+                      provider,
+                      () => provider.updateBigBreak(v),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

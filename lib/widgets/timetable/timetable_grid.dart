@@ -5,10 +5,11 @@ import '../../core/app_constants.dart';
 import '../../models/course.dart';
 import '../../models/event.dart';
 import '../../models/timetable_view_data.dart';
+import '../long_screenshot_scroll_capture.dart';
 import 'course_card.dart';
 import 'event_card.dart';
 
-class DayAgendaView extends StatelessWidget {
+class DayAgendaView extends StatefulWidget {
   const DayAgendaView({
     super.key,
     required this.pageData,
@@ -27,54 +28,74 @@ class DayAgendaView extends StatelessWidget {
   final String locationPendingLabel;
 
   @override
+  State<DayAgendaView> createState() => _DayAgendaViewState();
+}
+
+class _DayAgendaViewState extends State<DayAgendaView> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: AppSpacing.xs),
         Expanded(
-          child: pageData.isEmpty
+          child: widget.pageData.isEmpty
               ? EmptyScheduleState(
-                  title: pageData.emptyTitle,
-                  subtitle: pageData.emptySubtitle,
+                  title: widget.pageData.emptyTitle,
+                  subtitle: widget.pageData.emptySubtitle,
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xl,
-                    AppSpacing.sm,
-                    AppSpacing.xl,
-                    AppSpacing.xxl,
-                  ),
-                  itemCount: pageData.items.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
+              : LongScreenshotScrollCapture(
+                  controller: _scrollController,
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.sm,
+                      AppSpacing.xl,
+                      AppSpacing.xxl,
+                    ),
+                    itemCount: widget.pageData.items.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: ScheduleHeaderCard(
+                            title: widget.pageData.headerTitle,
+                            subtitle: widget.pageData.headerSubtitle,
+                          ),
+                        );
+                      }
+
+                      final item = widget.pageData.items[index - 1];
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: ScheduleHeaderCard(
-                          title: pageData.headerTitle,
-                          subtitle: pageData.headerSubtitle,
-                        ),
+                        child: item.isCourse
+                            ? CourseCard(
+                                course: item.course!,
+                                periodText: widget.coursePeriodTextBuilder(
+                                  item.course!,
+                                ),
+                                accentColor: Color(item.course!.colorValue),
+                                onTap: () => widget.onCourseTap(item.course!),
+                              )
+                            : EventCard(
+                                event: item.event!,
+                                markerLabel: widget.eventMarkerLabel,
+                                locationPendingLabel:
+                                    widget.locationPendingLabel,
+                                onTap: () => widget.onEventTap(item.event!),
+                              ),
                       );
-                    }
-
-                    final item = pageData.items[index - 1];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: item.isCourse
-                          ? CourseCard(
-                              course: item.course!,
-                              periodText: coursePeriodTextBuilder(item.course!),
-                              accentColor: Color(item.course!.colorValue),
-                              onTap: () => onCourseTap(item.course!),
-                            )
-                          : EventCard(
-                              event: item.event!,
-                              markerLabel: eventMarkerLabel,
-                              locationPendingLabel: locationPendingLabel,
-                              onTap: () => onEventTap(item.event!),
-                            ),
-                    );
-                  },
+                    },
+                  ),
                 ),
         ),
       ],
@@ -149,7 +170,7 @@ class DayWeekHeader extends StatelessWidget {
   }
 }
 
-class TimetableGrid extends StatelessWidget {
+class TimetableGrid extends StatefulWidget {
   const TimetableGrid({
     super.key,
     required this.pageData,
@@ -164,34 +185,51 @@ class TimetableGrid extends StatelessWidget {
   final String Function(Course course) coursePeriodTextBuilder;
 
   @override
+  State<TimetableGrid> createState() => _TimetableGridState();
+}
+
+class _TimetableGridState extends State<TimetableGrid> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: AppSpacing.listPagePadding,
-      children: [
-        Text(
-          pageData.title,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          pageData.subtitle,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        for (final section in pageData.sections) ...[
-          _WeekdaySection(
-            section: section,
-            onCourseTap: onCourseTap,
-            onEventTap: onEventTap,
-            coursePeriodTextBuilder: coursePeriodTextBuilder,
+    return LongScreenshotScrollCapture(
+      controller: _scrollController,
+      child: ListView(
+        controller: _scrollController,
+        padding: AppSpacing.listPagePadding,
+        children: [
+          Text(
+            widget.pageData.title,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 4),
+          Text(
+            widget.pageData.subtitle,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          for (final section in widget.pageData.sections) ...[
+            _WeekdaySection(
+              section: section,
+              onCourseTap: widget.onCourseTap,
+              onEventTap: widget.onEventTap,
+              coursePeriodTextBuilder: widget.coursePeriodTextBuilder,
+            ),
+            const SizedBox(height: 14),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

@@ -6,29 +6,37 @@ import android.content.Context
 import android.content.Intent
 
 object NativeAlarmScheduler {
+    const val PREFS = "native_alarm_prefs"
+
     const val ACTION_SILENT = "com.timetable.ACTION_SILENT"
     const val ACTION_RESTORE = "com.timetable.ACTION_RESTORE"
     const val ACTION_REMIND_CLASS = "com.timetable.ACTION_REMIND_CLASS"
     const val ACTION_REMIND_SCHEDULE = "com.timetable.ACTION_REMIND_SCHEDULE"
 
+    const val SCHEDULE_TYPE_COURSE = "course"
+    const val SCHEDULE_TYPE_EVENT = "event"
+
     const val EXTRA_COURSE_INDEX = "course_index"
     const val EXTRA_TITLE = "extra_title"
     const val EXTRA_CONTENT = "extra_content"
 
-    private const val PREFS = "native_alarm_prefs"
-    private const val LAST_COUNT_KEY = "last_scheduled_count"
-
     private const val RESTORE_CODE_OFFSET = 10000
     private const val BASE_CODE_REMINDER = 30000
+    private const val DIAGNOSTIC_REQUEST_CODE = 90001
 
     data class AlarmItem(
         val index: Int,
-        val silentAtMillis: Long,
-        val restoreAtMillis: Long,
+        val silentAtMillis: Long?,
+        val restoreAtMillis: Long?,
         val reminderAtMillis: Long?,
         val title: String?,
         val content: String?,
         val reminderAction: String = ACTION_REMIND_CLASS,
+        val scheduleType: String = SCHEDULE_TYPE_COURSE,
+        val courseName: String? = null,
+        val location: String? = null,
+        val windowStartAtMillis: Long? = null,
+        val windowEndAtMillis: Long? = null,
     )
 
     fun scheduleAll(
@@ -36,17 +44,13 @@ object NativeAlarmScheduler {
         items: List<AlarmItem>,
     ) {
         cancelAll(context)
+        NativeStateStore.saveAlarmItems(context, items)
         items.forEach { item ->
             scheduleClass(
                 context = context,
                 item = item,
             )
         }
-
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putInt(LAST_COUNT_KEY, items.size)
-            .apply()
     }
 
     fun scheduleClass(
@@ -56,33 +60,35 @@ object NativeAlarmScheduler {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val index = item.index
 
-        val silentIntent = Intent(context, AlarmReceiver::class.java).apply {
-            action = ACTION_SILENT
-            putExtra(EXTRA_COURSE_INDEX, index)
+        item.silentAtMillis?.let { silentAtMillis ->
+            val silentIntent = Intent(context, AlarmReceiver::class.java).apply {
+                action = ACTION_SILENT
+                putExtra(EXTRA_COURSE_INDEX, index)
+            }
+            val silentPendingIntent = PendingIntent.getBroadcast(
+                context,
+                index,
+                silentIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            setAlarmClock(alarmManager, silentAtMillis, silentPendingIntent)
         }
-        val restoreIntent = Intent(context, AlarmReceiver::class.java).apply {
-            action = ACTION_RESTORE
-            putExtra(EXTRA_COURSE_INDEX, index)
+
+        item.restoreAtMillis?.let { restoreAtMillis ->
+            val restoreIntent = Intent(context, AlarmReceiver::class.java).apply {
+                action = ACTION_RESTORE
+                putExtra(EXTRA_COURSE_INDEX, index)
+            }
+            val restorePendingIntent = PendingIntent.getBroadcast(
+                context,
+                index + RESTORE_CODE_OFFSET,
+                restoreIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            setAlarmClock(alarmManager, restoreAtMillis, restorePendingIntent)
         }
 
-        val silentPendingIntent = PendingIntent.getBroadcast(
-            context,
-            index,
-            silentIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val restorePendingIntent = PendingIntent.getBroadcast(
-            context,
-            index + RESTORE_CODE_OFFSET,
-            restoreIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        setExactAlarm(alarmManager, item.silentAtMillis, silentPendingIntent)
-        setExactAlarm(alarmManager, item.restoreAtMillis, restorePendingIntent)
-
-        val reminderAt = item.reminderAtMillis
-        if (reminderAt != null) {
+        item.reminderAtMillis?.let { reminderAt ->
             val reminderIntent = Intent(context, AlarmReceiver::class.java).apply {
                 action = item.reminderAction
                 putExtra(EXTRA_TITLE, item.title ?: "提醒")
@@ -95,14 +101,13 @@ object NativeAlarmScheduler {
                 reminderIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            setExactAlarm(alarmManager, reminderAt, reminderPendingIntent)
+            setAlarmClock(alarmManager, reminderAt, reminderPendingIntent)
         }
     }
 
     fun cancelAll(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val lastCount = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(LAST_COUNT_KEY, 0)
+        val lastCount = NativeStateStore.getLastScheduledCount(context)
 
         for (index in 0 until lastCount) {
             cancelByAction(context, alarmManager, ACTION_SILENT, index, index)
@@ -111,10 +116,31 @@ object NativeAlarmScheduler {
             cancelByAction(context, alarmManager, ACTION_REMIND_SCHEDULE, BASE_CODE_REMINDER + index, index)
         }
 
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putInt(LAST_COUNT_KEY, 0)
-            .apply()
+        cancelByAction(
+            context = context,
+            alarmManager = alarmManager,
+            action = ACTION_SILENT,
+            requestCode = DIAGNOSTIC_REQUEST_CODE,
+            index = DIAGNOSTIC_REQUEST_CODE,
+        )
+
+        NativeStateStore.clearAlarmItems(context)
+    }
+
+    fun scheduleOneMinuteMuteTest(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val triggerAtMillis = System.currentTimeMillis() + 60_000L
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_SILENT
+            putExtra(EXTRA_COURSE_INDEX, DIAGNOSTIC_REQUEST_CODE)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            DIAGNOSTIC_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        setAlarmClock(alarmManager, triggerAtMillis, pendingIntent)
     }
 
     private fun cancelByAction(
@@ -137,33 +163,15 @@ object NativeAlarmScheduler {
         alarmManager.cancel(pendingIntent)
     }
 
-    private fun setExactAlarm(
+    private fun setAlarmClock(
         alarmManager: AlarmManager,
         triggerAtMillis: Long,
         pendingIntent: PendingIntent,
     ) {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent,
-            )
-            return
-        }
-
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
-            alarmManager.setExact(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent,
-            )
-            return
-        }
-
-        alarmManager.set(
-            AlarmManager.RTC_WAKEUP,
-            triggerAtMillis,
+        alarmManager.setAlarmClock(
+            AlarmManager.AlarmClockInfo(triggerAtMillis, null),
             pendingIntent,
         )
     }
 }
+
