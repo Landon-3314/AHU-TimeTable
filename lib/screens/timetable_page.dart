@@ -187,7 +187,11 @@ class _TimetablePageState extends State<TimetablePage> {
                             return DayAgendaView(
                               pageData: pageData,
                               onCourseTap: (course) {
-                                showCourseDetailsSheet(context, course);
+                                showCourseDetailsSheet(
+                                  context,
+                                  course,
+                                  sourceWeek: pageData.week,
+                                );
                               },
                               onEventTap: (event) {
                                 showEventDetailsSheet(context, event);
@@ -220,10 +224,15 @@ class _TimetablePageState extends State<TimetablePage> {
                         );
                       }
 
+                      final pageData = screenData.weekPages[index];
                       return TimetableGrid(
-                        pageData: screenData.weekPages[index],
+                        pageData: pageData,
                         onCourseTap: (course) {
-                          showCourseDetailsSheet(context, course);
+                          showCourseDetailsSheet(
+                            context,
+                            course,
+                            sourceWeek: pageData.week,
+                          );
                         },
                         onEventTap: (event) {
                           showEventDetailsSheet(context, event);

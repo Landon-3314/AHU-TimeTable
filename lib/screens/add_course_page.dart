@@ -372,16 +372,22 @@ class _CourseFormState extends State<_CourseForm> {
     );
 
     final courseProvider = context.read<CourseProvider>();
-    if (_isEditMode) {
-      await courseProvider.updateCourse(
-        originalCourse: widget.existingCourse!,
-        updatedCourse: course,
-      );
-    } else {
-      await courseProvider.addCourse(course);
-    }
+    final didSave = _isEditMode
+        ? await courseProvider.updateCourse(
+          originalCourse: widget.existingCourse!,
+          updatedCourse: course,
+        )
+        : await courseProvider.addCourse(course);
 
     if (!mounted) {
+      return;
+    }
+
+    if (!didSave) {
+      setState(() {
+        _isSaving = false;
+      });
+      _showMessage(provider.t('duplicate_course_not_added'));
       return;
     }
 

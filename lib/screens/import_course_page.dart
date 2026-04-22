@@ -85,12 +85,13 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       }
 
       final importedCourses = _parserService.parse(rawMessage);
-      await context.read<CourseProvider>().addCourses(importedCourses);
+      final importedCount = await context.read<CourseProvider>()
+          .mergeImportedCourses(importedCourses);
 
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(importedCourses.length);
+      Navigator.of(context).pop(importedCount);
     } on ScheduleParseException catch (error) {
       _finishImportWithMessage('Import failed: ${error.message}');
     } catch (error) {

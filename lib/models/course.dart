@@ -9,6 +9,8 @@ class Course {
     required this.startPeriod,
     required this.endPeriod,
     required this.colorValue,
+    this.rescheduledFromSessionKey,
+    this.rescheduledFromWeek,
   }) : id = id ?? createId(),
        weeks = List<int>.unmodifiable(weeks);
 
@@ -21,6 +23,17 @@ class Course {
   final int startPeriod;
   final int endPeriod;
   final int colorValue;
+  final String? rescheduledFromSessionKey;
+  final int? rescheduledFromWeek;
+
+  String get sessionKey => buildSessionKey(
+    name: name,
+    location: location,
+    teacher: teacher,
+    weekday: weekday,
+    startPeriod: startPeriod,
+    endPeriod: endPeriod,
+  );
 
   Course copyWith({
     String? id,
@@ -32,6 +45,9 @@ class Course {
     int? startPeriod,
     int? endPeriod,
     int? colorValue,
+    String? rescheduledFromSessionKey,
+    int? rescheduledFromWeek,
+    bool clearRescheduleSource = false,
   }) {
     return Course(
       id: id ?? this.id,
@@ -43,6 +59,12 @@ class Course {
       startPeriod: startPeriod ?? this.startPeriod,
       endPeriod: endPeriod ?? this.endPeriod,
       colorValue: colorValue ?? this.colorValue,
+      rescheduledFromSessionKey: clearRescheduleSource
+          ? null
+          : (rescheduledFromSessionKey ?? this.rescheduledFromSessionKey),
+      rescheduledFromWeek: clearRescheduleSource
+          ? null
+          : (rescheduledFromWeek ?? this.rescheduledFromWeek),
     );
   }
 
@@ -57,6 +79,8 @@ class Course {
       'startPeriod': startPeriod,
       'endPeriod': endPeriod,
       'colorValue': colorValue,
+      'rescheduledFromSessionKey': rescheduledFromSessionKey,
+      'rescheduledFromWeek': rescheduledFromWeek,
     };
   }
 
@@ -69,6 +93,9 @@ class Course {
     final startPeriod = (map['startPeriod'] as int?) ?? 1;
     final endPeriod = (map['endPeriod'] as int?) ?? 2;
     final colorValue = (map['colorValue'] as int?) ?? 0xFF7C9AF2;
+    final rescheduledFromSessionKey =
+        map['rescheduledFromSessionKey'] as String?;
+    final rescheduledFromWeek = map['rescheduledFromWeek'] as int?;
 
     return Course(
       id:
@@ -91,6 +118,8 @@ class Course {
       startPeriod: startPeriod,
       endPeriod: endPeriod,
       colorValue: colorValue,
+      rescheduledFromSessionKey: rescheduledFromSessionKey,
+      rescheduledFromWeek: rescheduledFromWeek,
     );
   }
 
@@ -119,6 +148,24 @@ class Course {
       colorValue,
     ].join('|');
     return 'course-${_stableHash(source)}';
+  }
+
+  static String buildSessionKey({
+    required String name,
+    required String location,
+    required String teacher,
+    required int weekday,
+    required int startPeriod,
+    required int endPeriod,
+  }) {
+    return [
+      name.trim().toLowerCase(),
+      location.trim().toLowerCase(),
+      teacher.trim().toLowerCase(),
+      weekday,
+      startPeriod,
+      endPeriod,
+    ].join('|');
   }
 
   static List<int> _parseWeeks(Object? rawWeeks) {

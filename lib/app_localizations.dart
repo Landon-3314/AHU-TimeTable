@@ -180,6 +180,41 @@ class AppStrings {
     'extract_timetable': {'zh': '一键提取课表', 'en': 'Extract Timetable'},
     'extracting': {'zh': '正在提取...', 'en': 'Extracting...'},
     'import_success': {'zh': '成功导入课程', 'en': 'Successfully imported courses'},
+    'reschedule_course': {'zh': '\u8c03\u8bfe', 'en': 'Reschedule Course'},
+    'reschedule_success': {
+      'zh': '\u8c03\u8bfe\u6210\u529f',
+      'en': 'Course rescheduled',
+    },
+    'reschedule_unavailable': {
+      'zh': '\u65e0\u6cd5\u8c03\u8bfe\uff0c\u8bf7\u91cd\u8bd5',
+      'en': 'Unable to reschedule course',
+    },
+    'target_week': {'zh': '\u76ee\u6807\u5468\u6b21', 'en': 'Target Week'},
+    'target_weekday': {
+      'zh': '\u76ee\u6807\u661f\u671f',
+      'en': 'Target Weekday',
+    },
+    'target_start_period': {
+      'zh': '\u76ee\u6807\u5f00\u59cb\u8282\u6b21',
+      'en': 'Target Start Period',
+    },
+    'target_end_period': {
+      'zh': '\u76ee\u6807\u7ed3\u675f\u8282\u6b21',
+      'en': 'Target End Period',
+    },
+    'original_schedule': {
+      'zh': '\u539f\u8bfe\u7a0b\u5b89\u6392',
+      'en': 'Original Schedule',
+    },
+    'invalid_reschedule_period_range': {
+      'zh':
+          '\u5f53\u524d\u8bfe\u7a0b\u8282\u6b21\u8d85\u51fa\u53ef\u914d\u7f6e\u8303\u56f4',
+      'en': 'This course period range is out of the configured limit',
+    },
+    'duplicate_course_not_added': {
+      'zh': '\u76f8\u540c\u8bfe\u7a0b\u5df2\u5b58\u5728\uff0c\u672a\u91cd\u590d\u6dfb\u52a0',
+      'en': 'An identical course already exists and was not added',
+    },
   };
 
   static String get(String key, String languageCode) {

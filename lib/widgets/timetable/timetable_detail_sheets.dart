@@ -14,10 +14,15 @@ import '../../providers/course_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/timetable_view_data_service.dart';
 
-Future<void> showCourseDetailsSheet(BuildContext context, Course course) async {
+Future<void> showCourseDetailsSheet(
+  BuildContext context,
+  Course course, {
+  int? sourceWeek,
+}) async {
   final settingsProvider = context.read<SettingsProvider>();
   final courseProvider = context.read<CourseProvider>();
   final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.of(context);
   final timeSlots = settingsProvider.timeSlots;
   final weekdayLabels = TimetableViewDataService.weekdayKeys;
   final startSlot =
@@ -38,97 +43,141 @@ Future<void> showCourseDetailsSheet(BuildContext context, Course course) async {
 
   await showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     showDragHandle: true,
     builder: (sheetContext) {
+      final actionButtons = <Widget>[
+        if (sourceWeek != null)
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.surfaceMuted,
+                foregroundColor: AppColors.primary,
+              ),
+              onPressed: () async {
+                Navigator.of(sheetContext).pop();
+                final didReschedule = await navigator.pushNamed<bool>(
+                  AppRoutes.rescheduleCourse,
+                  arguments: RescheduleCourseRouteArgs(
+                    course: course,
+                    sourceWeek: sourceWeek,
+                  ),
+                );
+
+                if (didReschedule != true) {
+                  return;
+                }
+
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(settingsProvider.t('reschedule_success')),
+                  ),
+                );
+              },
+              child: Text(settingsProvider.t('reschedule_course')),
+            ),
+          ),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.onPrimary,
+            ),
+            onPressed: () async {
+              Navigator.of(sheetContext).pop();
+              await navigator.pushNamed(
+                AppRoutes.addCourse,
+                arguments: AddCourseRouteArgs(existingCourse: course),
+              );
+            },
+            child: Text(settingsProvider.t('edit_course')),
+          ),
+        ),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: AppColors.onPrimary,
+            ),
+            onPressed: () {
+              Navigator.of(sheetContext).pop();
+              unawaited(
+                Future<void>.delayed(
+                  AppDurations.sheetActionDelay,
+                ).then((_) => courseProvider.removeCourse(course)),
+              );
+            },
+            child: Text(settingsProvider.t('delete_course')),
+          ),
+        ),
+      ];
+
       return SafeArea(
-        child: Padding(
-          padding: AppSpacing.floatingSheetPadding,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                course.name,
-                style: Theme.of(sheetContext).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.9,
+          ),
+          child: SingleChildScrollView(
+            padding: AppSpacing.floatingSheetPadding,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  course.name,
+                  style: Theme.of(
+                    sheetContext,
+                  ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              DetailRow(
-                label: settingsProvider.t('teacher'),
-                value: course.teacher.isEmpty
-                    ? settingsProvider.t('not_set')
-                    : course.teacher,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DetailRow(
-                label: settingsProvider.t('location'),
-                value: course.location.isEmpty
-                    ? settingsProvider.t('not_set')
-                    : course.location,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DetailRow(
-                label: settingsProvider.t('periods'),
-                value: _periodRangeLabel(
-                  settingsProvider,
-                  course.startPeriod,
-                  course.endPeriod,
+                const SizedBox(height: AppSpacing.xl),
+                DetailRow(
+                  label: settingsProvider.t('teacher'),
+                  value: course.teacher.isEmpty
+                      ? settingsProvider.t('not_set')
+                      : course.teacher,
                 ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DetailRow(
-                label: settingsProvider.t('time'),
-                value: courseTimeText,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DetailRow(
-                label: settingsProvider.t('weekday'),
-                value: settingsProvider.t(weekdayLabels[course.weekday - 1]),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DetailRow(
-                label: settingsProvider.t('weeks'),
-                value: course.weeks.join(', '),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.onPrimary,
+                const SizedBox(height: AppSpacing.md),
+                DetailRow(
+                  label: settingsProvider.t('location'),
+                  value: course.location.isEmpty
+                      ? settingsProvider.t('not_set')
+                      : course.location,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DetailRow(
+                  label: settingsProvider.t('periods'),
+                  value: _periodRangeLabel(
+                    settingsProvider,
+                    course.startPeriod,
+                    course.endPeriod,
                   ),
-                  onPressed: () async {
-                    Navigator.of(sheetContext).pop();
-                    await navigator.pushNamed(
-                      AppRoutes.addCourse,
-                      arguments: AddCourseRouteArgs(existingCourse: course),
-                    );
-                  },
-                  child: Text(settingsProvider.t('edit_course')),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.danger,
-                    foregroundColor: AppColors.onPrimary,
-                  ),
-                  onPressed: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(
-                      Future<void>.delayed(
-                        AppDurations.sheetActionDelay,
-                      ).then((_) => courseProvider.removeCourse(course)),
-                    );
-                  },
-                  child: Text(settingsProvider.t('delete_course')),
+                const SizedBox(height: AppSpacing.md),
+                DetailRow(
+                  label: settingsProvider.t('time'),
+                  value: courseTimeText,
                 ),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.md),
+                DetailRow(
+                  label: settingsProvider.t('weekday'),
+                  value: settingsProvider.t(weekdayLabels[course.weekday - 1]),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DetailRow(
+                  label: settingsProvider.t('weeks'),
+                  value: course.weeks.join(', '),
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                for (int index = 0; index < actionButtons.length; index++) ...[
+                  actionButtons[index],
+                  if (index != actionButtons.length - 1)
+                    const SizedBox(height: AppSpacing.lg),
+                ],
+              ],
+            ),
           ),
         ),
       );
