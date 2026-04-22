@@ -2,12 +2,16 @@ name: Android Split APK
 
 on:
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag, e.g. v0.2.11
+        required: true
   push:
     tags:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-android-apk:
@@ -66,3 +70,35 @@ jobs:
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             build/app/outputs/flutter-apk/app-x86_64-release.apk
           if-no-files-found: error
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+              build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+              build/app/outputs/flutter-apk/app-x86_64-release.apk \
+              --clobber
+          else
+            gh release create "$TAG" \
+              build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+              build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+              build/app/outputs/flutter-apk/app-x86_64-release.apk \
+              --target "${GITHUB_SHA}" \
+              --generate-notes
+          fi
