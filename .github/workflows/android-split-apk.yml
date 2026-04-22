@@ -33,7 +33,28 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Generate CI keystore
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-keystore"
+          keytool -genkeypair \
+            -v \
+            -storetype JKS \
+            -keystore "$RUNNER_TEMP/android-keystore/debug.keystore" \
+            -storepass android \
+            -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Build release APKs with split per ABI
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/android-keystore/debug.keystore
+          ANDROID_KEYSTORE_PASSWORD: android
+          ANDROID_KEYSTORE_ALIAS: androiddebugkey
+          ANDROID_KEY_PASSWORD: android
         run: flutter build apk --release --split-per-abi
 
       - name: Upload APK artifacts

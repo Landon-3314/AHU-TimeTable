@@ -1,9 +1,30 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use(keystoreProperties::load)
+}
+
+fun readSigningValue(envName: String, propertyName: String): String? {
+    return providers.environmentVariable(envName).orNull
+        ?: keystoreProperties.getProperty(propertyName)
+}
+
+val releaseStoreFile = readSigningValue("ANDROID_KEYSTORE_PATH", "storeFile")
+val releaseStorePassword = readSigningValue(
+    "ANDROID_KEYSTORE_PASSWORD",
+    "storePassword",
+)
+val releaseKeyAlias = readSigningValue("ANDROID_KEYSTORE_ALIAS", "keyAlias")
+val releaseKeyPassword = readSigningValue("ANDROID_KEY_PASSWORD", "keyPassword")
 
 android {
     namespace = "com.example.timetable"
@@ -37,9 +58,22 @@ android {
             enableV2Signing = true
         }
         create("release") {
-            initWith(getByName("debug"))
             enableV1Signing = true
             enableV2Signing = true
+
+            if (
+                !releaseStoreFile.isNullOrBlank() &&
+                !releaseStorePassword.isNullOrBlank() &&
+                !releaseKeyAlias.isNullOrBlank() &&
+                !releaseKeyPassword.isNullOrBlank()
+            ) {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            } else {
+                initWith(getByName("debug"))
+            }
         }
     }
 
