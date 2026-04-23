@@ -13,14 +13,19 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import android.util.Log
+import android.view.MotionEvent
 import android.view.ScrollCaptureCallback
 import android.view.ScrollCaptureSession
 import android.view.TextureView
 import android.view.View
+import android.view.View.AccessibilityDelegate
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.FrameLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.RenderMode
@@ -35,13 +40,19 @@ import kotlin.math.roundToInt
 private const val REQUEST_POST_NOTIFICATIONS = 5021
 private const val NATIVE_ALARM_CHANNEL = "com.timetable/native_alarm"
 private const val SCROLL_CAPTURE_CHANNEL = "app.scroll_capture"
-private const val TAG = "MainActivity"
 
 class MainActivity : FlutterActivity() {
     private var notificationPermissionResult: MethodChannel.Result? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var scrollCaptureChannel: MethodChannel? = null
     private var didInstallScrollCaptureCallback = false
+    private var overlayRecyclerView: RecyclerView? = null
+    private var overlayAdapter: OverlayPlaceholderAdapter? = null
+    private var overlayActiveScrollableId: String? = null
+    private var isSyncingOverlayPosition = false
+    private val overlayHideRunnable = Runnable {
+        setOverlayVisible(false)
+    }
 
     override fun getRenderMode(): RenderMode = RenderMode.texture
 
@@ -150,6 +161,27 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         installScrollCaptureCallbackIfNeeded()
+        setupScrollOverlayIfNeeded()
+        refreshOverlayScrollable()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            refreshOverlayScrollable()
+        }
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.pointerCount >= 2 || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            setOverlayVisible(true)
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
+    override fun onPause() {
+        setOverlayVisible(false)
+        super.onPause()
     }
 
     private fun parseAlarmItem(entry: Map<*, *>): NativeAlarmScheduler.AlarmItem? {
@@ -316,12 +348,10 @@ class MainActivity : FlutterActivity() {
                     }
 
                     override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
-                        Log.w(TAG, "Flutter method $method failed: $errorCode $errorMessage")
                         onFailure()
                     }
 
                     override fun notImplemented() {
-                        Log.w(TAG, "Flutter method $method not implemented")
                         onFailure()
                     }
                 },
@@ -359,6 +389,156 @@ class MainActivity : FlutterActivity() {
             }
         }
         return null
+    }
+
+    private fun setupScrollOverlayIfNeeded() {
+        if (overlayRecyclerView != null) {
+            return
+        }
+        val root = window.decorView as? FrameLayout ?: return
+        val screenHeight = resources.displayMetrics.heightPixels
+        val density = resources.displayMetrics.density
+        val adapter = OverlayPlaceholderAdapter(screenHeight * 5)
+        val recyclerView = RecyclerView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+            alpha = 0f
+            visibility = View.GONE
+            layoutManager = LinearLayoutManager(context)
+            this.adapter = adapter
+            accessibilityDelegate = object : AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(
+                    host: View,
+                    info: AccessibilityNodeInfo,
+                ) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = "android.widget.ScrollView"
+                    info.isScrollable = true
+                    info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
+                    info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
+                }
+            }
+            addOnScrollListener(
+                object : RecyclerView.OnScrollListener() {
+                    override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                        if (isSyncingOverlayPosition) {
+                            return
+                        }
+                        val id = overlayActiveScrollableId ?: return
+                        val offsetDp = rv.computeVerticalScrollOffset() / density
+                        invokeFlutterMethod(
+                            method = "scrollTo",
+                            arguments = mapOf("id" to id, "offset" to offsetDp.toDouble()),
+                            onSuccess = {},
+                            onFailure = {},
+                        )
+                    }
+                },
+            )
+        }
+        overlayRecyclerView = recyclerView
+        overlayAdapter = adapter
+        root.addView(recyclerView)
+    }
+
+    private fun setOverlayVisible(visible: Boolean) {
+        val recyclerView = overlayRecyclerView ?: return
+        if (visible) {
+            if (recyclerView.visibility != View.VISIBLE) {
+                recyclerView.visibility = View.VISIBLE
+                recyclerView.bringToFront()
+            }
+            refreshOverlayScrollable()
+            mainHandler.removeCallbacks(overlayHideRunnable)
+            mainHandler.postDelayed(overlayHideRunnable, 12_000L)
+        } else {
+            recyclerView.visibility = View.GONE
+            mainHandler.removeCallbacks(overlayHideRunnable)
+        }
+    }
+
+    private fun updateOverlayHeight(maxScrollExtentDp: Double) {
+        val adapter = overlayAdapter ?: return
+        val density = resources.displayMetrics.density
+        val screenHeight = resources.displayMetrics.heightPixels
+        val totalPx = screenHeight + (maxScrollExtentDp * density).roundToInt()
+        adapter.updateHeight(totalPx)
+    }
+
+    private fun syncOverlayToOffset(offsetDp: Double) {
+        val recyclerView = overlayRecyclerView ?: return
+        val density = resources.displayMetrics.density
+        val targetPx = (offsetDp * density).roundToInt()
+        val currentPx = recyclerView.computeVerticalScrollOffset()
+        val dy = targetPx - currentPx
+        if (dy == 0) {
+            return
+        }
+        isSyncingOverlayPosition = true
+        try {
+            recyclerView.scrollBy(0, dy)
+        } finally {
+            isSyncingOverlayPosition = false
+        }
+    }
+
+    private fun refreshOverlayScrollable() {
+        invokeFlutterMethod(
+            method = "describeScrollables",
+            onSuccess = { raw ->
+                val flutterView = findFlutterView(window.decorView)
+                val bestScrollable = if (flutterView == null) null else chooseBestScrollable(raw, flutterView)
+                overlayActiveScrollableId = bestScrollable?.id
+                if (bestScrollable != null) {
+                    updateOverlayHeight(bestScrollable.maxScrollExtent.toDouble())
+                    syncOverlayToOffset(bestScrollable.pixels.toDouble())
+                }
+            },
+            onFailure = {},
+        )
+    }
+
+    private class OverlayPlaceholderAdapter(
+        initialHeightPx: Int,
+    ) : RecyclerView.Adapter<OverlayPlaceholderAdapter.OverlayViewHolder>() {
+        private var itemHeightPx: Int = initialHeightPx
+
+        class OverlayViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView)
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): OverlayViewHolder {
+            val view = View(parent.context).apply {
+                layoutParams = RecyclerView.LayoutParams(
+                    RecyclerView.LayoutParams.MATCH_PARENT,
+                    itemHeightPx,
+                )
+            }
+            return OverlayViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: OverlayViewHolder, position: Int) {
+            val params =
+                (holder.itemView.layoutParams as? RecyclerView.LayoutParams)
+                    ?: RecyclerView.LayoutParams(
+                        RecyclerView.LayoutParams.MATCH_PARENT,
+                        itemHeightPx,
+                    )
+            if (params.height != itemHeightPx) {
+                params.height = itemHeightPx
+                holder.itemView.layoutParams = params
+            }
+        }
+
+        override fun getItemCount(): Int = 1
+
+        fun updateHeight(heightPx: Int) {
+            if (heightPx <= 0 || heightPx == itemHeightPx) {
+                return
+            }
+            itemHeightPx = heightPx
+            notifyItemChanged(0)
+        }
     }
 
     private fun parseScrollableTarget(raw: Any?): ScrollableTarget? {
@@ -521,12 +701,8 @@ class MainActivity : FlutterActivity() {
             invokeFlutterMethod(
                 method = "prepareCapture",
                 arguments = mapOf("id" to state.id),
-                onSuccess = {
-                    onReady.run()
-                },
-                onFailure = {
-                    onReady.run()
-                },
+                onSuccess = { onReady.run() },
+                onFailure = { onReady.run() },
             )
         }
 
@@ -586,12 +762,8 @@ class MainActivity : FlutterActivity() {
             invokeFlutterMethod(
                 method = "restoreCapture",
                 arguments = mapOf("id" to state.id),
-                onSuccess = {
-                    onReady.run()
-                },
-                onFailure = {
-                    onReady.run()
-                },
+                onSuccess = { onReady.run() },
+                onFailure = { onReady.run() },
             )
         }
 
@@ -642,8 +814,7 @@ class MainActivity : FlutterActivity() {
                     session.surface.unlockCanvasAndPost(canvas)
                 }
                 availableRect
-            } catch (error: Throwable) {
-                Log.w(TAG, "Scroll capture frame failed", error)
+            } catch (_: Throwable) {
                 null
             } finally {
                 bitmap.recycle()

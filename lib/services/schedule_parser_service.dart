@@ -26,9 +26,9 @@ class ScheduleParserService {
     0xFF9AA6BD,
   ];
 
-  // Accept both normal Chinese "周/节" and mojibake variants from exported files.
+  // Support normal Chinese labels and mojibake exports.
   static final RegExp _timeRegExp = RegExp(
-    r'\(([\d,\-~]+)(?:周|鍛[^\)]*)\)\s*\(([\d\-]+)(?:节|鑺[^\)]*)\)\s+(\S+)\s+(\S+)\s+(\S+)',
+    r'\(((?:[^()]|\((?:单|双|单周|双周)\))+?)(?:周|鍛[^\)]*)\)\s*\(([\d\-]+)(?:节|鑺[^\)]*)\)\s+(\S+)\s+(\S+)\s+(\S+)',
   );
 
   List<Course> parse(String html) {
@@ -41,7 +41,7 @@ class ScheduleParserService {
       final document = parser.parse(normalizedHtml);
       final table = document.querySelector('table.courseTable');
       if (table == null) {
-        throw ScheduleParseException('未找到课表表格，请确认当前页面仍是教务课表页。');
+        throw ScheduleParseException('未找到课表表格，请确认当前页面仍然是教务课表页。');
       }
 
       final occupiedGrid = <int, Map<int, bool>>{};
@@ -127,7 +127,7 @@ class ScheduleParserService {
       }
 
       if (courses.isEmpty) {
-        throw ScheduleParseException('未识别到课程，请确认课表 HTML 结构未发生变化。');
+        throw ScheduleParseException('没有识别到课程，请确认课表 HTML 结构没有变化。');
       }
 
       return courses;
@@ -162,7 +162,6 @@ class ScheduleParserService {
       }
     }
 
-    // For structures like courseStructure.txt where only opacity:0 snapshot exists.
     return visibleBlocks.isNotEmpty ? visibleBlocks : hiddenFallbackBlocks;
   }
 
@@ -197,7 +196,6 @@ class ScheduleParserService {
       if (node is Element) {
         buffer.write(node.outerHtml);
       } else {
-        // Critical for this bug: keep stray text nodes between elements.
         buffer.write(node.text);
       }
     }
@@ -228,7 +226,12 @@ class ScheduleParserService {
     final weeks = <int>[];
     final standardizedStr = weekStr
         .replaceAll('~', '-')
-        .replaceAll('～', '-')
+        .replaceAll('至', '-')
+        .replaceAll('（', '(')
+        .replaceAll('）', ')')
+        .replaceAll('，', ',')
+        .replaceAll('、', ',')
+        .replaceAll('周', '')
         .replaceAll(RegExp(r'\s+'), '');
     final parts = standardizedStr.split(',');
 
@@ -237,27 +240,53 @@ class ScheduleParserService {
         continue;
       }
 
-      if (part.contains('-')) {
-        final bounds = part.split('-');
-        if (bounds.length == 2) {
-          final start = int.tryParse(bounds[0]) ?? 0;
-          final end = int.tryParse(bounds[1]) ?? 0;
-          if (start > 0 && end >= start) {
-            for (var i = start; i <= end; i += 1) {
-              weeks.add(i);
-            }
+      final qualifierMatch = RegExp(
+        r'^(.*?)(?:\((单|双|单周|双周)\)|(单|双|单周|双周))?$',
+      ).firstMatch(part);
+      final rawRange = (qualifierMatch?.group(1) ?? part).trim();
+      final qualifier =
+          (qualifierMatch?.group(2) ?? qualifierMatch?.group(3) ?? '')
+              .replaceAll('周', '');
+
+      if (rawRange.contains('-')) {
+        final bounds = rawRange.split('-');
+        if (bounds.length != 2) {
+          continue;
+        }
+
+        final start = int.tryParse(bounds[0]) ?? 0;
+        final end = int.tryParse(bounds[1]) ?? 0;
+        if (start <= 0 || end < start) {
+          continue;
+        }
+
+        for (var week = start; week <= end; week += 1) {
+          if (_matchesWeekQualifier(week, qualifier)) {
+            weeks.add(week);
           }
         }
-      } else {
-        final week = int.tryParse(part);
-        if (week != null) {
-          weeks.add(week);
-        }
+        continue;
+      }
+
+      final week = int.tryParse(rawRange);
+      if (week != null && _matchesWeekQualifier(week, qualifier)) {
+        weeks.add(week);
       }
     }
 
     final result = weeks.toSet().toList()..sort();
     return result.isEmpty ? <int>[1] : result;
+  }
+
+  bool _matchesWeekQualifier(int week, String qualifier) {
+    switch (qualifier) {
+      case '单':
+        return week.isOdd;
+      case '双':
+        return week.isEven;
+      default:
+        return true;
+    }
   }
 
   _PeriodRange _parsePeriodRange(String rawPeriods) {
