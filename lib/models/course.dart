@@ -9,6 +9,7 @@ class Course {
     required this.startPeriod,
     required this.endPeriod,
     required this.colorValue,
+    this.semesterId,
     this.rescheduledFromSessionKey,
     this.rescheduledFromWeek,
   }) : id = id ?? createId(),
@@ -23,6 +24,7 @@ class Course {
   final int startPeriod;
   final int endPeriod;
   final int colorValue;
+  final String? semesterId;
   final String? rescheduledFromSessionKey;
   final int? rescheduledFromWeek;
 
@@ -45,6 +47,7 @@ class Course {
     int? startPeriod,
     int? endPeriod,
     int? colorValue,
+    String? semesterId,
     String? rescheduledFromSessionKey,
     int? rescheduledFromWeek,
     bool clearRescheduleSource = false,
@@ -59,6 +62,7 @@ class Course {
       startPeriod: startPeriod ?? this.startPeriod,
       endPeriod: endPeriod ?? this.endPeriod,
       colorValue: colorValue ?? this.colorValue,
+      semesterId: semesterId ?? this.semesterId,
       rescheduledFromSessionKey: clearRescheduleSource
           ? null
           : (rescheduledFromSessionKey ?? this.rescheduledFromSessionKey),
@@ -79,6 +83,7 @@ class Course {
       'startPeriod': startPeriod,
       'endPeriod': endPeriod,
       'colorValue': colorValue,
+      'semesterId': semesterId,
       'rescheduledFromSessionKey': rescheduledFromSessionKey,
       'rescheduledFromWeek': rescheduledFromWeek,
     };
@@ -93,6 +98,7 @@ class Course {
     final startPeriod = (map['startPeriod'] as int?) ?? 1;
     final endPeriod = (map['endPeriod'] as int?) ?? 2;
     final colorValue = (map['colorValue'] as int?) ?? 0xFF7C9AF2;
+    final semesterId = map['semesterId'] as String?;
     final rescheduledFromSessionKey =
         map['rescheduledFromSessionKey'] as String?;
     final rescheduledFromWeek = map['rescheduledFromWeek'] as int?;
@@ -118,6 +124,7 @@ class Course {
       startPeriod: startPeriod,
       endPeriod: endPeriod,
       colorValue: colorValue,
+      semesterId: semesterId,
       rescheduledFromSessionKey: rescheduledFromSessionKey,
       rescheduledFromWeek: rescheduledFromWeek,
     );

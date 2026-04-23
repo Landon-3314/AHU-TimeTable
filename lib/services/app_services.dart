@@ -22,6 +22,12 @@ class AppServices {
     required List<Event> events,
     required SettingsProvider settings,
   }) async {
+    if (!settings.isCurrentSemesterInitialized) {
+      await NativeAlarmService.instance.cancelAllClasses();
+      await BackgroundServiceManager.setEnabled(false);
+      return;
+    }
+
     final shouldSyncNativeSchedule =
         settings.autoMuteEnabled ||
         settings.courseReminderEnabled ||

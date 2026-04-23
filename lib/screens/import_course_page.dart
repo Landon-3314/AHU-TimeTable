@@ -56,6 +56,26 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   }
 
   Future<void> _runExtractScript() async {
+    final settingsProvider = context.read<SettingsProvider>();
+    if (!settingsProvider.isCurrentSemesterInitialized) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('当前学期尚未初始化'),
+            content: const Text('当前学期尚未初始化，请先完成学期开始日期设置后再导入课程。'),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('知道了'),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
     setState(() {
       _isImporting = true;
     });
@@ -85,7 +105,8 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       }
 
       final importedCourses = _parserService.parse(rawMessage);
-      final importedCount = await context.read<CourseProvider>()
+      final importedCount = await context
+          .read<CourseProvider>()
           .mergeImportedCourses(importedCourses);
 
       if (!mounted) {

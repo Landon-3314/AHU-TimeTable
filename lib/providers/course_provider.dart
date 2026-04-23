@@ -42,12 +42,28 @@ class CourseProvider extends ChangeNotifier {
     _reminderScheduler = callback;
   }
 
+  Future<void> reloadForCurrentSemester({bool refreshReminders = true}) async {
+    _courses
+      ..clear()
+      ..addAll(_storageService.loadCourses());
+    _events
+      ..clear()
+      ..addAll(_storageService.loadEvents());
+    notifyListeners();
+    if (refreshReminders) {
+      await _refreshReminders();
+    }
+  }
+
   Future<bool> addCourse(Course course) async {
-    if (_containsDuplicate(course)) {
+    final semesterCourse = course.copyWith(
+      semesterId: _storageService.currentSemesterId,
+    );
+    if (_containsDuplicate(semesterCourse)) {
       return false;
     }
 
-    _courses.add(course);
+    _courses.add(semesterCourse);
     notifyListeners();
     await _persistCourses();
     await _syncBackgroundRuntimeIfEnabled();
@@ -62,10 +78,13 @@ class CourseProvider extends ChangeNotifier {
 
     final acceptedCourses = <Course>[];
     for (final course in courses) {
-      if (_containsDuplicate(course, pendingCourses: acceptedCourses)) {
+      final semesterCourse = course.copyWith(
+        semesterId: _storageService.currentSemesterId,
+      );
+      if (_containsDuplicate(semesterCourse, pendingCourses: acceptedCourses)) {
         continue;
       }
-      acceptedCourses.add(course);
+      acceptedCourses.add(semesterCourse);
     }
 
     if (acceptedCourses.isEmpty) {
@@ -87,7 +106,10 @@ class CourseProvider extends ChangeNotifier {
 
     final uniqueImported = <String, Course>{};
     for (final course in courses) {
-      final sanitizedCourse = course.copyWith(clearRescheduleSource: true);
+      final sanitizedCourse = course.copyWith(
+        clearRescheduleSource: true,
+        semesterId: _storageService.currentSemesterId,
+      );
       uniqueImported.putIfAbsent(
         _exactCourseKey(sanitizedCourse),
         () => sanitizedCourse,
@@ -147,7 +169,9 @@ class CourseProvider extends ChangeNotifier {
       return false;
     }
 
-    _courses[index] = updatedCourse;
+    _courses[index] = updatedCourse.copyWith(
+      semesterId: _storageService.currentSemesterId,
+    );
     notifyListeners();
     await _persistCourses();
     await _syncBackgroundRuntimeIfEnabled();
@@ -198,15 +222,11 @@ class CourseProvider extends ChangeNotifier {
       rescheduledFromWeek: sourceWeek,
     );
 
-    if (
-      _containsDuplicate(
-        rescheduledCourse,
-        ignoredCourseId: originalCourse.id,
-        pendingCourses: [
-          if (remainingCourse != null) remainingCourse,
-        ],
-      )
-    ) {
+    if (_containsDuplicate(
+      rescheduledCourse,
+      ignoredCourseId: originalCourse.id,
+      pendingCourses: [?remainingCourse],
+    )) {
       return false;
     }
 
@@ -243,7 +263,7 @@ class CourseProvider extends ChangeNotifier {
   }
 
   Future<void> addEvent(Event event) async {
-    _events.add(event);
+    _events.add(event.copyWith(semesterId: _storageService.currentSemesterId));
     notifyListeners();
     await _persistEvents();
     await _syncBackgroundRuntimeIfEnabled();
@@ -264,7 +284,9 @@ class CourseProvider extends ChangeNotifier {
       return;
     }
 
-    _events[index] = updatedEvent;
+    _events[index] = updatedEvent.copyWith(
+      semesterId: _storageService.currentSemesterId,
+    );
     notifyListeners();
     await _persistEvents();
     await _syncBackgroundRuntimeIfEnabled();
@@ -316,8 +338,7 @@ class CourseProvider extends ChangeNotifier {
   }
 
   bool _isDuplicateCourse(Course left, Course right) {
-    if (!_hasSameCourseIdentity(left, right) ||
-        left.weekday != right.weekday) {
+    if (!_hasSameCourseIdentity(left, right) || left.weekday != right.weekday) {
       return false;
     }
 
@@ -335,7 +356,8 @@ class CourseProvider extends ChangeNotifier {
   }
 
   bool _hasSameCourseIdentity(Course left, Course right) {
-    return _normalizeCourseText(left.name) == _normalizeCourseText(right.name) &&
+    return _normalizeCourseText(left.name) ==
+            _normalizeCourseText(right.name) &&
         _normalizeCourseText(left.location) ==
             _normalizeCourseText(right.location) &&
         _normalizeCourseText(left.teacher) ==
@@ -358,13 +380,13 @@ class CourseProvider extends ChangeNotifier {
 
   String _exactCourseKey(Course course) {
     final sortedWeeks = course.weeks.toList()..sort();
-    return [
-      course.sessionKey,
-      sortedWeeks.join(','),
-    ].join('|');
+    return [course.sessionKey, sortedWeeks.join(',')].join('|');
   }
 
-  bool _shouldReplaceWithImported(Course existingCourse, Course importedCourse) {
+  bool _shouldReplaceWithImported(
+    Course existingCourse,
+    Course importedCourse,
+  ) {
     if (_exactCourseKey(existingCourse) == _exactCourseKey(importedCourse)) {
       return false;
     }
@@ -389,7 +411,8 @@ class CourseProvider extends ChangeNotifier {
     Course existingCourse,
     Course importedCourse,
   ) {
-    return existingCourse.rescheduledFromSessionKey == importedCourse.sessionKey &&
+    return existingCourse.rescheduledFromSessionKey ==
+            importedCourse.sessionKey &&
         existingCourse.rescheduledFromWeek != null &&
         importedCourse.weeks.contains(existingCourse.rescheduledFromWeek);
   }

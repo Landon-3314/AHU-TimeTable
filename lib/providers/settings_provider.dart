@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_localizations.dart';
 import '../core/app_constants.dart';
 import '../models/clock_time.dart';
+import '../models/semester.dart';
 import '../models/time_slot.dart';
 
 import '../services/permission_service.dart';
@@ -77,6 +78,8 @@ class SettingsProvider extends ChangeNotifier {
            ),
        _languageCode = storageService.readLanguageCode(fallback: 'zh'),
        _autoMuteEnabled = storageService.readAutoMuteEnabled(fallback: false),
+       _semesters = storageService.loadSemesters(),
+       _currentSemesterId = storageService.currentSemesterId,
        _backgroundServiceEnabled = storageService.readBackgroundServiceEnabled(
          fallback: false,
        );
@@ -118,6 +121,8 @@ class SettingsProvider extends ChangeNotifier {
   String _languageCode;
   bool _autoMuteEnabled;
   bool _backgroundServiceEnabled;
+  List<Semester> _semesters;
+  String? _currentSemesterId;
   Future<void> Function()? _reminderScheduler;
 
   double get pixelsPerMinute => _pixelsPerMinute;
@@ -138,6 +143,25 @@ class SettingsProvider extends ChangeNotifier {
   String get languageCode => _languageCode;
   bool get autoMuteEnabled => _autoMuteEnabled;
   bool get backgroundServiceEnabled => _backgroundServiceEnabled;
+  List<Semester> get semesters => List.unmodifiable(_semesters);
+  String? get currentSemesterId => _currentSemesterId;
+  Semester? get currentSemester {
+    final semesterId = _currentSemesterId;
+    if (semesterId == null) {
+      return null;
+    }
+    for (final semester in _semesters) {
+      if (semester.id == semesterId) {
+        return semester;
+      }
+    }
+    return null;
+  }
+
+  bool get shouldShowSemesterStartDatePrompt =>
+      currentSemester?.isInitialized != true;
+  bool get isCurrentSemesterInitialized =>
+      currentSemester?.isInitialized == true;
   bool get courseReminderEnabled => _reminderAdvanceMinutes > 0;
   List<TimeSlot> get timeSlots => generateTimeSlots();
   String t(String key) => AppStrings.get(key, _languageCode);
@@ -160,6 +184,71 @@ class SettingsProvider extends ChangeNotifier {
 
   void bindReminderScheduler(Future<void> Function() callback) {
     _reminderScheduler = callback;
+  }
+
+  Future<Semester> createSemesterWithInitialData({
+    required DateTime startDate,
+    String? customName,
+  }) async {
+    final aligned = _scheduleCalculator.alignToMonday(startDate);
+    final semester = await _storageService.createSemesterWithInitialData(
+      startDate: aligned,
+      customName: customName,
+    );
+    _reloadSemesterState();
+    notifyListeners();
+    return semester;
+  }
+
+  Future<bool> switchSemester(String semesterId) async {
+    if (semesterId == _currentSemesterId) {
+      return true;
+    }
+    final targetSemester = _semesterById(semesterId);
+    if (targetSemester?.isInitialized != true) {
+      return false;
+    }
+
+    await _storageService.setCurrentSemesterId(semesterId);
+    _reloadSemesterState();
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> initializeExistingSemester(
+    String semesterId, {
+    required DateTime startDate,
+  }) async {
+    final aligned = _scheduleCalculator.alignToMonday(startDate);
+    await _storageService.initializeExistingSemester(
+      semesterId,
+      startDate: aligned,
+    );
+    _semesters = _storageService.loadSemesters();
+    notifyListeners();
+  }
+
+  Future<void> initializeExistingSemesterAndSwitch(
+    String semesterId, {
+    required DateTime startDate,
+  }) async {
+    await initializeExistingSemester(semesterId, startDate: startDate);
+    await _storageService.setCurrentSemesterId(semesterId);
+    _reloadSemesterState();
+    notifyListeners();
+  }
+
+  Future<void> renameSemester(String semesterId, String newName) async {
+    await _storageService.renameSemester(semesterId, newName);
+    _semesters = _storageService.loadSemesters();
+    notifyListeners();
+  }
+
+  Future<String?> deleteSemester(String semesterId) async {
+    final nextSemesterId = await _storageService.deleteSemester(semesterId);
+    _reloadSemesterState();
+    notifyListeners();
+    return nextSemesterId;
   }
 
   Future<void> changeLanguage(String code) async {
@@ -311,7 +400,33 @@ class SettingsProvider extends ChangeNotifier {
     _semesterStartDate = aligned;
     notifyListeners();
     await _storageService.writeSemesterStartDate(aligned);
+    if (!isCurrentSemesterInitialized) {
+      final semesterId = _currentSemesterId;
+      if (semesterId != null) {
+        await _storageService.markSemesterInitialized(semesterId);
+      }
+      _semesters = _storageService.loadSemesters();
+      notifyListeners();
+    }
     await _refreshReminders();
+  }
+
+  Future<void> completeInitialSemesterStartDate(DateTime value) async {
+    final aligned = _scheduleCalculator.alignToMonday(value);
+    final dateChanged = !_isSameDate(aligned, _semesterStartDate);
+
+    _semesterStartDate = aligned;
+
+    await _storageService.writeSemesterStartDate(aligned);
+    final semesterId = _currentSemesterId;
+    if (semesterId != null) {
+      await _storageService.markSemesterInitialized(semesterId);
+    }
+    _semesters = _storageService.loadSemesters();
+    notifyListeners();
+    if (dateChanged) {
+      await _refreshReminders();
+    }
   }
 
   Future<void> updateTotalWeeks(int value) async {
@@ -360,7 +475,9 @@ class SettingsProvider extends ChangeNotifier {
     return updateReminderAdvanceMinutes(10);
   }
 
-  Future<SettingsActionResult> updateEventReminderAdvanceMinutes(int value) async {
+  Future<SettingsActionResult> updateEventReminderAdvanceMinutes(
+    int value,
+  ) async {
     final safeValue = value.clamp(0, 1440).toInt();
     if (safeValue == _eventReminderAdvanceMinutes) {
       return SettingsActionResult.success();
@@ -422,7 +539,9 @@ class SettingsProvider extends ChangeNotifier {
     return SettingsActionResult.success();
   }
 
-  Future<SettingsActionResult> toggleBackgroundServiceWithCheck(bool value) async {
+  Future<SettingsActionResult> toggleBackgroundServiceWithCheck(
+    bool value,
+  ) async {
     if (!value) {
       if (!_backgroundServiceEnabled) {
         return SettingsActionResult.success();
@@ -466,7 +585,8 @@ class SettingsProvider extends ChangeNotifier {
     return SettingsActionResult.success();
   }
 
-  Future<bool> ensureDndPermission() => _permissionService.ensureDndPermission();
+  Future<bool> ensureDndPermission() =>
+      _permissionService.ensureDndPermission();
 
   Future<bool> ensureNotificationPermission() =>
       _permissionService.ensureNotificationPermission();
@@ -524,7 +644,53 @@ class SettingsProvider extends ChangeNotifier {
     await scheduler();
   }
 
+  void _reloadSemesterState() {
+    _semesters = _storageService.loadSemesters();
+    _currentSemesterId = _storageService.currentSemesterId;
+    _pixelsPerMinute = _storageService.readPixelsPerMinute(
+      fallback: _defaultPixelsPerMinute,
+    );
+    _classDuration = _storageService.readClassDuration(
+      fallback: _defaultClassDuration,
+    );
+    _shortBreak = _storageService.readShortBreak(fallback: _defaultShortBreak);
+    _bigBreak = _storageService.readBigBreak(fallback: _defaultBigBreak);
+    _bigBreakAfterPeriod = _storageService.readBigBreakAfterPeriod(
+      fallback: _defaultBigBreakAfterPeriod,
+    );
+    _morningStartTime = _storageService.readMorningStartTime(
+      fallback: _defaultMorningStartTime,
+    );
+    _morningClasses = _storageService.readMorningClasses(
+      fallback: _defaultMorningClasses,
+    );
+    _afternoonStartTime = _storageService.readAfternoonStartTime(
+      fallback: _defaultAfternoonStartTime,
+    );
+    _afternoonClasses = _storageService.readAfternoonClasses(
+      fallback: _defaultAfternoonClasses,
+    );
+    _eveningStartTime = _storageService.readEveningStartTime(
+      fallback: _defaultEveningStartTime,
+    );
+    _eveningClasses = _storageService.readEveningClasses(
+      fallback: _defaultEveningClasses,
+    );
+    _semesterStartDate = _restoreSemesterStartDate(
+      storageService: _storageService,
+      scheduleCalculator: _scheduleCalculator,
+    );
+    _totalWeeks = _storageService.readTotalWeeks(fallback: _defaultTotalWeeks);
+  }
 
+  Semester? _semesterById(String semesterId) {
+    for (final semester in _semesters) {
+      if (semester.id == semesterId) {
+        return semester;
+      }
+    }
+    return null;
+  }
 
   TimeOfDay _parseTime(String value) {
     final parts = value.split(':');

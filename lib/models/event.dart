@@ -5,6 +5,7 @@ class Event {
     required this.location,
     required this.dateTime,
     required this.enableAlarm,
+    this.semesterId,
   }) : id = id ?? createId();
 
   final String id;
@@ -12,6 +13,7 @@ class Event {
   final String location;
   final DateTime dateTime;
   final bool enableAlarm;
+  final String? semesterId;
 
   Event copyWith({
     String? id,
@@ -19,6 +21,7 @@ class Event {
     String? location,
     DateTime? dateTime,
     bool? enableAlarm,
+    String? semesterId,
   }) {
     return Event(
       id: id ?? this.id,
@@ -26,6 +29,7 @@ class Event {
       location: location ?? this.location,
       dateTime: dateTime ?? this.dateTime,
       enableAlarm: enableAlarm ?? this.enableAlarm,
+      semesterId: semesterId ?? this.semesterId,
     );
   }
 
@@ -36,6 +40,7 @@ class Event {
       'location': location,
       'dateTime': dateTime.toIso8601String(),
       'enableAlarm': enableAlarm,
+      'semesterId': semesterId,
     };
   }
 
@@ -46,6 +51,7 @@ class Event {
         DateTime.tryParse((json['dateTime'] as String?) ?? '') ??
         DateTime.now();
     final enableAlarm = (json['enableAlarm'] as bool?) ?? false;
+    final semesterId = json['semesterId'] as String?;
 
     return Event(
       id:
@@ -60,6 +66,7 @@ class Event {
       location: location,
       dateTime: dateTime,
       enableAlarm: enableAlarm,
+      semesterId: semesterId,
     );
   }
 

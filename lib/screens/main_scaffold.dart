@@ -1,10 +1,12 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_routes.dart';
 import '../providers/settings_provider.dart';
+import '../providers/timetable_view_provider.dart';
+import '../widgets/semester_start_date_dialog.dart';
 import 'settings_page.dart';
 import 'timetable_page.dart';
 
@@ -22,9 +24,21 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   int _currentIndex = 0;
   int _devTapCount = 0;
+  bool _hasHandledInitialSemesterPrompt = false;
   Timer? _devTapTimer;
 
   static const List<Widget> _pages = [TimetablePage(), SettingsPage()];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _showInitialSemesterStartDatePrompt();
+    });
+  }
 
   @override
   void dispose() {
@@ -59,6 +73,37 @@ class _MainScaffoldState extends State<MainScaffold> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showInitialSemesterStartDatePrompt() async {
+    if (_hasHandledInitialSemesterPrompt) {
+      return;
+    }
+
+    final provider = context.read<SettingsProvider>();
+    if (!provider.shouldShowSemesterStartDatePrompt) {
+      return;
+    }
+
+    _hasHandledInitialSemesterPrompt = true;
+    final selectedDate = await showSemesterStartDateDialog(
+      context: context,
+      initialDate: provider.semesterStartDate,
+    );
+
+    if (!mounted || selectedDate == null) {
+      return;
+    }
+
+    await provider.completeInitialSemesterStartDate(selectedDate);
+    if (!mounted) {
+      return;
+    }
+
+    context.read<TimetableViewProvider>().setCurrentWeekAndWeekday(
+      week: provider.currentRealWeek,
+      weekday: provider.currentRealWeekday,
     );
   }
 

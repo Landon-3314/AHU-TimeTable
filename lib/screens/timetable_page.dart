@@ -7,8 +7,10 @@ import '../models/course.dart';
 import '../models/timetable_view_data.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/app_services.dart';
 import '../services/timetable_navigation_controller.dart';
 import '../services/timetable_view_data_service.dart';
+import '../widgets/semester_start_date_dialog.dart';
 import '../widgets/timetable/holiday_list_view.dart';
 import '../widgets/timetable/course_overview_panel.dart';
 import '../widgets/timetable/timetable_detail_sheets.dart';
@@ -26,13 +28,20 @@ class _TimetablePageState extends State<TimetablePage> {
   static const TimetableViewDataService _viewDataService =
       TimetableViewDataService();
 
+  late final SettingsProvider _settingsProvider;
   late final TimetableNavigationController _navigationController;
+  late DateTime _lastSemesterStartDate;
+  late int _lastTotalWeeks;
 
   @override
   void initState() {
     super.initState();
+    _settingsProvider = context.read<SettingsProvider>();
+    _lastSemesterStartDate = _settingsProvider.semesterStartDate;
+    _lastTotalWeeks = _settingsProvider.totalWeeks;
+    _settingsProvider.addListener(_handleSettingsChanged);
     _navigationController = TimetableNavigationController(
-      settingsProvider: context.read<SettingsProvider>(),
+      settingsProvider: _settingsProvider,
       timetableViewProvider: context.read(),
       holidayWeekIndex: AppConstants.holidayWeekIndex,
     );
@@ -47,6 +56,7 @@ class _TimetablePageState extends State<TimetablePage> {
 
   @override
   void dispose() {
+    _settingsProvider.removeListener(_handleSettingsChanged);
     _navigationController.dispose();
     super.dispose();
   }
@@ -108,6 +118,12 @@ class _TimetablePageState extends State<TimetablePage> {
             actions: [
               IconButton(
                 onPressed: () async {
+                  final canImport =
+                      await _ensureSemesterInitializedBeforeImport(context);
+                  if (!canImport || !mounted) {
+                    return;
+                  }
+
                   final importedCount = await navigator.pushNamed<int>(
                     AppRoutes.importCourses,
                   );
@@ -274,5 +290,90 @@ class _TimetablePageState extends State<TimetablePage> {
         );
       },
     );
+  }
+
+  Future<bool> _ensureSemesterInitializedBeforeImport(
+    BuildContext context,
+  ) async {
+    final settingsProvider = context.read<SettingsProvider>();
+    final courseProvider = context.read<CourseProvider>();
+    if (settingsProvider.isCurrentSemesterInitialized) {
+      return true;
+    }
+
+    final shouldInitialize = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('当前学期尚未初始化'),
+          content: const Text('当前学期尚未初始化，请先完成学期开始日期设置后再导入课程。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('去初始化'),
+            ),
+          ],
+        );
+      },
+    );
+    if (shouldInitialize != true || !context.mounted) {
+      return false;
+    }
+
+    final selectedDate = await showSemesterStartDateDialog(
+      context: context,
+      initialDate: settingsProvider.semesterStartDate,
+    );
+    if (selectedDate == null || !context.mounted) {
+      return false;
+    }
+
+    if (settingsProvider.currentSemesterId == null) {
+      await settingsProvider.createSemesterWithInitialData(
+        startDate: selectedDate,
+      );
+    } else {
+      await settingsProvider.completeInitialSemesterStartDate(selectedDate);
+    }
+
+    await courseProvider.reloadForCurrentSemester(refreshReminders: false);
+    await AppServices.refreshSchedules(
+      courses: courseProvider.courses.toList(),
+      events: courseProvider.events.toList(),
+      settings: settingsProvider,
+    );
+    return settingsProvider.isCurrentSemesterInitialized;
+  }
+
+  void _handleSettingsChanged() {
+    final nextSemesterStartDate = _settingsProvider.semesterStartDate;
+    final nextTotalWeeks = _settingsProvider.totalWeeks;
+    final semesterChanged = !_isSameDate(
+      _lastSemesterStartDate,
+      nextSemesterStartDate,
+    );
+    final totalWeeksChanged = _lastTotalWeeks != nextTotalWeeks;
+    if (!semesterChanged && !totalWeeksChanged) {
+      return;
+    }
+
+    _lastSemesterStartDate = nextSemesterStartDate;
+    _lastTotalWeeks = nextTotalWeeks;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _navigationController.jumpToToday();
+    });
+  }
+
+  bool _isSameDate(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
   }
 }
