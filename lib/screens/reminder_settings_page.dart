@@ -17,6 +17,16 @@ class ReminderSettingsPage extends StatefulWidget {
 }
 
 class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
+  static const List<int> _reminderOffsetOptions = <int>[
+    5,
+    10,
+    15,
+    30,
+    60,
+    120,
+    1440,
+  ];
+
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -29,14 +39,12 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
   Widget build(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
 
-    final courseOffsetOptions = <int>[5, 10, 15];
-    final eventOffsetOptions = <int>[5, 10, 15, 30];
     final courseOffsetValue =
-        courseOffsetOptions.contains(provider.reminderAdvanceMinutes)
+        _reminderOffsetOptions.contains(provider.reminderAdvanceMinutes)
         ? provider.reminderAdvanceMinutes
         : 10;
     final eventOffsetValue =
-        eventOffsetOptions.contains(provider.eventReminderAdvanceMinutes)
+        _reminderOffsetOptions.contains(provider.eventReminderAdvanceMinutes)
         ? provider.eventReminderAdvanceMinutes
         : 10;
 
@@ -88,7 +96,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                     title: const Text('开启课前提醒'),
                     subtitle: Text(
                       provider.courseReminderEnabled
-                          ? '已开启，提前 ${provider.reminderAdvanceMinutes} 分钟提醒'
+                          ? '已开启，提前 ${_formatReminderAdvance(provider.reminderAdvanceMinutes)} 提醒'
                           : '关闭',
                     ),
                     value: provider.courseReminderEnabled,
@@ -101,16 +109,12 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                       leading: const Icon(Icons.timer_outlined),
                       title: const Text('提前提醒时间'),
                       subtitle: Text(
-                        '当前：提前 ${provider.reminderAdvanceMinutes} 分钟',
+                        '当前：提前 ${_formatReminderAdvance(provider.reminderAdvanceMinutes)}',
                       ),
                       trailing: DropdownButton<int>(
                         value: courseOffsetValue,
                         underline: const SizedBox.shrink(),
-                        items: const [
-                          DropdownMenuItem(value: 5, child: Text('提前 5 分钟')),
-                          DropdownMenuItem(value: 10, child: Text('提前 10 分钟')),
-                          DropdownMenuItem(value: 15, child: Text('提前 15 分钟')),
-                        ],
+                        items: _buildReminderOffsetMenuItems(),
                         onChanged: (value) {
                           if (value != null) {
                             _onCourseReminderOffsetChanged(
@@ -135,7 +139,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                     title: const Text('日程提醒开关'),
                     subtitle: Text(
                       provider.eventReminderAdvanceMinutes > 0
-                          ? '已开启，提前 ${provider.eventReminderAdvanceMinutes} 分钟提醒'
+                          ? '已开启，提前 ${_formatReminderAdvance(provider.eventReminderAdvanceMinutes)} 提醒'
                           : '关闭',
                     ),
                     value: provider.eventReminderAdvanceMinutes > 0,
@@ -148,17 +152,12 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                       leading: const Icon(Icons.schedule_send_outlined),
                       title: const Text('日程提前提醒时间'),
                       subtitle: Text(
-                        '当前：提前 ${provider.eventReminderAdvanceMinutes} 分钟',
+                        '当前：提前 ${_formatReminderAdvance(provider.eventReminderAdvanceMinutes)}',
                       ),
                       trailing: DropdownButton<int>(
                         value: eventOffsetValue,
                         underline: const SizedBox.shrink(),
-                        items: const [
-                          DropdownMenuItem(value: 5, child: Text('提前 5 分钟')),
-                          DropdownMenuItem(value: 10, child: Text('提前 10 分钟')),
-                          DropdownMenuItem(value: 15, child: Text('提前 15 分钟')),
-                          DropdownMenuItem(value: 30, child: Text('提前 30 分钟')),
-                        ],
+                        items: _buildReminderOffsetMenuItems(),
                         onChanged: (value) {
                           if (value != null) {
                             _onEventReminderOffsetChanged(
@@ -178,6 +177,29 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
         ),
       ),
     );
+  }
+
+  List<DropdownMenuItem<int>> _buildReminderOffsetMenuItems() {
+    return [
+      for (final minutes in _reminderOffsetOptions)
+        DropdownMenuItem(
+          value: minutes,
+          child: Text('提前 ${_formatReminderAdvance(minutes)}'),
+        ),
+    ];
+  }
+
+  String _formatReminderAdvance(int minutes) {
+    if (minutes == 1440) {
+      return '1 天';
+    }
+    if (minutes == 120) {
+      return '2 小时';
+    }
+    if (minutes == 60) {
+      return '1 小时';
+    }
+    return '$minutes 分钟';
   }
 
   Future<bool> _ensureNotificationPermission() async {

@@ -442,7 +442,7 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<SettingsActionResult> updateReminderAdvanceMinutes(int value) async {
-    final safeValue = value.clamp(0, 60).toInt();
+    final safeValue = value.clamp(0, 1440).toInt();
     if (safeValue == _reminderAdvanceMinutes) {
       return SettingsActionResult.success();
     }

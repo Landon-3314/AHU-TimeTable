@@ -103,7 +103,7 @@ class _DayAgendaViewState extends State<DayAgendaView> {
   }
 }
 
-class DayWeekHeader extends StatelessWidget {
+class DayWeekHeader extends StatefulWidget {
   const DayWeekHeader({
     super.key,
     required this.summaryLabel,
@@ -118,6 +118,122 @@ class DayWeekHeader extends StatelessWidget {
   final ValueChanged<int> onDaySelected;
 
   @override
+  State<DayWeekHeader> createState() => _DayWeekHeaderState();
+}
+
+class _DayWeekHeaderState extends State<DayWeekHeader> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _scrollViewKey = GlobalKey();
+  final Map<int, GlobalKey> _chipKeys = <int, GlobalKey>{};
+  bool _visibilityCheckScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncChipKeys();
+    _scheduleSelectedChipVisibility();
+  }
+
+  @override
+  void didUpdateWidget(DayWeekHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncChipKeys();
+    if (oldWidget.selectedWeekday != widget.selectedWeekday ||
+        !_hasSameChipWeekdays(oldWidget.chips, widget.chips)) {
+      _scheduleSelectedChipVisibility();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _syncChipKeys() {
+    final weekdays = widget.chips.map((chip) => chip.weekday).toSet();
+    _chipKeys.removeWhere((weekday, _) => !weekdays.contains(weekday));
+    for (final weekday in weekdays) {
+      _chipKeys.putIfAbsent(weekday, GlobalKey.new);
+    }
+  }
+
+  bool _hasSameChipWeekdays(
+    List<TimetableDayChipData> previous,
+    List<TimetableDayChipData> next,
+  ) {
+    if (previous.length != next.length) {
+      return false;
+    }
+    for (var index = 0; index < previous.length; index += 1) {
+      if (previous[index].weekday != next[index].weekday) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _scheduleSelectedChipVisibility() {
+    if (_visibilityCheckScheduled) {
+      return;
+    }
+    _visibilityCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _visibilityCheckScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _ensureSelectedChipVisible();
+    });
+  }
+
+  void _ensureSelectedChipVisible() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    final viewportObject = _scrollViewKey.currentContext?.findRenderObject();
+    final chipObject = _chipKeys[widget.selectedWeekday]?.currentContext
+        ?.findRenderObject();
+    if (viewportObject is! RenderBox || chipObject is! RenderBox) {
+      return;
+    }
+
+    final chipOffset = chipObject.localToGlobal(
+      Offset.zero,
+      ancestor: viewportObject,
+    );
+    final chipLeft = chipOffset.dx;
+    final chipRight = chipLeft + chipObject.size.width;
+    final viewportWidth = viewportObject.size.width;
+
+    final currentOffset = _scrollController.offset;
+    double targetOffset = currentOffset;
+    if (chipLeft < 0) {
+      targetOffset = currentOffset + chipLeft;
+    } else if (chipRight > viewportWidth) {
+      targetOffset = currentOffset + (chipRight - viewportWidth);
+    } else {
+      return;
+    }
+
+    final position = _scrollController.position;
+    targetOffset = targetOffset.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((targetOffset - currentOffset).abs() < 0.5) {
+      return;
+    }
+
+    _scrollController.animateTo(
+      targetOffset,
+      duration: AppDurations.pageSync,
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,7 +246,7 @@ class DayWeekHeader extends StatelessWidget {
             AppSpacing.sm,
           ),
           child: Text(
-            summaryLabel,
+            widget.summaryLabel,
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -139,12 +255,15 @@ class DayWeekHeader extends StatelessWidget {
         SizedBox(
           height: AppSpacing.chipHeight,
           child: SingleChildScrollView(
+            key: _scrollViewKey,
+            controller: _scrollController,
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             child: Row(
               children: [
-                for (final chip in chips)
+                for (final chip in widget.chips)
                   Padding(
+                    key: _chipKeys[chip.weekday],
                     padding: const EdgeInsets.only(right: AppSpacing.sm),
                     child: ChoiceChip(
                       label: Column(
@@ -157,8 +276,8 @@ class DayWeekHeader extends StatelessWidget {
                           ),
                         ],
                       ),
-                      selected: selectedWeekday == chip.weekday,
-                      onSelected: (_) => onDaySelected(chip.weekday),
+                      selected: widget.selectedWeekday == chip.weekday,
+                      onSelected: (_) => widget.onDaySelected(chip.weekday),
                     ),
                   ),
               ],
