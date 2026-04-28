@@ -9,19 +9,20 @@ import '../providers/settings_provider.dart';
 import '../providers/timetable_view_provider.dart';
 import '../services/app_services.dart';
 import '../services/native_alarm_service.dart';
-import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/semester_start_date_dialog.dart';
+import 'period_start_time_settings_page.dart';
 
-class TimetableTimeSettingsPage extends StatefulWidget {
-  const TimetableTimeSettingsPage({super.key});
+class SemesterTimeSettingsPage extends StatefulWidget {
+  const SemesterTimeSettingsPage({super.key});
 
   @override
-  State<TimetableTimeSettingsPage> createState() =>
-      _TimetableTimeSettingsPageState();
+  State<SemesterTimeSettingsPage> createState() =>
+      _SemesterTimeSettingsPageState();
 }
 
-class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
+class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -46,150 +47,139 @@ class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
             _buildSemesterManagementSection(context, provider),
             const SizedBox(height: AppSpacing.xl),
             const AppSectionTitle(title: '日历范围', subtitle: '决定课表从哪一天开始、显示多少周'),
-            AppSurface(
-              child: Column(
-                children: [
-                  AppActionTile(
-                    icon: Icons.date_range_outlined,
-                    title: '学期起始日期',
-                    subtitle: _formatDate(provider.semesterStartDate),
-                    onTap: () => _pickSemesterStartDate(context, provider),
-                  ),
-                  const Divider(height: 1),
-                  AppActionTile(
-                    icon: Icons.calendar_view_week_outlined,
-                    title: '上课周数',
-                    subtitle: '${provider.totalWeeks} 周',
-                    trailing: DropdownButton<int>(
-                      value: provider.totalWeeks,
-                      underline: const SizedBox.shrink(),
-                      items: [
-                        for (int week = 12; week <= 30; week++)
-                          DropdownMenuItem<int>(
-                            value: week,
-                            child: Text('$week'),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          _updateAndRefresh(
-                            context,
-                            provider,
-                            () => provider.updateTotalWeeks(value),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildCalendarSection(context, provider),
             const SizedBox(height: AppSpacing.xl),
-            const AppSectionTitle(title: '节次', subtitle: '调整单节课与课间的时间长度'),
-            AppSurface(
-              child: Column(
-                children: [
-                  _durationTile(
-                    context: context,
-                    icon: Icons.timelapse_outlined,
-                    title: '每节课时长',
-                    value: provider.classDuration,
-                    min: 30,
-                    max: 60,
-                    onChanged: (v) => _updateAndRefresh(
-                      context,
-                      provider,
-                      () => provider.updateClassDuration(v),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  _durationTile(
-                    context: context,
-                    icon: Icons.coffee_outlined,
-                    title: '课间时长',
-                    value: provider.shortBreak,
-                    min: 0,
-                    max: 30,
-                    onChanged: (v) => _updateAndRefresh(
-                      context,
-                      provider,
-                      () => provider.updateShortBreak(v),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.schedule_outlined),
-                    title: const Text('大课间发生在第几节课后'),
-                    subtitle: Text('第 ${provider.bigBreakAfterPeriod} 节后'),
-                    trailing: DropdownButton<int>(
-                      value: provider.bigBreakAfterPeriod,
-                      underline: const SizedBox.shrink(),
-                      items: [
-                        for (int period = 1; period <= 6; period++)
-                          DropdownMenuItem<int>(
-                            value: period,
-                            child: Text('第$period节后'),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          _updateAndRefresh(
-                            context,
-                            provider,
-                            () => provider.updateBigBreakAfterPeriod(value),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  _durationTile(
-                    context: context,
-                    icon: Icons.wb_sunny_outlined,
-                    title: '大课间时长',
-                    value: provider.bigBreak,
-                    min: 5,
-                    max: 60,
-                    onChanged: (v) => _updateAndRefresh(
-                      context,
-                      provider,
-                      () => provider.updateBigBreak(v),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const AppSectionTitle(title: '节次', subtitle: '调整单节课、课间和每天各时段节数'),
+            _buildPeriodSection(context, provider),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSemesterManagementSection(
+  Widget _buildCalendarSection(
     BuildContext context,
     SettingsProvider provider,
   ) {
-    final currentSemester = provider.currentSemester;
     return AppSurface(
       child: Column(
         children: [
           AppActionTile(
-            icon: Icons.school_outlined,
-            title: '当前学期',
-            subtitle: currentSemester?.name ?? '未设置',
+            icon: Icons.date_range_outlined,
+            title: '学期起始日期',
+            subtitle: _formatDate(provider.semesterStartDate),
+            onTap: () => _pickSemesterStartDate(context, provider),
           ),
           const Divider(height: 1),
           AppActionTile(
-            icon: Icons.swap_horiz_outlined,
-            title: '管理学期',
-            onTap: () => _showSemesterSwitcher(context, provider),
+            icon: Icons.calendar_view_week_outlined,
+            title: '上课周数',
+            subtitle: '${provider.totalWeeks} 周',
+            trailing: DropdownButton<int>(
+              value: provider.totalWeeks,
+              underline: const SizedBox.shrink(),
+              items: [
+                for (int week = 12; week <= 30; week++)
+                  DropdownMenuItem<int>(value: week, child: Text('$week')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  _updateAndRefresh(
+                    context,
+                    provider,
+                    () => provider.updateTotalWeeks(value),
+                  );
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPeriodSection(BuildContext context, SettingsProvider provider) {
+    return AppSurface(
+      child: Column(
+        children: [
+          _durationTile(
+            context: context,
+            icon: Icons.timelapse_outlined,
+            title: '每节课时长',
+            value: provider.classDuration,
+            min: 30,
+            max: 60,
+            onChanged: (v) => _updateAndRefresh(
+              context,
+              provider,
+              () => provider.updateClassDuration(v),
+            ),
+          ),
+          const Divider(height: 1),
+          _durationTile(
+            context: context,
+            icon: Icons.coffee_outlined,
+            title: '课间时长',
+            value: provider.shortBreak,
+            min: 0,
+            max: 30,
+            onChanged: (v) => _updateAndRefresh(
+              context,
+              provider,
+              () => provider.updateShortBreak(v),
+            ),
+          ),
+          const Divider(height: 1),
+          _sessionCountTile(
+            context: context,
+            icon: Icons.wb_sunny_outlined,
+            title: '上午几节课',
+            value: provider.morningClasses,
+            max: 8,
+            onChanged: (v) => _updateAndRefresh(
+              context,
+              provider,
+              () => provider.updateMorningClasses(v),
+            ),
+          ),
+          const Divider(height: 1),
+          _sessionCountTile(
+            context: context,
+            icon: Icons.wb_twilight_outlined,
+            title: '下午几节课',
+            value: provider.afternoonClasses,
+            max: 8,
+            onChanged: (v) => _updateAndRefresh(
+              context,
+              provider,
+              () => provider.updateAfternoonClasses(v),
+            ),
+          ),
+          const Divider(height: 1),
+          _sessionCountTile(
+            context: context,
+            icon: Icons.nightlight_outlined,
+            title: '晚上几节课',
+            value: provider.eveningClasses,
+            max: 6,
+            onChanged: (v) => _updateAndRefresh(
+              context,
+              provider,
+              () => provider.updateEveningClasses(v),
+            ),
           ),
           const Divider(height: 1),
           AppActionTile(
-            icon: Icons.add_circle_outline,
-            title: '新建学期',
-            subtitle: '创建后会立即选择学期开始日期',
-            onTap: () => _createSemester(context, provider),
+            icon: Icons.edit_calendar_outlined,
+            title: '详细调整每节课起始时间',
+            subtitle: '当前共 ${provider.totalClassPeriods} 节课',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const PeriodStartTimeSettingsPage(),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -228,9 +218,67 @@ class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
             min: min.toDouble(),
             max: max.toDouble(),
             divisions: max - min,
-            onChanged: (newValue) {
-              onChanged(newValue.round());
-            },
+            label: '$value 分钟',
+            onChanged: (newValue) => onChanged(newValue.round()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sessionCountTile({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    required int value,
+    required int max,
+    required Future<void> Function(int value) onChanged,
+  }) {
+    return AppActionTile(
+      icon: icon,
+      title: title,
+      subtitle: '$value 节',
+      trailing: DropdownButton<int>(
+        value: value.clamp(0, max).toInt(),
+        underline: const SizedBox.shrink(),
+        items: [
+          for (int count = 0; count <= max; count++)
+            DropdownMenuItem<int>(value: count, child: Text('$count')),
+        ],
+        onChanged: (nextValue) {
+          if (nextValue != null) {
+            onChanged(nextValue);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildSemesterManagementSection(
+    BuildContext context,
+    SettingsProvider provider,
+  ) {
+    final currentSemester = provider.currentSemester;
+    return AppSurface(
+      child: Column(
+        children: [
+          AppActionTile(
+            icon: Icons.school_outlined,
+            title: '当前学期',
+            subtitle: currentSemester?.name ?? '未设置',
+          ),
+          const Divider(height: 1),
+          AppActionTile(
+            icon: Icons.swap_horiz_outlined,
+            title: '管理学期',
+            onTap: () => _showSemesterSwitcher(context, provider),
+          ),
+          const Divider(height: 1),
+          AppActionTile(
+            icon: Icons.add_circle_outline,
+            title: '新建学期',
+            subtitle: '创建后会立即选择学期开始日期',
+            onTap: () => _createSemester(context, provider),
           ),
         ],
       ),
@@ -505,10 +553,7 @@ class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
       firstDate: DateTime(now.year - 2),
       lastDate: DateTime(now.year + 2),
     );
-    if (picked == null) {
-      return;
-    }
-    if (!context.mounted) {
+    if (picked == null || !context.mounted) {
       return;
     }
 
@@ -528,19 +573,7 @@ class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
     if (!context.mounted) {
       return;
     }
-    await _refreshNativeAlarms(context, provider);
-  }
-
-  Future<void> _refreshNativeAlarms(
-    BuildContext context,
-    SettingsProvider provider,
-  ) async {
-    final courseProvider = context.read<CourseProvider>();
-    await AppServices.refreshSchedules(
-      courses: courseProvider.courses.toList(),
-      events: courseProvider.events.toList(),
-      settings: provider,
-    );
+    await _refreshSchedules(context, provider);
   }
 
   Future<void> _refreshSchedules(

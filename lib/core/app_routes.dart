@@ -6,7 +6,7 @@ import '../screens/developer_diagnostics_page.dart';
 import '../screens/import_course_page.dart';
 import '../screens/main_scaffold.dart';
 import '../screens/reschedule_course_page.dart';
-import '../screens/schedule_settings_page.dart';
+import '../screens/semester_time_settings_page.dart';
 
 class AppRoutes {
   const AppRoutes._();
@@ -59,7 +59,7 @@ class AppRoutes {
         );
       case scheduleSettings:
         return MaterialPageRoute<void>(
-          builder: (_) => const ScheduleSettingsPage(),
+          builder: (_) => const SemesterTimeSettingsPage(),
           settings: settings,
         );
       case developerDiagnostics:

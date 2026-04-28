@@ -34,54 +34,33 @@ class ScheduleCalculator {
 
   List<TimeSlot> generateTimeSlots({
     required int classDuration,
-    required int shortBreak,
-    required int bigBreak,
-    required int bigBreakAfterPeriod,
-    required ClockTime morningStartTime,
-    required int morningClasses,
-    required ClockTime afternoonStartTime,
-    required int afternoonClasses,
-    required ClockTime eveningStartTime,
-    required int eveningClasses,
+    required List<ClockTime> morningStartTimes,
+    required List<ClockTime> afternoonStartTimes,
+    required List<ClockTime> eveningStartTimes,
   }) {
     final slots = <TimeSlot>[];
     var periodNumber = 1;
 
     periodNumber = _appendSessionSlots(
       slots: slots,
-      startTime: morningStartTime,
-      count: morningClasses,
+      startTimes: morningStartTimes,
       classDuration: classDuration,
-      shortBreak: shortBreak,
-      bigBreak: bigBreak,
-      bigBreakAfterPeriod: bigBreakAfterPeriod,
       periodNumber: periodNumber,
       label: 'Morning',
-      hasBigBreak: true,
     );
     periodNumber = _appendSessionSlots(
       slots: slots,
-      startTime: afternoonStartTime,
-      count: afternoonClasses,
+      startTimes: afternoonStartTimes,
       classDuration: classDuration,
-      shortBreak: shortBreak,
-      bigBreak: bigBreak,
-      bigBreakAfterPeriod: bigBreakAfterPeriod,
       periodNumber: periodNumber,
       label: 'Afternoon',
-      hasBigBreak: true,
     );
     _appendSessionSlots(
       slots: slots,
-      startTime: eveningStartTime,
-      count: eveningClasses,
+      startTimes: eveningStartTimes,
       classDuration: classDuration,
-      shortBreak: shortBreak,
-      bigBreak: bigBreak,
-      bigBreakAfterPeriod: bigBreakAfterPeriod,
       periodNumber: periodNumber,
       label: 'Evening',
-      hasBigBreak: false,
     );
 
     return slots;
@@ -98,20 +77,13 @@ class ScheduleCalculator {
 
   int _appendSessionSlots({
     required List<TimeSlot> slots,
-    required ClockTime startTime,
-    required int count,
+    required List<ClockTime> startTimes,
     required int classDuration,
-    required int shortBreak,
-    required int bigBreak,
-    required int bigBreakAfterPeriod,
     required int periodNumber,
     required String label,
-    required bool hasBigBreak,
   }) {
-    var currentStartMinutes = startTime.toMinutes();
-
-    for (var index = 1; index <= count; index += 1) {
-      final classStartMinutes = currentStartMinutes;
+    for (final startTime in startTimes) {
+      final classStartMinutes = startTime.toMinutes();
       final classEndMinutes = classStartMinutes + classDuration;
 
       slots.add(
@@ -124,14 +96,6 @@ class ScheduleCalculator {
       );
 
       periodNumber += 1;
-      currentStartMinutes = classEndMinutes;
-
-      if (index == count) {
-        continue;
-      }
-
-      currentStartMinutes +=
-          hasBigBreak && index == bigBreakAfterPeriod ? bigBreak : shortBreak;
     }
 
     return periodNumber;

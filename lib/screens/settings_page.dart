@@ -8,8 +8,8 @@ import '../providers/settings_provider.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/common/app_ui.dart';
 import 'reminder_settings_page.dart';
+import 'semester_time_settings_page.dart';
 import 'theme_settings_page.dart';
-import 'timetable_time_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -104,7 +104,7 @@ class _SettingsPageState extends State<SettingsPage> {
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => const TimetableTimeSettingsPage(),
+              builder: (_) => const SemesterTimeSettingsPage(),
             ),
           );
         },

@@ -158,8 +158,7 @@ class TimetableViewDataService {
         headerTitle: weekdayLabel,
         headerSubtitle: '${_weekLabel(translate, week)} / $dateLabel',
         emptyTitle: weekdayLabel,
-        emptySubtitle:
-            '${translate('no_courses_for_day')} ($dateLabel / ${_weekLabel(translate, week)})',
+        emptySubtitle: translate('no_courses_for_day'),
         items: items,
       );
     });

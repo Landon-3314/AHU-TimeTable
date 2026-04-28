@@ -11,6 +11,14 @@ class AppStrings {
     'theme_blue_amber': {'zh': '蓝色 / 琥珀', 'en': 'Blue / Amber'},
     'theme_violet_pink': {'zh': '紫色 / 粉色', 'en': 'Violet / Pink'},
     'theme_green_lime': {'zh': '绿色 / 青柠', 'en': 'Green / Lime'},
+    'theme_custom': {'zh': '自定义颜色', 'en': 'Custom Colors'},
+    'theme_custom_subtitle': {
+      'zh': '从调色盘选择主色和辅助色，点选后立即应用',
+      'en':
+          'Choose primary and accent colors from the palette. Changes apply instantly.',
+    },
+    'primary_color': {'zh': '主色', 'en': 'Primary Color'},
+    'accent_color': {'zh': '辅助色', 'en': 'Accent Color'},
     'basic_settings': {'zh': '基础设置', 'en': 'Basic Settings'},
     'notifications': {'zh': '提醒设置', 'en': 'Notifications'},
     'data_storage': {'zh': '高级与数据管理', 'en': 'Data & Storage'},

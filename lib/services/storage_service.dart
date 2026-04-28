@@ -26,10 +26,16 @@ class StorageService {
   static const String _bigBreakAfterPeriodKey = 'settings.bigBreakAfterPeriod';
   static const String _morningStartTimeKey = 'settings.morningStartTime';
   static const String _morningClassesKey = 'settings.morningClasses';
+  static const String _morningPeriodStartTimesKey =
+      'settings.morningPeriodStartTimes';
   static const String _afternoonStartTimeKey = 'settings.afternoonStartTime';
   static const String _afternoonClassesKey = 'settings.afternoonClasses';
+  static const String _afternoonPeriodStartTimesKey =
+      'settings.afternoonPeriodStartTimes';
   static const String _eveningStartTimeKey = 'settings.eveningStartTime';
   static const String _eveningClassesKey = 'settings.eveningClasses';
+  static const String _eveningPeriodStartTimesKey =
+      'settings.eveningPeriodStartTimes';
   static const String _semesterStartDateKey = 'settings.semesterStartDate';
   static const String _semesterStartDatePromptShownKey =
       'settings.semesterStartDatePromptShown';
@@ -40,6 +46,10 @@ class StorageService {
       'settings.eventReminderAdvanceMinutes';
   static const String _languageCodeKey = 'settings.languageCode';
   static const String _themePaletteIdKey = 'settings.themePaletteId';
+  static const String _customThemePrimaryValueKey =
+      'settings.customThemePrimaryValue';
+  static const String _customThemeAccentValueKey =
+      'settings.customThemeAccentValue';
   static const String _autoMuteEnabledKey = 'settings.autoMuteEnabled';
   static const String _backgroundServiceEnabledKey =
       'settings.backgroundServiceEnabled';
@@ -339,6 +349,19 @@ class StorageService {
     );
   }
 
+  List<String>? readMorningPeriodStartTimes() {
+    return _sharedPreferences.getStringList(
+      _currentSemesterKey(_morningPeriodStartTimesKey),
+    );
+  }
+
+  Future<void> writeMorningPeriodStartTimes(List<String> values) {
+    return _sharedPreferences.setStringList(
+      _currentSemesterKey(_morningPeriodStartTimesKey),
+      values,
+    );
+  }
+
   String readAfternoonStartTime({required String fallback}) {
     return _sharedPreferences.getString(
           _currentSemesterKey(_afternoonStartTimeKey),
@@ -367,6 +390,19 @@ class StorageService {
     );
   }
 
+  List<String>? readAfternoonPeriodStartTimes() {
+    return _sharedPreferences.getStringList(
+      _currentSemesterKey(_afternoonPeriodStartTimesKey),
+    );
+  }
+
+  Future<void> writeAfternoonPeriodStartTimes(List<String> values) {
+    return _sharedPreferences.setStringList(
+      _currentSemesterKey(_afternoonPeriodStartTimesKey),
+      values,
+    );
+  }
+
   String readEveningStartTime({required String fallback}) {
     return _sharedPreferences.getString(
           _currentSemesterKey(_eveningStartTimeKey),
@@ -390,6 +426,19 @@ class StorageService {
     return _sharedPreferences.setInt(
       _currentSemesterKey(_eveningClassesKey),
       value,
+    );
+  }
+
+  List<String>? readEveningPeriodStartTimes() {
+    return _sharedPreferences.getStringList(
+      _currentSemesterKey(_eveningPeriodStartTimesKey),
+    );
+  }
+
+  Future<void> writeEveningPeriodStartTimes(List<String> values) {
+    return _sharedPreferences.setStringList(
+      _currentSemesterKey(_eveningPeriodStartTimesKey),
+      values,
     );
   }
 
@@ -477,6 +526,22 @@ class StorageService {
     return _sharedPreferences.setString(_themePaletteIdKey, value);
   }
 
+  int readCustomThemePrimaryValue({required int fallback}) {
+    return _sharedPreferences.getInt(_customThemePrimaryValueKey) ?? fallback;
+  }
+
+  Future<void> writeCustomThemePrimaryValue(int value) {
+    return _sharedPreferences.setInt(_customThemePrimaryValueKey, value);
+  }
+
+  int readCustomThemeAccentValue({required int fallback}) {
+    return _sharedPreferences.getInt(_customThemeAccentValueKey) ?? fallback;
+  }
+
+  Future<void> writeCustomThemeAccentValue(int value) {
+    return _sharedPreferences.setInt(_customThemeAccentValueKey, value);
+  }
+
   bool readAutoMuteEnabled({required bool fallback}) {
     return _sharedPreferences.getBool(_autoMuteEnabledKey) ?? fallback;
   }
@@ -522,10 +587,13 @@ class StorageService {
       _bigBreakAfterPeriodKey,
       _morningStartTimeKey,
       _morningClassesKey,
+      _morningPeriodStartTimesKey,
       _afternoonStartTimeKey,
       _afternoonClassesKey,
+      _afternoonPeriodStartTimesKey,
       _eveningStartTimeKey,
       _eveningClassesKey,
+      _eveningPeriodStartTimesKey,
       _semesterStartDateKey,
       _semesterStartDatePromptShownKey,
       _totalWeeksKey,
@@ -562,10 +630,13 @@ class StorageService {
     await _copyLegacySetting(_bigBreakAfterPeriodKey);
     await _copyLegacySetting(_morningStartTimeKey);
     await _copyLegacySetting(_morningClassesKey);
+    await _copyLegacySetting(_morningPeriodStartTimesKey);
     await _copyLegacySetting(_afternoonStartTimeKey);
     await _copyLegacySetting(_afternoonClassesKey);
+    await _copyLegacySetting(_afternoonPeriodStartTimesKey);
     await _copyLegacySetting(_eveningStartTimeKey);
     await _copyLegacySetting(_eveningClassesKey);
+    await _copyLegacySetting(_eveningPeriodStartTimesKey);
     await _copyLegacySetting(_semesterStartDateKey);
     await _copyLegacySetting(_semesterStartDatePromptShownKey);
     await _copyLegacySetting(_totalWeeksKey);

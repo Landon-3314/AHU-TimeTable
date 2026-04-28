@@ -1,6 +1,0 @@
-Analyzing timetable...                                          
-
-  error - Undefined class 'Timer' - lib\screens\main_scaffold.dart:22:3 - undefined_class
-  error - The method 'Timer' isn't defined for the type '_MainScaffoldState' - lib\screens\main_scaffold.dart:70:20 - undefined_method
-
-2 issues found. (ran in 3.5s)

@@ -12,6 +12,10 @@ class ThemeSettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
+    final customPalette = AppThemePalette.custom(
+      primaryValue: provider.customThemePrimaryValue,
+      accentValue: provider.customThemeAccentValue,
+    );
 
     return Scaffold(
       appBar: AppBar(title: Text(provider.t('theme_color'))),
@@ -48,6 +52,51 @@ class ThemeSettingsPage extends StatelessWidget {
                       if (index != AppThemePalette.values.length - 1)
                         const Divider(height: 1),
                     ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            AppSectionTitle(
+              title: provider.t('theme_custom'),
+              subtitle: provider.t('theme_custom_subtitle'),
+            ),
+            AppSurface(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ThemePaletteTile(
+                      palette: customPalette,
+                      selected:
+                          provider.themePaletteId == AppThemePalette.customId,
+                      label: provider.t('theme_custom'),
+                      onTap: () => provider.changeCustomThemeColors(
+                        primaryValue: provider.customThemePrimaryValue,
+                        accentValue: provider.customThemeAccentValue,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    _ColorPickerTitle(provider.t('primary_color')),
+                    const SizedBox(height: AppSpacing.md),
+                    _ThemeColorGrid(
+                      selectedValue: provider.customThemePrimaryValue,
+                      onSelected: (value) => provider.changeCustomThemeColors(
+                        primaryValue: value,
+                        accentValue: provider.customThemeAccentValue,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    _ColorPickerTitle(provider.t('accent_color')),
+                    const SizedBox(height: AppSpacing.md),
+                    _ThemeColorGrid(
+                      selectedValue: provider.customThemeAccentValue,
+                      onSelected: (value) => provider.changeCustomThemeColors(
+                        primaryValue: provider.customThemePrimaryValue,
+                        accentValue: value,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -171,6 +220,98 @@ class _ColorSwatch extends StatelessWidget {
             offset: const Offset(0, 4),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ColorPickerTitle extends StatelessWidget {
+  const _ColorPickerTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: Theme.of(
+        context,
+      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+    );
+  }
+}
+
+class _ThemeColorGrid extends StatelessWidget {
+  const _ThemeColorGrid({
+    required this.selectedValue,
+    required this.onSelected,
+  });
+
+  final int selectedValue;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.md,
+      runSpacing: AppSpacing.md,
+      children: [
+        for (final colorValue in AppColors.themePickerPaletteValues)
+          _ThemeColorChip(
+            colorValue: colorValue,
+            selected: colorValue == selectedValue,
+            onTap: () => onSelected(colorValue),
+          ),
+      ],
+    );
+  }
+}
+
+class _ThemeColorChip extends StatelessWidget {
+  const _ThemeColorChip({
+    required this.colorValue,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final int colorValue;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(colorValue);
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkResponse(
+        onTap: onTap,
+        radius: 28,
+        child: AnimatedContainer(
+          duration: AppDurations.fast,
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected
+                  ? Theme.of(context).colorScheme.onSurface
+                  : AppColors.surface,
+              width: selected ? 3 : 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: selected ? 0.30 : 0.16),
+                blurRadius: selected ? 14 : 8,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: selected
+              ? const Icon(Icons.check, color: AppColors.onPrimary, size: 20)
+              : null,
+        ),
       ),
     );
   }

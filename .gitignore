@@ -4,6 +4,14 @@
 *.pyc
 *.swp
 .DS_Store
+analyze*.txt
+class.txt
+courseStructure.txt
+devtools_options.yaml
+flutter_*.png
+flutter_run*.txt
+PROJECT_STATUS.txt
+reconstruction_progress.txt
 .atom/
 .build/
 .buildlog/
@@ -32,6 +40,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/android/build/
 
 # Symbolication related
 app.*.symbols

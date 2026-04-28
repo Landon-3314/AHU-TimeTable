@@ -1,5 +1,0 @@
-Analyzing timetable...                                          
-
-warning - Unused import: '../core/app_routes.dart' - lib\screens\main_scaffold.dart:6:8 - unused_import
-
-1 issue found. (ran in 3.1s)

@@ -27,7 +27,12 @@ class AppThemePalette {
   final Color divider;
   final Color textPrimary;
 
-  static const AppThemePalette defaultPalette = AppThemePalette(
+  int get primaryValue => _argbValue(primary);
+  int get accentValue => _argbValue(accent);
+
+  static const String customId = 'custom';
+
+  static const AppThemePalette tealOrange = AppThemePalette(
     id: 'teal_orange',
     nameKey: 'theme_teal_orange',
     primary: Color(0xFF0D9488),
@@ -41,21 +46,25 @@ class AppThemePalette {
     textPrimary: Color(0xFF134E4A),
   );
 
+  static const AppThemePalette blueAmber = AppThemePalette(
+    id: 'blue_amber',
+    nameKey: 'theme_blue_amber',
+    primary: Color(0xFF2563EB),
+    primaryDark: Color(0xFF1E3A8A),
+    primarySoft: Color(0xFFDBEAFE),
+    accent: Color(0xFFF59E0B),
+    accentSoft: Color(0xFFFEF3C7),
+    scaffoldBackground: Color(0xFFF3F7FF),
+    surfaceMuted: Color(0xFFEFF6FF),
+    divider: Color(0xFFD6E4FF),
+    textPrimary: Color(0xFF172554),
+  );
+
+  static const AppThemePalette defaultPalette = blueAmber;
+
   static const List<AppThemePalette> values = <AppThemePalette>[
-    defaultPalette,
-    AppThemePalette(
-      id: 'blue_amber',
-      nameKey: 'theme_blue_amber',
-      primary: Color(0xFF2563EB),
-      primaryDark: Color(0xFF1E3A8A),
-      primarySoft: Color(0xFFDBEAFE),
-      accent: Color(0xFFF59E0B),
-      accentSoft: Color(0xFFFEF3C7),
-      scaffoldBackground: Color(0xFFF3F7FF),
-      surfaceMuted: Color(0xFFEFF6FF),
-      divider: Color(0xFFD6E4FF),
-      textPrimary: Color(0xFF172554),
-    ),
+    blueAmber,
+    tealOrange,
     AppThemePalette(
       id: 'violet_pink',
       nameKey: 'theme_violet_pink',
@@ -92,6 +101,52 @@ class AppThemePalette {
     }
     return defaultPalette;
   }
+
+  static AppThemePalette custom({
+    required int primaryValue,
+    required int accentValue,
+  }) {
+    final primary = Color(primaryValue);
+    final accent = Color(accentValue);
+    return AppThemePalette(
+      id: customId,
+      nameKey: 'theme_custom',
+      primary: primary,
+      primaryDark: _darken(primary, 0.34),
+      primarySoft: _mix(primary, Colors.white, 0.84),
+      accent: accent,
+      accentSoft: _mix(accent, Colors.white, 0.86),
+      scaffoldBackground: _mix(primary, Colors.white, 0.94),
+      surfaceMuted: _mix(primary, Colors.white, 0.90),
+      divider: _mix(primary, Colors.white, 0.76),
+      textPrimary: _darken(primary, 0.54),
+    );
+  }
+
+  static Color _darken(Color color, double amount) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl
+        .withLightness((hsl.lightness * (1 - amount)).clamp(0.12, 0.42))
+        .withSaturation((hsl.saturation * 1.05).clamp(0.32, 1.0))
+        .toColor();
+  }
+
+  static Color _mix(Color color, Color target, double targetAmount) {
+    final colorAmount = 1 - targetAmount;
+    return Color.fromARGB(
+      255,
+      (color.r * 255 * colorAmount + target.r * 255 * targetAmount).round(),
+      (color.g * 255 * colorAmount + target.g * 255 * targetAmount).round(),
+      (color.b * 255 * colorAmount + target.b * 255 * targetAmount).round(),
+    );
+  }
+
+  static int _argbValue(Color color) {
+    return ((color.a * 255).round() << 24) |
+        ((color.r * 255).round() << 16) |
+        ((color.g * 255).round() << 8) |
+        (color.b * 255).round();
+  }
 }
 
 class AppColors {
@@ -127,5 +182,24 @@ class AppColors {
     0xFFDB2777,
     0xFF7C3AED,
     0xFF16A34A,
+    0xFF0891B2,
+    0xFFDC2626,
+    0xFFCA8A04,
+    0xFF4F46E5,
+  ];
+
+  static const List<int> themePickerPaletteValues = <int>[
+    0xFF2563EB,
+    0xFF0D9488,
+    0xFF7C3AED,
+    0xFF16A34A,
+    0xFF0891B2,
+    0xFF4F46E5,
+    0xFFDB2777,
+    0xFFDC2626,
+    0xFFF97316,
+    0xFFF59E0B,
+    0xFF84CC16,
+    0xFF475569,
   ];
 }
