@@ -1,4 +1,4 @@
-﻿package com.example.timetable
+﻿package com.gh.timetable
 
 import android.app.AlarmManager
 import android.app.PendingIntent

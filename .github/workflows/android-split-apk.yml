@@ -1,21 +1,21 @@
-name: Android Split APK
+name: Android Release APK
 
 on:
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: Release tag, e.g. v0.2.11
-        required: true
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
 
 permissions:
   contents: write
 
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-android-apk:
-    name: Build Split APK
+    name: Build and publish APKs
     runs-on: ubuntu-latest
 
     steps:
@@ -37,68 +37,102 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Generate CI keystore
+      - name: Resolve version from pubspec.yaml
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(awk '/^version:/ { print $2; exit }' pubspec.yaml | tr -d '\r')"
+          if [ -z "$VERSION" ]; then
+            echo "Unable to find version in pubspec.yaml" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_name=Timetable v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Android signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD_SECRET: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEYSTORE_ALIAS_SECRET: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          ANDROID_KEY_PASSWORD_SECRET: ${{ secrets.ANDROID_KEY_PASSWORD }}
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/android-keystore"
-          keytool -genkeypair \
-            -v \
-            -storetype JKS \
-            -keystore "$RUNNER_TEMP/android-keystore/debug.keystore" \
-            -storepass android \
-            -keypass android \
-            -alias androiddebugkey \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] \
+            && [ -n "$ANDROID_KEYSTORE_PASSWORD_SECRET" ] \
+            && [ -n "$ANDROID_KEYSTORE_ALIAS_SECRET" ] \
+            && [ -n "$ANDROID_KEY_PASSWORD_SECRET" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/android-keystore/release.keystore"
+            {
+              echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/android-keystore/release.keystore"
+              echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD_SECRET"
+              echo "ANDROID_KEYSTORE_ALIAS=$ANDROID_KEYSTORE_ALIAS_SECRET"
+              echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD_SECRET"
+            } >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair \
+              -v \
+              -storetype JKS \
+              -keystore "$RUNNER_TEMP/android-keystore/debug.keystore" \
+              -storepass android \
+              -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+            {
+              echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/android-keystore/debug.keystore"
+              echo "ANDROID_KEYSTORE_PASSWORD=android"
+              echo "ANDROID_KEYSTORE_ALIAS=androiddebugkey"
+              echo "ANDROID_KEY_PASSWORD=android"
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Build release APKs with split per ABI
-        env:
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/android-keystore/debug.keystore
-          ANDROID_KEYSTORE_PASSWORD: android
-          ANDROID_KEYSTORE_ALIAS: androiddebugkey
-          ANDROID_KEY_PASSWORD: android
         run: flutter build apk --release --split-per-abi
+
+      - name: Prepare versioned release assets
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "release/timetable-${VERSION}-armeabi-v7a.apk"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "release/timetable-${VERSION}-arm64-v8a.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk "release/timetable-${VERSION}-x86_64.apk"
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: android-split-apks
+          name: android-split-apks-${{ steps.version.outputs.version }}
           path: |
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            build/app/outputs/flutter-apk/app-x86_64-release.apk
+            release/timetable-${{ steps.version.outputs.version }}-armeabi-v7a.apk
+            release/timetable-${{ steps.version.outputs.version }}-arm64-v8a.apk
+            release/timetable-${{ steps.version.outputs.version }}-x86_64.apk
           if-no-files-found: error
-
-      - name: Resolve release tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag_name }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          RELEASE_NAME="${{ steps.version.outputs.release_name }}"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --title "$RELEASE_NAME" \
+              --latest
             gh release upload "$TAG" \
-              build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
-              build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
-              build/app/outputs/flutter-apk/app-x86_64-release.apk \
+              release/*.apk \
               --clobber
           else
             gh release create "$TAG" \
-              build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
-              build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
-              build/app/outputs/flutter-apk/app-x86_64-release.apk \
+              release/*.apk \
               --target "${GITHUB_SHA}" \
+              --title "$RELEASE_NAME" \
               --generate-notes
           fi

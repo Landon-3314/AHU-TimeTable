@@ -44,19 +44,9 @@ class _HolidayListViewState extends State<HolidayListView> {
       child: ListView.builder(
         controller: _scrollController,
         padding: AppSpacing.listPagePadding,
-        itemCount: widget.pageData.events.length + 1,
+        itemCount: widget.pageData.events.length,
         itemBuilder: (context, index) {
-          if (index == 0) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-              child: ScheduleHeaderCard(
-                title: widget.pageData.title,
-                subtitle: widget.pageData.subtitle,
-              ),
-            );
-          }
-
-          final event = widget.pageData.events[index - 1];
+          final event = widget.pageData.events[index];
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.lg),
             child: HolidayEventCard(

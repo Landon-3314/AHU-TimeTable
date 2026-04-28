@@ -1,4 +1,4 @@
-﻿package com.example.timetable
+﻿package com.gh.timetable
 
 import android.content.ComponentName
 import android.content.Context

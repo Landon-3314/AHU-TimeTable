@@ -43,64 +43,45 @@ class _DayAgendaViewState extends State<DayAgendaView> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: AppSpacing.xs),
-        Expanded(
-          child: widget.pageData.isEmpty
-              ? EmptyScheduleState(
-                  title: widget.pageData.emptyTitle,
-                  subtitle: widget.pageData.emptySubtitle,
-                )
-              : LongScreenshotScrollCapture(
-                  controller: _scrollController,
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.xl,
-                      AppSpacing.sm,
-                      AppSpacing.xl,
-                      AppSpacing.xxl,
-                    ),
-                    itemCount: widget.pageData.items.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: ScheduleHeaderCard(
-                            title: widget.pageData.headerTitle,
-                            subtitle: widget.pageData.headerSubtitle,
+    return widget.pageData.isEmpty
+        ? EmptyScheduleState(
+            title: widget.pageData.emptyTitle,
+            subtitle: widget.pageData.emptySubtitle,
+          )
+        : LongScreenshotScrollCapture(
+            controller: _scrollController,
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.xs,
+                AppSpacing.xl,
+                AppSpacing.xxl,
+              ),
+              itemCount: widget.pageData.items.length,
+              itemBuilder: (context, index) {
+                final item = widget.pageData.items[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: item.isCourse
+                      ? CourseCard(
+                          course: item.course!,
+                          periodText: widget.coursePeriodTextBuilder(
+                            item.course!,
                           ),
-                        );
-                      }
-
-                      final item = widget.pageData.items[index - 1];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: item.isCourse
-                            ? CourseCard(
-                                course: item.course!,
-                                periodText: widget.coursePeriodTextBuilder(
-                                  item.course!,
-                                ),
-                                accentColor: Color(item.course!.colorValue),
-                                onTap: () => widget.onCourseTap(item.course!),
-                              )
-                            : EventCard(
-                                event: item.event!,
-                                markerLabel: widget.eventMarkerLabel,
-                                locationPendingLabel:
-                                    widget.locationPendingLabel,
-                                onTap: () => widget.onEventTap(item.event!),
-                              ),
-                      );
-                    },
-                  ),
-                ),
-        ),
-      ],
-    );
+                          accentColor: Color(item.course!.colorValue),
+                          onTap: () => widget.onCourseTap(item.course!),
+                        )
+                      : EventCard(
+                          event: item.event!,
+                          markerLabel: widget.eventMarkerLabel,
+                          locationPendingLabel: widget.locationPendingLabel,
+                          onTap: () => widget.onEventTap(item.event!),
+                        ),
+                );
+              },
+            ),
+          );
   }
 }
 
@@ -237,73 +218,60 @@ class _DayWeekHeaderState extends State<DayWeekHeader> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xxl,
-            AppSpacing.xl,
-            AppSpacing.xxl,
-            AppSpacing.sm,
-          ),
-          child: Text(
-            widget.summaryLabel,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
+    return SizedBox(
+      height: AppSpacing.chipHeight + AppSpacing.sm,
+      child: SingleChildScrollView(
+        key: _scrollViewKey,
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.sm,
+          AppSpacing.xl,
+          AppSpacing.xs,
         ),
-        SizedBox(
-          height: AppSpacing.chipHeight,
-          child: SingleChildScrollView(
-            key: _scrollViewKey,
-            controller: _scrollController,
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-            child: Row(
-              children: [
-                for (final chip in widget.chips)
-                  Padding(
-                    key: _chipKeys[chip.weekday],
-                    padding: const EdgeInsets.only(right: AppSpacing.sm),
-                    child: ChoiceChip(
-                      showCheckmark: false,
-                      selectedColor: colorScheme.primaryContainer,
-                      backgroundColor: AppColors.surface,
-                      side: BorderSide(
-                        color: widget.selectedWeekday == chip.weekday
-                            ? colorScheme.primary
-                            : AppColors.divider,
-                      ),
-                      label: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            chip.label,
-                            style: TextStyle(
-                              color: widget.selectedWeekday == chip.weekday
-                                  ? colorScheme.primary
-                                  : AppColors.textPrimary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          Text(
-                            chip.dateLabel,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                      selected: widget.selectedWeekday == chip.weekday,
-                      onSelected: (_) => widget.onDaySelected(chip.weekday),
-                    ),
+        child: Row(
+          children: [
+            for (final chip in widget.chips)
+              Padding(
+                key: _chipKeys[chip.weekday],
+                padding: const EdgeInsets.only(right: AppSpacing.sm),
+                child: ChoiceChip(
+                  showCheckmark: false,
+                  selectedColor: colorScheme.primaryContainer,
+                  backgroundColor: AppColors.surface,
+                  side: BorderSide(
+                    color: widget.selectedWeekday == chip.weekday
+                        ? colorScheme.primary
+                        : AppColors.divider,
                   ),
-              ],
-            ),
-          ),
+                  label: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        chip.label,
+                        style: TextStyle(
+                          color: widget.selectedWeekday == chip.weekday
+                              ? colorScheme.primary
+                              : AppColors.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        chip.dateLabel,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  selected: widget.selectedWeekday == chip.weekday,
+                  onSelected: (_) => widget.onDaySelected(chip.weekday),
+                ),
+              ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -343,20 +311,6 @@ class _TimetableGridState extends State<TimetableGrid> {
         controller: _scrollController,
         padding: AppSpacing.listPagePadding,
         children: [
-          Text(
-            widget.pageData.title,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.pageData.subtitle,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: AppSpacing.xl),
           for (final section in widget.pageData.sections) ...[
             _WeekdaySection(
               section: section,
@@ -424,42 +378,6 @@ class _WeekdaySection extends StatelessWidget {
                       onTap: () => onEventTap(item.event!),
                     ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class ScheduleHeaderCard extends StatelessWidget {
-  const ScheduleHeaderCard({
-    super.key,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppSurface(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            subtitle,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-          ),
         ],
       ),
     );

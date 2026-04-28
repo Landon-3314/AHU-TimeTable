@@ -1,4 +1,4 @@
-﻿package com.example.timetable
+﻿package com.gh.timetable
 
 import android.app.Notification
 import android.app.NotificationChannel

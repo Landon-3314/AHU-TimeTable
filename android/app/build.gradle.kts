@@ -27,7 +27,7 @@ val releaseKeyAlias = readSigningValue("ANDROID_KEYSTORE_ALIAS", "keyAlias")
 val releaseKeyPassword = readSigningValue("ANDROID_KEY_PASSWORD", "keyPassword")
 
 android {
-    namespace = "com.example.timetable"
+    namespace = "com.gh.timetable"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -42,10 +42,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.timetable"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.gh.timetable"
         minSdk = flutter.minSdkVersion
         targetSdk = maxOf(flutter.targetSdkVersion, 33)
         versionCode = flutter.versionCode
