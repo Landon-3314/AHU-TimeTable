@@ -195,10 +195,10 @@ class Course {
   }
 
   static String _stableHash(String source) {
-    var hash = 0xcbf29ce484222325;
+    var hash = 0x811c9dc5;
     for (final codeUnit in source.codeUnits) {
       hash ^= codeUnit;
-      hash = (hash * 0x100000001b3) & 0x7fffffffffffffff;
+      hash = (hash * 0x01000193) & 0xffffffff;
     }
     return hash.toRadixString(16);
   }

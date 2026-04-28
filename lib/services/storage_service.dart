@@ -39,6 +39,7 @@ class StorageService {
   static const String _eventReminderAdvanceMinutesKey =
       'settings.eventReminderAdvanceMinutes';
   static const String _languageCodeKey = 'settings.languageCode';
+  static const String _themePaletteIdKey = 'settings.themePaletteId';
   static const String _autoMuteEnabledKey = 'settings.autoMuteEnabled';
   static const String _backgroundServiceEnabledKey =
       'settings.backgroundServiceEnabled';
@@ -466,6 +467,14 @@ class StorageService {
 
   Future<void> writeLanguageCode(String value) {
     return _sharedPreferences.setString(_languageCodeKey, value);
+  }
+
+  String readThemePaletteId({required String fallback}) {
+    return _sharedPreferences.getString(_themePaletteIdKey) ?? fallback;
+  }
+
+  Future<void> writeThemePaletteId(String value) {
+    return _sharedPreferences.setString(_themePaletteIdKey, value);
   }
 
   bool readAutoMuteEnabled({required bool fallback}) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/app_colors.dart';
 import '../core/app_constants.dart';
 import '../models/semester.dart';
 import '../providers/course_provider.dart';
@@ -9,6 +10,7 @@ import '../providers/timetable_view_provider.dart';
 import '../services/app_services.dart';
 import '../services/native_alarm_service.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
+import '../widgets/common/app_ui.dart';
 import '../widgets/semester_start_date_dialog.dart';
 
 class TimetableTimeSettingsPage extends StatefulWidget {
@@ -40,23 +42,24 @@ class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
           controller: _scrollController,
           padding: AppSpacing.pagePadding,
           children: [
+            const AppSectionTitle(title: '学期', subtitle: '切换、创建或初始化当前学期'),
             _buildSemesterManagementSection(context, provider),
             const SizedBox(height: AppSpacing.xl),
-            Card(
+            const AppSectionTitle(title: '日历范围', subtitle: '决定课表从哪一天开始、显示多少周'),
+            AppSurface(
               child: Column(
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.date_range_outlined),
-                    title: const Text('学期起始日期'),
-                    subtitle: Text(_formatDate(provider.semesterStartDate)),
-                    trailing: const Icon(Icons.chevron_right),
+                  AppActionTile(
+                    icon: Icons.date_range_outlined,
+                    title: '学期起始日期',
+                    subtitle: _formatDate(provider.semesterStartDate),
                     onTap: () => _pickSemesterStartDate(context, provider),
                   ),
                   const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.calendar_view_week_outlined),
-                    title: const Text('上课周数'),
-                    subtitle: Text('${provider.totalWeeks} 周'),
+                  AppActionTile(
+                    icon: Icons.calendar_view_week_outlined,
+                    title: '上课周数',
+                    subtitle: '${provider.totalWeeks} 周',
                     trailing: DropdownButton<int>(
                       value: provider.totalWeeks,
                       underline: const SizedBox.shrink(),
@@ -82,7 +85,8 @@ class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
               ),
             ),
             const SizedBox(height: AppSpacing.xl),
-            Card(
+            const AppSectionTitle(title: '节次', subtitle: '调整单节课与课间的时间长度'),
+            AppSurface(
               child: Column(
                 children: [
                   _durationTile(
@@ -166,27 +170,25 @@ class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
     SettingsProvider provider,
   ) {
     final currentSemester = provider.currentSemester;
-    return Card(
+    return AppSurface(
       child: Column(
         children: [
-          ListTile(
-            leading: const Icon(Icons.school_outlined),
-            title: const Text('当前学期'),
-            subtitle: Text(currentSemester?.name ?? '未设置'),
+          AppActionTile(
+            icon: Icons.school_outlined,
+            title: '当前学期',
+            subtitle: currentSemester?.name ?? '未设置',
           ),
           const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.swap_horiz_outlined),
-            title: const Text('管理学期'),
-            trailing: const Icon(Icons.chevron_right),
+          AppActionTile(
+            icon: Icons.swap_horiz_outlined,
+            title: '管理学期',
             onTap: () => _showSemesterSwitcher(context, provider),
           ),
           const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.add_circle_outline),
-            title: const Text('新建学期'),
-            subtitle: const Text('创建后会立即选择学期开始日期'),
-            trailing: const Icon(Icons.chevron_right),
+          AppActionTile(
+            icon: Icons.add_circle_outline,
+            title: '新建学期',
+            subtitle: '创建后会立即选择学期开始日期',
             onTap: () => _createSemester(context, provider),
           ),
         ],
@@ -425,6 +427,10 @@ class _TimetableTimeSettingsPageState extends State<TimetableTimeSettingsPage> {
               child: const Text('取消'),
             ),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: AppColors.onPrimary,
+              ),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('删除'),
             ),

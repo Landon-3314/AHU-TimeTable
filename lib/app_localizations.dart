@@ -1,6 +1,16 @@
 class AppStrings {
   static const Map<String, Map<String, String>> dict = {
     'settings': {'zh': '设置', 'en': 'Settings'},
+    'appearance': {'zh': '外观', 'en': 'Appearance'},
+    'theme_color': {'zh': '主题颜色', 'en': 'Theme Color'},
+    'theme_color_subtitle': {
+      'zh': '切换课表、按钮和强调信息的主色与辅助色',
+      'en': 'Change the primary and accent colors used across the app',
+    },
+    'theme_teal_orange': {'zh': '青绿 / 橙色', 'en': 'Teal / Orange'},
+    'theme_blue_amber': {'zh': '蓝色 / 琥珀', 'en': 'Blue / Amber'},
+    'theme_violet_pink': {'zh': '紫色 / 粉色', 'en': 'Violet / Pink'},
+    'theme_green_lime': {'zh': '绿色 / 青柠', 'en': 'Green / Lime'},
     'basic_settings': {'zh': '基础设置', 'en': 'Basic Settings'},
     'notifications': {'zh': '提醒设置', 'en': 'Notifications'},
     'data_storage': {'zh': '高级与数据管理', 'en': 'Data & Storage'},
@@ -95,10 +105,23 @@ class AppStrings {
     'weeks': {'zh': '周次', 'en': 'Weeks'},
     'edit_course': {'zh': '编辑课程', 'en': 'Edit Course'},
     'delete_course': {'zh': '删除课程', 'en': 'Delete Course'},
+    'confirm_delete_course_title': {
+      'zh': '删除这门课程？',
+      'en': 'Delete this course?',
+    },
+    'confirm_delete_course_message': {
+      'zh': '该课程会从当前学期中移除，操作不可恢复。',
+      'en': 'This course will be removed from the current semester.',
+    },
     'alarm': {'zh': '提醒', 'en': 'Alarm'},
     'enabled': {'zh': '开启', 'en': 'Enabled'},
     'disabled': {'zh': '关闭', 'en': 'Disabled'},
     'delete_event': {'zh': '删除日程', 'en': 'Delete Event'},
+    'confirm_delete_event_title': {'zh': '删除这个日程？', 'en': 'Delete this event?'},
+    'confirm_delete_event_message': {
+      'zh': '该日程会被永久删除，操作不可恢复。',
+      'en': 'This event will be permanently deleted.',
+    },
     'location_pending': {'zh': '地点待定', 'en': 'Location pending'},
     'not_set': {'zh': '未设置', 'en': 'Not set'},
     'add_schedule': {'zh': '添加日程', 'en': 'Add Schedule'},
@@ -175,7 +198,7 @@ class AppStrings {
     'fri_short': {'zh': '周五', 'en': 'Fri'},
     'sat_short': {'zh': '周六', 'en': 'Sat'},
     'sun_short': {'zh': '周日', 'en': 'Sun'},
-    'event_marker': {'zh': '📌', 'en': '📌'},
+    'event_marker': {'zh': '日程', 'en': 'Event'},
     'academic_import': {'zh': '教务课表导入', 'en': 'Academic Timetable Import'},
     'extract_timetable': {'zh': '一键提取课表', 'en': 'Extract Timetable'},
     'extracting': {'zh': '正在提取...', 'en': 'Extracting...'},
@@ -212,7 +235,8 @@ class AppStrings {
       'en': 'This course period range is out of the configured limit',
     },
     'duplicate_course_not_added': {
-      'zh': '\u76f8\u540c\u8bfe\u7a0b\u5df2\u5b58\u5728\uff0c\u672a\u91cd\u590d\u6dfb\u52a0',
+      'zh':
+          '\u76f8\u540c\u8bfe\u7a0b\u5df2\u5b58\u5728\uff0c\u672a\u91cd\u590d\u6dfb\u52a0',
       'en': 'An identical course already exists and was not added',
     },
   };

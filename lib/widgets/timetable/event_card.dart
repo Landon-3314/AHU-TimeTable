@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_constants.dart';
 import '../../models/event.dart';
+import '../common/app_ui.dart';
 
 class EventCard extends StatelessWidget {
   const EventCard({
@@ -21,58 +22,55 @@ class EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: AppColors.warningSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadii.xl),
-        side: const BorderSide(color: AppColors.warningBorder),
-      ),
+    final colorScheme = Theme.of(context).colorScheme;
+    return AppSurface(
+      padding: EdgeInsets.zero,
+      color: colorScheme.secondaryContainer.withValues(alpha: 0.56),
+      borderColor: colorScheme.secondary.withValues(alpha: 0.34),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadii.xl),
+        borderRadius: BorderRadius.circular(AppRadii.xxl),
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 10,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.warningAccent,
-                  borderRadius: BorderRadius.circular(AppRadii.pill),
-                ),
+              Icon(
+                Icons.event_available_outlined,
+                color: colorScheme.secondary,
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: AppSpacing.lg),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       '$markerLabel ${event.name}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
                       event.location.isEmpty
                           ? locationPendingLabel
                           : event.location,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      DateFormat('HH:mm').format(event.dateTime),
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: AppColors.warningAccent,
-                        fontWeight: FontWeight.w700,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Text(
+                DateFormat('HH:mm').format(event.dateTime),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: colorScheme.secondary,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
@@ -95,7 +93,7 @@ class CompactEventCard extends StatelessWidget {
       elevation: 0,
       color: AppColors.surfaceMuted,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadii.md),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
         side: const BorderSide(color: AppColors.infoBorder),
       ),
       child: ListTile(

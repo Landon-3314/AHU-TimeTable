@@ -18,6 +18,7 @@ class AppSpacing {
   static const double xl = 16;
   static const double xxl = 20;
   static const double xxxl = 24;
+  static const double sectionGap = 18;
   static const double chipHeight = 64;
   static const double formBottomSafeArea = 96;
 
@@ -49,10 +50,10 @@ class AppRadii {
   const AppRadii._();
 
   static const double sm = 4;
-  static const double md = 14;
+  static const double md = 12;
   static const double lg = 16;
   static const double xl = 18;
-  static const double xxl = 20;
+  static const double xxl = 22;
   static const double surface = 24;
   static const double pill = 999;
 }

@@ -7,6 +7,7 @@ import '../models/course.dart';
 import '../models/event.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/common/app_ui.dart';
 
 class AddCoursePage extends StatelessWidget {
   const AddCoursePage({super.key, this.existingCourse});
@@ -118,7 +119,6 @@ class _CourseFormState extends State<_CourseForm> {
                 textInputAction: TextInputAction.next,
                 decoration: InputDecoration(
                   labelText: provider.t('course_name'),
-                  border: const OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -131,10 +131,7 @@ class _CourseFormState extends State<_CourseForm> {
               TextFormField(
                 controller: _locationController,
                 textInputAction: TextInputAction.done,
-                decoration: InputDecoration(
-                  labelText: provider.t('location'),
-                  border: const OutlineInputBorder(),
-                ),
+                decoration: InputDecoration(labelText: provider.t('location')),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return provider.t('please_enter_location');
@@ -146,17 +143,13 @@ class _CourseFormState extends State<_CourseForm> {
               TextFormField(
                 controller: _teacherController,
                 textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: provider.t('teacher'),
-                  border: const OutlineInputBorder(),
-                ),
+                decoration: InputDecoration(labelText: provider.t('teacher')),
               ),
               const SizedBox(height: AppSpacing.xl),
               DropdownButtonFormField<int>(
                 initialValue: _selectedWeekday,
                 decoration: InputDecoration(
                   labelText: provider.t('weekday_label'),
-                  border: const OutlineInputBorder(),
                 ),
                 items: [
                   for (int day = 1; day <= 7; day++)
@@ -209,7 +202,6 @@ class _CourseFormState extends State<_CourseForm> {
                       initialValue: currentStartValue,
                       decoration: InputDecoration(
                         labelText: provider.t('start_period'),
-                        border: const OutlineInputBorder(),
                       ),
                       items: [
                         for (
@@ -240,7 +232,6 @@ class _CourseFormState extends State<_CourseForm> {
                       initialValue: currentEndValue,
                       decoration: InputDecoration(
                         labelText: provider.t('end_period'),
-                        border: const OutlineInputBorder(),
                       ),
                       items: [
                         for (
@@ -277,33 +268,46 @@ class _CourseFormState extends State<_CourseForm> {
                 runSpacing: AppSpacing.lg,
                 children: _presetColors.map((colorValue) {
                   final isSelected = colorValue == _selectedColorValue;
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedColorValue = colorValue;
-                      });
-                    },
-                    child: AnimatedContainer(
-                      duration: AppDurations.fast,
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Color(colorValue),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.textPrimary
-                              : AppColors.transparent,
-                          width: 2.5,
+                  return Semantics(
+                    button: true,
+                    selected: isSelected,
+                    label: provider.t('card_color'),
+                    child: InkResponse(
+                      onTap: () {
+                        setState(() {
+                          _selectedColorValue = colorValue;
+                        });
+                      },
+                      radius: 28,
+                      child: AnimatedContainer(
+                        duration: AppDurations.fast,
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Color(colorValue),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected
+                                ? AppColors.textPrimary
+                                : AppColors.surface,
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(colorValue).withValues(alpha: 0.24),
+                              blurRadius: 12,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
                         ),
+                        child: isSelected
+                            ? const Icon(
+                                Icons.check,
+                                color: AppColors.onPrimary,
+                                size: 20,
+                              )
+                            : null,
                       ),
-                      child: isSelected
-                          ? const Icon(
-                              Icons.check,
-                              color: AppColors.onPrimary,
-                              size: 20,
-                            )
-                          : null,
                     ),
                   );
                 }).toList(),
@@ -317,12 +321,11 @@ class _CourseFormState extends State<_CourseForm> {
         minimum: AppSpacing.actionBarPadding,
         child: FilledButton(
           onPressed: _isSaving ? null : () => _saveCourse(periodCount),
-          child: Text(
-            _isSaving
-                ? provider.t('saving')
-                : (_isEditMode
-                      ? provider.t('save_changes')
-                      : provider.t('save')),
+          child: LoadingButtonLabel(
+            isLoading: _isSaving,
+            label: _isEditMode
+                ? provider.t('save_changes')
+                : provider.t('save'),
           ),
         ),
       ),
@@ -374,9 +377,9 @@ class _CourseFormState extends State<_CourseForm> {
     final courseProvider = context.read<CourseProvider>();
     final didSave = _isEditMode
         ? await courseProvider.updateCourse(
-          originalCourse: widget.existingCourse!,
-          updatedCourse: course,
-        )
+            originalCourse: widget.existingCourse!,
+            updatedCourse: course,
+          )
         : await courseProvider.addCourse(course);
 
     if (!mounted) {
@@ -466,7 +469,6 @@ class _EventFormState extends State<_EventForm> {
   Widget build(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
     const sharedDecoration = InputDecoration(
-      border: OutlineInputBorder(),
       contentPadding: EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
         vertical: AppSpacing.xl,
@@ -551,7 +553,10 @@ class _EventFormState extends State<_EventForm> {
         minimum: AppSpacing.actionBarPadding,
         child: FilledButton(
           onPressed: _isSaving ? null : _saveEvent,
-          child: Text(_isSaving ? provider.t('saving') : provider.t('save')),
+          child: LoadingButtonLabel(
+            isLoading: _isSaving,
+            label: provider.t('save'),
+          ),
         ),
       ),
     );

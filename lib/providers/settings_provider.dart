@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_localizations.dart';
+import '../core/app_colors.dart';
 import '../core/app_constants.dart';
 import '../models/clock_time.dart';
 import '../models/semester.dart';
@@ -77,6 +78,9 @@ class SettingsProvider extends ChangeNotifier {
              fallback: _defaultEventReminderAdvanceMinutes,
            ),
        _languageCode = storageService.readLanguageCode(fallback: 'zh'),
+       _themePaletteId = storageService.readThemePaletteId(
+         fallback: AppThemePalette.values.first.id,
+       ),
        _autoMuteEnabled = storageService.readAutoMuteEnabled(fallback: false),
        _semesters = storageService.loadSemesters(),
        _currentSemesterId = storageService.currentSemesterId,
@@ -119,6 +123,7 @@ class SettingsProvider extends ChangeNotifier {
   int _reminderAdvanceMinutes;
   int _eventReminderAdvanceMinutes;
   String _languageCode;
+  String _themePaletteId;
   bool _autoMuteEnabled;
   bool _backgroundServiceEnabled;
   List<Semester> _semesters;
@@ -141,6 +146,8 @@ class SettingsProvider extends ChangeNotifier {
   int get reminderAdvanceMinutes => _reminderAdvanceMinutes;
   int get eventReminderAdvanceMinutes => _eventReminderAdvanceMinutes;
   String get languageCode => _languageCode;
+  String get themePaletteId => _themePaletteId;
+  AppThemePalette get themePalette => AppThemePalette.byId(_themePaletteId);
   bool get autoMuteEnabled => _autoMuteEnabled;
   bool get backgroundServiceEnabled => _backgroundServiceEnabled;
   List<Semester> get semesters => List.unmodifiable(_semesters);
@@ -259,6 +266,17 @@ class SettingsProvider extends ChangeNotifier {
     _languageCode = code;
     notifyListeners();
     await _storageService.writeLanguageCode(code);
+  }
+
+  Future<void> changeThemePalette(String id) async {
+    final palette = AppThemePalette.byId(id);
+    if (palette.id == _themePaletteId) {
+      return;
+    }
+
+    _themePaletteId = palette.id;
+    notifyListeners();
+    await _storageService.writeThemePaletteId(palette.id);
   }
 
   List<TimeSlot> generateTimeSlots() {

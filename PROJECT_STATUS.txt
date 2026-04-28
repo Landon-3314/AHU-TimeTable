@@ -1,4 +1,72 @@
-﻿Project: Local-first Flutter Timetable & Schedule App
+﻿==================================================
+2026-04-27 当前项目状态（扫描后更新）
+==================================================
+
+Project: Local-first Flutter Timetable & Schedule App
+Workspace: D:\zzzzz\timetable
+Last updated: 2026-04-27
+
+一、当前定位
+- 项目已升级为 Flutter 多端 scaffold 的本地优先课程表应用。
+- Android 仍是系统级能力最完整的平台。
+- iOS/macOS 已补齐原生 MethodChannel，支持课程/日程提醒调度与通知权限请求。
+- Linux/Windows/Web 当前保留 Flutter scaffold 与基础 UI/本地数据能力；系统级提醒、自动静音、后台保活尚未实现原生适配。
+
+二、当前核心功能（按扫描结果）
+- 课表视图：日视图、周视图、课程/日程混合展示、学期周选择、“假期中”模式、日/周导航同步、Android 长截图滚动捕获辅助。
+- 课程与日程管理：手动新增/编辑/删除课程，新增/编辑/删除单次日程，课程详情单次调课，导入/手动添加/编辑重复判断与导入覆盖策略。
+- 教务导入：WebView 登录教务系统后抓取 HTML，ScheduleHtmlExtractor 抽取页面/iframe 课表源码，ScheduleParserService 解析 HTML、周次、节次、地点、教师并去重。
+- 学期与时间配置：多学期创建/初始化/切换/重命名/删除，学期起始日期与总周数，上午/下午/晚上课程时间结构，小课间/大课间/课程时长配置。
+- 提醒与自动化：课程提醒、单次日程提醒；Android 额外支持 AlarmManager 精确触发、前台服务、上课自动静音与下课恢复；iOS/macOS 本次同步为 UserNotifications 本地通知。
+- 设置与数据：中英文切换，删除 WebView Cookies，删除全部课程/日程数据，开发者诊断页。
+
+三、关键架构（当前）
+- UI: Material + Provider + PageView/ListView/Grid widgets。
+- State: CourseProvider / SettingsProvider / TimetableViewProvider。
+- Storage: SharedPreferences，支持多学期 key 命名空间与旧数据迁移。
+- Import: webview_flutter + JS/HTML 抽取 + html parser。
+- Scheduling: Flutter 层统一通过 AppServices.refreshSchedules(...) 生成调度 payload。
+- Android 原生：com.timetable/native_alarm -> AlarmManager + BroadcastReceiver + ForegroundService。
+- iOS 原生：com.timetable/native_alarm -> UNUserNotificationCenter。
+- macOS 原生：com.timetable/native_alarm -> UNUserNotificationCenter。
+- Permissions: app.permissions 负责通知权限；Android DND 使用 sound_mode PermissionHandler。
+- Platform channels: app.timezone、app.permissions、app.scroll_capture（Android）、com.timetable/native_alarm。
+
+四、本次跨端同步变更（2026-04-27）
+- iOS: 在 ios/Runner/AppDelegate.swift 注册 app.timezone、app.permissions、com.timetable/native_alarm；支持通知权限查询/请求；支持 scheduleAllClasses/cancelAllClasses，将课程/日程 reminderAtMillis 调度为本地通知；Android 专属能力返回安全 no-op。
+- macOS: 在 macos/Runner/MainFlutterWindow.swift 注册同等平台通道；支持通知权限查询/请求与课程/日程本地通知调度；Android 专属能力返回安全 no-op。
+- Flutter UI: reminder_settings_page.dart 在非 Android 平台隐藏“前台保活服务”和“上课自动静音”入口；非 Android 平台不再要求精确闹钟/DND 权限，不再弹出前台保活建议。
+- NativeAlarmService: Android/iOS/macOS 走原生调度通道；Windows/Linux/Web 当前直接 no-op 降级，避免未实现平台反复 MissingPlugin。
+- Course/Event legacy id 哈希改为 JS 安全的 32 位稳定哈希，修复 Web dart2js 无法表示 64 位整数字面量的问题。
+- PermissionService: 移除 dart:io Platform 依赖，改用 kIsWeb/defaultTargetPlatform 判断 Android，降低非移动平台编译风险。
+
+五、当前平台能力矩阵
+- Android: 课表/日程/导入/多学期/时间配置、课程提醒、日程提醒、自动静音/恢复、前台保活服务、长截图滚动捕获均已支持。
+- iOS: Flutter 基础业务已支持；课程提醒/日程提醒本次已同步到 UserNotifications；自动静音/前台保活/ROM 权限不适用，已 no-op 与 UI 隐藏；长截图滚动捕获未实现原生适配。
+- macOS: Flutter 基础业务已支持；课程提醒/日程提醒本次已同步到 UserNotifications；自动静音/前台保活/ROM 权限不适用，已 no-op 与 UI 隐藏；长截图滚动捕获未实现原生适配。
+- Linux/Windows/Web: 保留 scaffold 与 Flutter 基础能力；系统级提醒、后台自动化、长截图原生捕获未实现；Web 编译层已清除 64 位整数阻塞，WebView 与插件运行兼容性仍需实测。
+
+六、待验证
+- 在 macOS/Xcode 环境执行 flutter build ios --debug 或真机/模拟器运行，并执行 flutter build macos。
+- 验证 iOS/macOS 首次开启提醒时系统通知授权弹窗是否出现。
+- 验证 iOS/macOS 课程提醒与日程提醒是否按 reminderAtMillis 触发。
+- Android 真机回归精确闹钟、DND、通知权限、前台服务、自动静音/恢复和长截图滚动捕获。
+- Windows debug 构建已在当前机器通过，产物为 build\windows\x64\runner\Debug\timetable.exe。
+- Web release 构建已通过，产物为 build\web；WebView 与插件运行兼容性仍需浏览器实测。
+- Linux 后续仍需在 Linux 环境做基础 Flutter 编译与插件兼容性验证。
+
+七、已知限制 / 后续建议
+- iOS/macOS 的本地通知调度没有实现系统级“静音/恢复”，这是平台限制，不应在 UI 中暴露为可启用能力。
+- iOS/macOS 通知调度当前只消费 reminderAtMillis，忽略 silentAtMillis/restoreAtMillis。
+- Linux/Windows/Web 若要支持系统提醒，建议抽象 SystemNotificationScheduler，再分别实现桌面通知或降级为应用内提醒。
+- 开发者诊断页仍直接依赖 sound_mode，若未来开放给非 Android 平台，需要做平台保护或拆分 Android-only 页面。
+
+
+==================================================
+以下为历史归档（2026-03-25 旧状态，保留用于追溯）
+==================================================
+
+Project: Local-first Flutter Timetable & Schedule App
 Workspace: D:\zzzzz\timetable
 Last updated: 2026-03-25
 

@@ -5,6 +5,7 @@ import '../../core/app_constants.dart';
 import '../../models/course.dart';
 import '../../models/event.dart';
 import '../../models/timetable_view_data.dart';
+import '../common/app_ui.dart';
 import '../long_screenshot_scroll_capture.dart';
 import 'course_card.dart';
 import 'event_card.dart';
@@ -235,6 +236,7 @@ class _DayWeekHeaderState extends State<DayWeekHeader> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -266,13 +268,30 @@ class _DayWeekHeaderState extends State<DayWeekHeader> {
                     key: _chipKeys[chip.weekday],
                     padding: const EdgeInsets.only(right: AppSpacing.sm),
                     child: ChoiceChip(
+                      showCheckmark: false,
+                      selectedColor: colorScheme.primaryContainer,
+                      backgroundColor: AppColors.surface,
+                      side: BorderSide(
+                        color: widget.selectedWeekday == chip.weekday
+                            ? colorScheme.primary
+                            : AppColors.divider,
+                      ),
                       label: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(chip.label),
+                          Text(
+                            chip.label,
+                            style: TextStyle(
+                              color: widget.selectedWeekday == chip.weekday
+                                  ? colorScheme.primary
+                                  : AppColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                           Text(
                             chip.dateLabel,
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -368,12 +387,8 @@ class _WeekdaySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppSurface(
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadii.xxl),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -385,11 +400,14 @@ class _WeekdaySection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           if (section.isEmpty)
-            Text(
-              section.emptyText,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Text(
+                section.emptyText,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ),
           for (final item in section.items)
             Padding(
@@ -424,12 +442,8 @@ class ScheduleHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppSurface(
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadii.xxl),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -464,36 +478,10 @@ class EmptyScheduleState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxxl),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.xxxl),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadii.surface),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return AppEmptyState(
+      icon: Icons.event_busy_outlined,
+      title: title,
+      subtitle: subtitle,
     );
   }
 }

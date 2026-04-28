@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/app_colors.dart';
-import '../../core/app_constants.dart';
+import '../common/app_ui.dart';
 
 class SettingsSectionTitle extends StatelessWidget {
   const SettingsSectionTitle({super.key, required this.title});
@@ -10,16 +9,7 @@ class SettingsSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: AppSpacing.sectionHeaderPadding,
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: AppColors.textSecondary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
+    return AppSectionTitle(title: title);
   }
 }
 
@@ -30,12 +20,8 @@ class SettingsSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadii.xxl),
-      ),
-      child: Column(children: children),
+    return AppSurface(
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 }

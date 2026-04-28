@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import '../providers/settings_provider.dart';
 import '../services/app_services.dart';
 import '../services/native_alarm_service.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
+import '../widgets/common/app_ui.dart';
 
 class ReminderSettingsPage extends StatefulWidget {
   const ReminderSettingsPage({super.key});
@@ -28,6 +30,9 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
   ];
 
   final ScrollController _scrollController = ScrollController();
+
+  bool get _supportsAndroidAutomation =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   @override
   void dispose() {
@@ -56,39 +61,46 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
           controller: _scrollController,
           padding: AppSpacing.pagePadding,
           children: [
-            Card(
-              child: SwitchListTile(
-                secondary: const Icon(Icons.shield_outlined),
-                title: const Text('前台保活服务'),
-                subtitle: const Text('用于降低息屏或系统限制对提醒与静音触发的影响'),
-                value: provider.backgroundServiceEnabled,
-                onChanged: (value) =>
-                    _onForegroundServiceToggled(provider, value),
+            if (_supportsAndroidAutomation) ...[
+              const AppSectionTitle(
+                title: 'Android 自动化',
+                subtitle: '这些能力依赖系统权限与后台保活策略',
               ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    secondary: const Icon(Icons.volume_off_outlined),
-                    title: const Text('上课自动静音'),
-                    subtitle: const Text('仅在需要的课程时间内执行自动静音与恢复'),
-                    value: provider.autoMuteEnabled,
-                    onChanged: (value) => _onAutoMuteToggled(provider, value),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.security_update_warning_outlined),
-                    title: const Text('如果静音失效，点此开启后台权限'),
-                    subtitle: const Text('将尝试打开自启动管理或后台高耗电允许页面'),
-                    onTap: _openRomPermissionHelp,
-                  ),
-                ],
+              AppSurface(
+                child: SwitchListTile(
+                  secondary: const Icon(Icons.shield_outlined),
+                  title: const Text('前台保活服务'),
+                  subtitle: const Text('用于降低息屏或系统限制对提醒与静音触发的影响'),
+                  value: provider.backgroundServiceEnabled,
+                  onChanged: (value) =>
+                      _onForegroundServiceToggled(provider, value),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Card(
+              const SizedBox(height: AppSpacing.xl),
+              AppSurface(
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      secondary: const Icon(Icons.volume_off_outlined),
+                      title: const Text('上课自动静音'),
+                      subtitle: const Text('仅在需要的课程时间内执行自动静音与恢复'),
+                      value: provider.autoMuteEnabled,
+                      onChanged: (value) => _onAutoMuteToggled(provider, value),
+                    ),
+                    const Divider(height: 1),
+                    AppActionTile(
+                      icon: Icons.security_update_warning_outlined,
+                      title: '如果静音失效，点此开启后台权限',
+                      subtitle: '将尝试打开自启动管理或后台高耗电允许页面',
+                      onTap: _openRomPermissionHelp,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+            ],
+            const AppSectionTitle(title: '提醒', subtitle: '管理课程和单次日程的提前提醒'),
+            AppSurface(
               child: Column(
                 children: [
                   SwitchListTile(
@@ -105,12 +117,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                   ),
                   if (provider.courseReminderEnabled) ...[
                     const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.timer_outlined),
-                      title: const Text('提前提醒时间'),
-                      subtitle: Text(
-                        '当前：提前 ${_formatReminderAdvance(provider.reminderAdvanceMinutes)}',
-                      ),
+                    AppActionTile(
+                      icon: Icons.timer_outlined,
+                      title: '提前提醒时间',
+                      subtitle:
+                          '当前：提前 ${_formatReminderAdvance(provider.reminderAdvanceMinutes)}',
                       trailing: DropdownButton<int>(
                         value: courseOffsetValue,
                         underline: const SizedBox.shrink(),
@@ -130,8 +141,8 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            Card(
+            const SizedBox(height: AppSpacing.xl),
+            AppSurface(
               child: Column(
                 children: [
                   SwitchListTile(
@@ -148,12 +159,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                   ),
                   if (provider.eventReminderAdvanceMinutes > 0) ...[
                     const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.schedule_send_outlined),
-                      title: const Text('日程提前提醒时间'),
-                      subtitle: Text(
-                        '当前：提前 ${_formatReminderAdvance(provider.eventReminderAdvanceMinutes)}',
-                      ),
+                    AppActionTile(
+                      icon: Icons.schedule_send_outlined,
+                      title: '日程提前提醒时间',
+                      subtitle:
+                          '当前：提前 ${_formatReminderAdvance(provider.eventReminderAdvanceMinutes)}',
                       trailing: DropdownButton<int>(
                         value: eventOffsetValue,
                         underline: const SizedBox.shrink(),
@@ -211,6 +221,9 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
   }
 
   Future<bool> _ensureDndPermission() async {
+    if (!_supportsAndroidAutomation) {
+      return true;
+    }
     var status = await Permission.accessNotificationPolicy.status;
     if (!status.isGranted) {
       status = await Permission.accessNotificationPolicy.request();
@@ -219,10 +232,17 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
   }
 
   Future<bool> _ensureExactAlarmPermission() async {
+    if (!_supportsAndroidAutomation) {
+      return true;
+    }
     return NativeAlarmService.instance.ensureExactAlarmPermission();
   }
 
   Future<void> _openRomPermissionHelp() async {
+    if (!_supportsAndroidAutomation) {
+      _showSnackBar('当前平台不需要配置 Android 后台权限');
+      return;
+    }
     await NativeAlarmService.instance.openRomPermissionSettings();
     _showSnackBar('已尝试打开后台权限页面，请在系统页面中允许自启动或后台运行');
   }
@@ -231,6 +251,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     SettingsProvider provider,
     bool value,
   ) async {
+    if (!_supportsAndroidAutomation) {
+      _showSnackBar('当前平台不需要前台保活服务');
+      return;
+    }
+
     if (value) {
       final notifOk = await _ensureNotificationPermission();
       if (!notifOk) {
@@ -258,6 +283,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
   }
 
   Future<void> _onAutoMuteToggled(SettingsProvider provider, bool value) async {
+    if (!_supportsAndroidAutomation) {
+      _showSnackBar('自动静音仅支持 Android');
+      return;
+    }
+
     if (!value) {
       await provider.toggleAutoMuteWithCheck(false);
       await _refreshSchedules(provider);
@@ -390,7 +420,9 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
   Future<void> _offerForegroundServiceEnableIfNeeded(
     SettingsProvider provider,
   ) async {
-    if (provider.backgroundServiceEnabled || !mounted) {
+    if (!_supportsAndroidAutomation ||
+        provider.backgroundServiceEnabled ||
+        !mounted) {
       return;
     }
 

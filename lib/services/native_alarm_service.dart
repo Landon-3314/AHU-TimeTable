@@ -13,7 +13,20 @@ class NativeAlarmService {
     'com.timetable/native_alarm',
   );
 
+  bool get _supportsNativeAlarmChannel =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
+
+  bool get _supportsAndroidAlarmControls =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
   Future<bool> ensureExactAlarmPermission() async {
+    if (!_supportsAndroidAlarmControls) {
+      return true;
+    }
+
     try {
       final hasPermission =
           await _channel.invokeMethod<bool>('hasExactAlarmPermission') ?? true;
@@ -31,6 +44,10 @@ class NativeAlarmService {
   }
 
   Future<bool> ensureIgnoreBatteryOptimizations() async {
+    if (!_supportsAndroidAlarmControls) {
+      return true;
+    }
+
     try {
       final ignoring =
           await _channel.invokeMethod<bool>('isIgnoringBatteryOptimizations') ??
@@ -50,6 +67,10 @@ class NativeAlarmService {
   }
 
   Future<void> requestIgnoreBatteryOptimization() async {
+    if (!_supportsAndroidAlarmControls) {
+      return;
+    }
+
     try {
       await _channel.invokeMethod<void>('requestIgnoreBatteryOptimizations');
     } catch (e) {
@@ -58,6 +79,10 @@ class NativeAlarmService {
   }
 
   Future<void> setForegroundServiceEnabled(bool enabled) async {
+    if (!_supportsAndroidAlarmControls) {
+      return;
+    }
+
     try {
       await _channel.invokeMethod<void>('setForegroundServiceEnabled', {
         'enabled': enabled,
@@ -68,6 +93,10 @@ class NativeAlarmService {
   }
 
   Future<void> refreshForegroundService() async {
+    if (!_supportsAndroidAlarmControls) {
+      return;
+    }
+
     try {
       await _channel.invokeMethod<void>('refreshForegroundService');
     } catch (e) {
@@ -76,6 +105,10 @@ class NativeAlarmService {
   }
 
   Future<bool> openRomPermissionSettings() async {
+    if (!_supportsAndroidAlarmControls) {
+      return false;
+    }
+
     try {
       return await _channel.invokeMethod<bool>('openRomPermissionSettings') ??
           false;
@@ -86,6 +119,10 @@ class NativeAlarmService {
   }
 
   Future<void> runOneMinuteMuteTest() async {
+    if (!_supportsAndroidAlarmControls) {
+      return;
+    }
+
     try {
       await _channel.invokeMethod<void>('runOneMinuteMuteTest');
     } catch (e) {
@@ -99,6 +136,10 @@ class NativeAlarmService {
     required SettingsProvider settings,
     int horizonDays = 14,
   }) async {
+    if (!_supportsNativeAlarmChannel) {
+      return;
+    }
+
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
@@ -242,6 +283,10 @@ class NativeAlarmService {
   }
 
   Future<void> cancelAllClasses() async {
+    if (!_supportsNativeAlarmChannel) {
+      return;
+    }
+
     try {
       await _channel.invokeMethod<void>('cancelAllClasses');
     } catch (e) {

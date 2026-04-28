@@ -19,6 +19,7 @@ class WeekSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     var currentLabel = options.first.label;
     for (final option in options) {
       if (option.value == currentWeek) {
@@ -44,13 +45,33 @@ class WeekSelector extends StatelessWidget {
           ),
       ],
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        child: Center(
-          child: Text(
-            currentLabel,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(AppRadii.pill),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                currentLabel,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xxs),
+              Icon(
+                Icons.keyboard_arrow_down,
+                size: 18,
+                color: colorScheme.primary,
+              ),
+            ],
           ),
         ),
       ),

@@ -15,7 +15,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   LongScreenshotService.instance.initialize();
   final initFuture = _initAppSafely();
-  runApp(MainApp(initFuture: initFuture));
+  runApp(_MainApp(initFuture: initFuture));
 }
 
 Future<_AppInitBundle?> _initAppSafely() async {
@@ -66,8 +66,8 @@ class AppScrollBehavior extends MaterialScrollBehavior {
       Set<PointerDeviceKind>.from(PointerDeviceKind.values);
 }
 
-class MainApp extends StatelessWidget {
-  const MainApp({super.key, required this.initFuture});
+class _MainApp extends StatelessWidget {
+  const _MainApp({required this.initFuture});
 
   final Future<_AppInitBundle?> initFuture;
 
@@ -106,7 +106,7 @@ class MainApp extends StatelessWidget {
                 debugShowCheckedModeBanner: false,
                 locale: Locale(settingsProvider.languageCode),
                 scrollBehavior: const AppScrollBehavior(),
-                theme: AppTheme.light(),
+                theme: AppTheme.light(palette: settingsProvider.themePalette),
                 initialRoute: AppRoutes.home,
                 onGenerateRoute: AppRoutes.onGenerateRoute,
               );

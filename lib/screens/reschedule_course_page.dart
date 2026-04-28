@@ -7,6 +7,7 @@ import '../models/course.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/timetable_view_data_service.dart';
+import '../widgets/common/app_ui.dart';
 
 class RescheduleCoursePage extends StatefulWidget {
   const RescheduleCoursePage({
@@ -60,12 +61,8 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
         child: ListView(
           padding: AppSpacing.pagePadding,
           children: [
-            Container(
+            AppSurface(
               padding: const EdgeInsets.all(AppSpacing.xl),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(AppRadii.xxl),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -105,7 +102,6 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
               initialValue: effectiveTargetWeek,
               decoration: InputDecoration(
                 labelText: settingsProvider.t('target_week'),
-                border: const OutlineInputBorder(),
               ),
               items: [
                 for (int week = 1; week <= settingsProvider.totalWeeks; week++)
@@ -128,7 +124,6 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
               initialValue: effectiveTargetWeekday,
               decoration: InputDecoration(
                 labelText: settingsProvider.t('target_weekday'),
-                border: const OutlineInputBorder(),
               ),
               items: [
                 for (int day = 1; day <= 7; day++)
@@ -153,7 +148,6 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
                   : null,
               decoration: InputDecoration(
                 labelText: settingsProvider.t('target_start_period'),
-                border: const OutlineInputBorder(),
               ),
               items: [
                 for (int period = 1; period <= maxStartPeriod; period++)
@@ -177,7 +171,6 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
             InputDecorator(
               decoration: InputDecoration(
                 labelText: settingsProvider.t('target_end_period'),
-                border: const OutlineInputBorder(),
               ),
               child: Text(
                 canFitPeriodRange
@@ -211,10 +204,9 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
                   targetWeekday: effectiveTargetWeekday,
                   targetStartPeriod: effectiveTargetStartPeriod,
                 ),
-          child: Text(
-            _isSaving
-                ? settingsProvider.t('saving')
-                : settingsProvider.t('save'),
+          child: LoadingButtonLabel(
+            isLoading: _isSaving,
+            label: settingsProvider.t('save'),
           ),
         ),
       ),

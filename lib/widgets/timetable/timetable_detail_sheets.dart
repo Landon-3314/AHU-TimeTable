@@ -13,6 +13,7 @@ import '../../models/event.dart';
 import '../../providers/course_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/timetable_view_data_service.dart';
+import '../common/app_ui.dart';
 
 Future<void> showCourseDetailsSheet(
   BuildContext context,
@@ -53,7 +54,7 @@ Future<void> showCourseDetailsSheet(
             child: FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.surfaceMuted,
-                foregroundColor: AppColors.primary,
+                foregroundColor: Theme.of(sheetContext).colorScheme.primary,
               ),
               onPressed: () async {
                 Navigator.of(sheetContext).pop();
@@ -82,7 +83,7 @@ Future<void> showCourseDetailsSheet(
           width: double.infinity,
           child: FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: Theme.of(sheetContext).colorScheme.primary,
               foregroundColor: AppColors.onPrimary,
             ),
             onPressed: () async {
@@ -102,7 +103,20 @@ Future<void> showCourseDetailsSheet(
               backgroundColor: AppColors.danger,
               foregroundColor: AppColors.onPrimary,
             ),
-            onPressed: () {
+            onPressed: () async {
+              final confirmed = await _confirmDestructiveAction(
+                sheetContext,
+                title: settingsProvider.t('confirm_delete_course_title'),
+                message: settingsProvider.t('confirm_delete_course_message'),
+                confirmLabel: settingsProvider.t('delete_course'),
+                cancelLabel: settingsProvider.t('cancel'),
+              );
+              if (!confirmed) {
+                return;
+              }
+              if (!sheetContext.mounted) {
+                return;
+              }
               Navigator.of(sheetContext).pop();
               unawaited(
                 Future<void>.delayed(
@@ -128,9 +142,8 @@ Future<void> showCourseDetailsSheet(
               children: [
                 Text(
                   course.name,
-                  style: Theme.of(
-                    sheetContext,
-                  ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(sheetContext).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 DetailRow(
@@ -233,7 +246,22 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
                     backgroundColor: AppColors.danger,
                     foregroundColor: AppColors.onPrimary,
                   ),
-                  onPressed: () {
+                  onPressed: () async {
+                    final confirmed = await _confirmDestructiveAction(
+                      sheetContext,
+                      title: settingsProvider.t('confirm_delete_event_title'),
+                      message: settingsProvider.t(
+                        'confirm_delete_event_message',
+                      ),
+                      confirmLabel: settingsProvider.t('delete_event'),
+                      cancelLabel: settingsProvider.t('cancel'),
+                    );
+                    if (!confirmed) {
+                      return;
+                    }
+                    if (!sheetContext.mounted) {
+                      return;
+                    }
                     Navigator.of(sheetContext).pop();
                     unawaited(
                       Future<void>.delayed(
@@ -284,6 +312,23 @@ class DetailRow extends StatelessWidget {
       ],
     );
   }
+}
+
+Future<bool> _confirmDestructiveAction(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String confirmLabel,
+  required String cancelLabel,
+}) async {
+  return showAppConfirmDialog(
+    context,
+    title: title,
+    message: message,
+    confirmLabel: confirmLabel,
+    cancelLabel: cancelLabel,
+    danger: true,
+  );
 }
 
 String _formatClockTime(ClockTime time) {
