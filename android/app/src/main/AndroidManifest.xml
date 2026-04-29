@@ -63,6 +63,8 @@
                 <action android:name="com.timetable.ACTION_RESTORE"/>
                 <action android:name="com.timetable.ACTION_REMIND_CLASS"/>
                 <action android:name="com.timetable.ACTION_REMIND_SCHEDULE"/>
+                <action android:name="com.timetable.action.SHOW_FOREGROUND_SERVICE"/>
+                <action android:name="com.timetable.action.HIDE_FOREGROUND_SERVICE"/>
             </intent-filter>
         </receiver>
     </application>

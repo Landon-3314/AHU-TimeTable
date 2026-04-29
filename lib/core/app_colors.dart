@@ -166,9 +166,9 @@ class AppColors {
   static const Color warningBorder = Color(0xFFFCD34D);
   static const Color infoBorder = Color(0xFF99F6E4);
   static const Color divider = Color(0xFFD6EEE8);
-  static const Color textPrimary = Color(0xFF134E4A);
-  static const Color textSecondary = Color(0xFF4B635F);
-  static const Color textTertiary = Color(0xFF6B7C78);
+  static const Color textPrimary = Color(0xFF111827);
+  static const Color textSecondary = Color(0xFF334155);
+  static const Color textTertiary = Color(0xFF64748B);
   static const Color success = Color(0xFF0F9F6E);
   static const Color danger = Color(0xFFD64545);
   static const Color dangerSoft = Color(0xFFFEE2E2);

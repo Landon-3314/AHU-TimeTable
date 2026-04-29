@@ -20,7 +20,7 @@ class AppTheme {
           secondaryContainer: palette.accentSoft,
           surface: AppColors.surface,
           onPrimary: AppColors.onPrimary,
-          onSurface: palette.textPrimary,
+          onSurface: AppColors.textPrimary,
           error: AppColors.danger,
         );
 
@@ -31,7 +31,7 @@ class AppTheme {
       visualDensity: VisualDensity.standard,
       appBarTheme: AppBarTheme(
         backgroundColor: palette.scaffoldBackground,
-        foregroundColor: palette.textPrimary,
+        foregroundColor: AppColors.textPrimary,
         surfaceTintColor: AppColors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -112,7 +112,7 @@ class AppTheme {
         backgroundColor: AppColors.surface,
         selectedColor: palette.primarySoft,
         disabledColor: palette.surfaceMuted,
-        labelStyle: TextStyle(color: palette.textPrimary),
+        labelStyle: const TextStyle(color: AppColors.textPrimary),
         secondaryLabelStyle: TextStyle(
           color: palette.primaryDark,
           fontWeight: FontWeight.w700,

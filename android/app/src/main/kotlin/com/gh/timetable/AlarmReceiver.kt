@@ -39,6 +39,9 @@ class AlarmReceiver : BroadcastReceiver() {
                 NativeAlarmScheduler.ACTION_REMIND_CLASS,
                 NativeAlarmScheduler.ACTION_REMIND_SCHEDULE,
                 -> showReminderNotification(context, intent)
+                TimetableForegroundService.ACTION_SHOW,
+                TimetableForegroundService.ACTION_HIDE,
+                -> TimetableForegroundService.handleVisibilityWindowAlarm(context, action)
 
                 else -> Log.w(TAG, "Unknown alarm action: $action")
             }
