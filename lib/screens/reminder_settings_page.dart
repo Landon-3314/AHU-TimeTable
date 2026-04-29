@@ -122,19 +122,29 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                       title: '提前提醒时间',
                       subtitle:
                           '当前：提前 ${_formatReminderAdvance(provider.reminderAdvanceMinutes)}',
-                      trailing: DropdownButton<int>(
-                        value: courseOffsetValue,
-                        underline: const SizedBox.shrink(),
-                        items: _buildReminderOffsetMenuItems(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            _onCourseReminderOffsetChanged(
-                              context,
-                              provider,
-                              value,
-                            );
-                          }
-                        },
+                      trailing: AppPickerPill(
+                        label:
+                            '提前 ${_formatReminderAdvance(courseOffsetValue)}',
+                        onTap: () => _pickReminderOffset(
+                          context: context,
+                          title: '提前提醒时间',
+                          selectedValue: courseOffsetValue,
+                          onSelected: (value) => _onCourseReminderOffsetChanged(
+                            context,
+                            provider,
+                            value,
+                          ),
+                        ),
+                      ),
+                      onTap: () => _pickReminderOffset(
+                        context: context,
+                        title: '提前提醒时间',
+                        selectedValue: courseOffsetValue,
+                        onSelected: (value) => _onCourseReminderOffsetChanged(
+                          context,
+                          provider,
+                          value,
+                        ),
                       ),
                     ),
                   ],
@@ -164,19 +174,28 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                       title: '日程提前提醒时间',
                       subtitle:
                           '当前：提前 ${_formatReminderAdvance(provider.eventReminderAdvanceMinutes)}',
-                      trailing: DropdownButton<int>(
-                        value: eventOffsetValue,
-                        underline: const SizedBox.shrink(),
-                        items: _buildReminderOffsetMenuItems(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            _onEventReminderOffsetChanged(
-                              context,
-                              provider,
-                              value,
-                            );
-                          }
-                        },
+                      trailing: AppPickerPill(
+                        label: '提前 ${_formatReminderAdvance(eventOffsetValue)}',
+                        onTap: () => _pickReminderOffset(
+                          context: context,
+                          title: '日程提前提醒时间',
+                          selectedValue: eventOffsetValue,
+                          onSelected: (value) => _onEventReminderOffsetChanged(
+                            context,
+                            provider,
+                            value,
+                          ),
+                        ),
+                      ),
+                      onTap: () => _pickReminderOffset(
+                        context: context,
+                        title: '日程提前提醒时间',
+                        selectedValue: eventOffsetValue,
+                        onSelected: (value) => _onEventReminderOffsetChanged(
+                          context,
+                          provider,
+                          value,
+                        ),
                       ),
                     ),
                   ],
@@ -189,14 +208,29 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     );
   }
 
-  List<DropdownMenuItem<int>> _buildReminderOffsetMenuItems() {
-    return [
-      for (final minutes in _reminderOffsetOptions)
-        DropdownMenuItem(
-          value: minutes,
-          child: Text('提前 ${_formatReminderAdvance(minutes)}'),
-        ),
-    ];
+  Future<void> _pickReminderOffset({
+    required BuildContext context,
+    required String title,
+    required int selectedValue,
+    required Future<void> Function(int value) onSelected,
+  }) async {
+    final selected = await showAppOptionPicker<int>(
+      context,
+      title: title,
+      selectedValue: selectedValue,
+      grid: true,
+      gridCrossAxisCount: 2,
+      options: [
+        for (final minutes in _reminderOffsetOptions)
+          AppPickerOption(
+            value: minutes,
+            label: '提前 ${_formatReminderAdvance(minutes)}',
+          ),
+      ],
+    );
+    if (selected != null) {
+      await onSelected(selected);
+    }
   }
 
   String _formatReminderAdvance(int minutes) {

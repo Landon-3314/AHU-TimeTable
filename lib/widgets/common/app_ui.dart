@@ -282,3 +282,304 @@ class LoadingButtonLabel extends StatelessWidget {
     );
   }
 }
+
+class AppPickerOption<T> {
+  const AppPickerOption({
+    required this.value,
+    required this.label,
+    this.subtitle,
+  });
+
+  final T value;
+  final String label;
+  final String? subtitle;
+}
+
+class AppPickerPill extends StatelessWidget {
+  const AppPickerPill({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+        child: AnimatedContainer(
+          duration: AppDurations.fast,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: enabled
+                ? colorScheme.primaryContainer
+                : AppColors.surfaceMuted,
+            borderRadius: BorderRadius.circular(AppRadii.pill),
+            border: Border.all(
+              color: enabled
+                  ? colorScheme.primary.withValues(alpha: 0.20)
+                  : AppColors.divider,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: enabled
+                        ? colorScheme.primary
+                        : AppColors.textTertiary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xxs),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: enabled ? colorScheme.primary : AppColors.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppPickerField extends StatelessWidget {
+  const AppPickerField({
+    super.key,
+    required this.label,
+    required this.valueLabel,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  final String label;
+  final String valueLabel;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: label,
+            enabled: enabled,
+            suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded),
+          ),
+          child: Text(
+            valueLabel,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: enabled ? AppColors.textPrimary : AppColors.textTertiary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<T?> showAppOptionPicker<T>(
+  BuildContext context, {
+  required String title,
+  required List<AppPickerOption<T>> options,
+  required T selectedValue,
+  bool grid = false,
+  int gridCrossAxisCount = 3,
+}) {
+  final screenHeight = MediaQuery.sizeOf(context).height;
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: screenHeight * 0.72),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xxl,
+            0,
+            AppSpacing.xxl,
+            AppSpacing.xxl,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(sheetContext).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: MaterialLocalizations.of(
+                      sheetContext,
+                    ).closeButtonTooltip,
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Flexible(
+                child: grid
+                    ? _AppPickerGrid<T>(
+                        options: options,
+                        selectedValue: selectedValue,
+                        crossAxisCount: gridCrossAxisCount,
+                      )
+                    : _AppPickerList<T>(
+                        options: options,
+                        selectedValue: selectedValue,
+                      ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _AppPickerList<T> extends StatelessWidget {
+  const _AppPickerList({required this.options, required this.selectedValue});
+
+  final List<AppPickerOption<T>> options;
+  final T selectedValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      shrinkWrap: true,
+      itemCount: options.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final option = options[index];
+        final selected = option.value == selectedValue;
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          title: Text(
+            option.label,
+            style: TextStyle(
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            ),
+          ),
+          subtitle: option.subtitle == null ? null : Text(option.subtitle!),
+          trailing: selected
+              ? Icon(
+                  Icons.check_circle,
+                  color: Theme.of(context).colorScheme.primary,
+                )
+              : null,
+          onTap: () => Navigator.of(context).pop(option.value),
+        );
+      },
+    );
+  }
+}
+
+class _AppPickerGrid<T> extends StatelessWidget {
+  const _AppPickerGrid({
+    required this.options,
+    required this.selectedValue,
+    required this.crossAxisCount,
+  });
+
+  final List<AppPickerOption<T>> options;
+  final T selectedValue;
+  final int crossAxisCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        mainAxisSpacing: AppSpacing.md,
+        crossAxisSpacing: AppSpacing.md,
+        childAspectRatio: 2.45,
+      ),
+      itemCount: options.length,
+      itemBuilder: (context, index) {
+        final option = options[index];
+        final selected = option.value == selectedValue;
+        return InkWell(
+          onTap: () => Navigator.of(context).pop(option.value),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
+          child: AnimatedContainer(
+            duration: AppDurations.fast,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: selected
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : AppColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(AppRadii.lg),
+              border: Border.all(
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : AppColors.divider,
+                width: selected ? 1.4 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    option.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: selected
+                          ? Theme.of(context).colorScheme.primary
+                          : AppColors.textPrimary,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (selected) ...[
+                  const SizedBox(width: AppSpacing.xxs),
+                  Icon(
+                    Icons.check_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 16,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

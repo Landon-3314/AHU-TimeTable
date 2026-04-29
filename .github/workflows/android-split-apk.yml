@@ -1,4 +1,4 @@
-name: Android Release APK
+name: Release Android and iOS
 
 on:
   workflow_dispatch:
@@ -10,13 +10,17 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-release-${{ github.ref }}
+  group: mobile-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-android-apk:
     name: Build and publish APKs
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      release_name: ${{ steps.version.outputs.release_name }}
 
     steps:
       - name: Checkout repository
@@ -136,3 +140,63 @@ jobs:
               --title "$RELEASE_NAME" \
               --generate-notes
           fi
+
+  build-ios-app:
+    name: Build and publish unsigned iOS app
+    runs-on: macos-latest
+    needs: build-android-apk
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build unsigned iOS app
+        run: flutter build ios --release --no-codesign
+
+      - name: Prepare versioned iOS app artifact
+        shell: bash
+        run: |
+          VERSION="${{ needs.build-android-apk.outputs.version }}"
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/ios/iphoneos/Runner.app \
+            "release/timetable-${VERSION}-ios-unsigned-app.zip"
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-app-${{ needs.build-android-apk.outputs.version }}
+          path: release/timetable-${{ needs.build-android-apk.outputs.version }}-ios-unsigned-app.zip
+          if-no-files-found: error
+
+      - name: Upload iOS app to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ needs.build-android-apk.outputs.tag }}"
+          RELEASE_NAME="${{ needs.build-android-apk.outputs.release_name }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --title "$RELEASE_NAME" \
+              --latest
+          else
+            gh release create "$TAG" \
+              --target "${GITHUB_SHA}" \
+              --title "$RELEASE_NAME" \
+              --generate-notes
+          fi
+
+          gh release upload "$TAG" \
+            release/timetable-${{ needs.build-android-apk.outputs.version }}-ios-unsigned-app.zip \
+            --clobber

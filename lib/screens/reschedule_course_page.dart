@@ -98,74 +98,38 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
               ),
             ),
             const SizedBox(height: AppSpacing.xxl),
-            DropdownButtonFormField<int>(
-              initialValue: effectiveTargetWeek,
-              decoration: InputDecoration(
-                labelText: settingsProvider.t('target_week'),
+            AppPickerField(
+              label: settingsProvider.t('target_week'),
+              valueLabel: _weekLabel(settingsProvider, effectiveTargetWeek),
+              onTap: () => _pickTargetWeek(
+                settingsProvider,
+                selectedValue: effectiveTargetWeek,
               ),
-              items: [
-                for (int week = 1; week <= settingsProvider.totalWeeks; week++)
-                  DropdownMenuItem<int>(
-                    value: week,
-                    child: Text(_weekLabel(settingsProvider, week)),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
-                setState(() {
-                  _targetWeek = value;
-                });
-              },
             ),
             const SizedBox(height: AppSpacing.xl),
-            DropdownButtonFormField<int>(
-              initialValue: effectiveTargetWeekday,
-              decoration: InputDecoration(
-                labelText: settingsProvider.t('target_weekday'),
+            AppPickerField(
+              label: settingsProvider.t('target_weekday'),
+              valueLabel: _weekdayLabel(
+                settingsProvider,
+                effectiveTargetWeekday,
               ),
-              items: [
-                for (int day = 1; day <= 7; day++)
-                  DropdownMenuItem<int>(
-                    value: day,
-                    child: Text(_weekdayLabel(settingsProvider, day)),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
-                setState(() {
-                  _targetWeekday = value;
-                });
-              },
+              onTap: () => _pickTargetWeekday(
+                settingsProvider,
+                selectedValue: effectiveTargetWeekday,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
-            DropdownButtonFormField<int>(
-              initialValue: canFitPeriodRange
-                  ? effectiveTargetStartPeriod
-                  : null,
-              decoration: InputDecoration(
-                labelText: settingsProvider.t('target_start_period'),
+            AppPickerField(
+              label: settingsProvider.t('target_start_period'),
+              enabled: canFitPeriodRange,
+              valueLabel: canFitPeriodRange
+                  ? _periodLabel(settingsProvider, effectiveTargetStartPeriod)
+                  : settingsProvider.t('invalid_reschedule_period_range'),
+              onTap: () => _pickTargetStartPeriod(
+                settingsProvider,
+                selectedValue: effectiveTargetStartPeriod,
+                maxStartPeriod: maxStartPeriod,
               ),
-              items: [
-                for (int period = 1; period <= maxStartPeriod; period++)
-                  DropdownMenuItem<int>(
-                    value: period,
-                    child: Text(_periodLabel(settingsProvider, period)),
-                  ),
-              ],
-              onChanged: !canFitPeriodRange
-                  ? null
-                  : (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _targetStartPeriod = value;
-                      });
-                    },
             ),
             const SizedBox(height: AppSpacing.xl),
             InputDecorator(
@@ -211,6 +175,76 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickTargetWeek(
+    SettingsProvider provider, {
+    required int selectedValue,
+  }) async {
+    final selected = await showAppOptionPicker<int>(
+      context,
+      title: provider.t('target_week'),
+      selectedValue: selectedValue,
+      grid: true,
+      gridCrossAxisCount: 3,
+      options: [
+        for (int week = 1; week <= provider.totalWeeks; week++)
+          AppPickerOption(value: week, label: _weekLabel(provider, week)),
+      ],
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    setState(() {
+      _targetWeek = selected;
+    });
+  }
+
+  Future<void> _pickTargetWeekday(
+    SettingsProvider provider, {
+    required int selectedValue,
+  }) async {
+    final selected = await showAppOptionPicker<int>(
+      context,
+      title: provider.t('target_weekday'),
+      selectedValue: selectedValue,
+      grid: true,
+      gridCrossAxisCount: 2,
+      options: [
+        for (int day = 1; day <= 7; day++)
+          AppPickerOption(value: day, label: _weekdayLabel(provider, day)),
+      ],
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    setState(() {
+      _targetWeekday = selected;
+    });
+  }
+
+  Future<void> _pickTargetStartPeriod(
+    SettingsProvider provider, {
+    required int selectedValue,
+    required int maxStartPeriod,
+  }) async {
+    final selected = await showAppOptionPicker<int>(
+      context,
+      title: provider.t('target_start_period'),
+      selectedValue: selectedValue,
+      grid: true,
+      gridCrossAxisCount: 3,
+      options: [
+        for (int period = 1; period <= maxStartPeriod; period++)
+          AppPickerOption(value: period, label: _periodLabel(provider, period)),
+      ],
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    setState(() {
+      _targetStartPeriod = selected;
+    });
   }
 
   Future<void> _submit({

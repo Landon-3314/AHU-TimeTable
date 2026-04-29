@@ -146,25 +146,10 @@ class _CourseFormState extends State<_CourseForm> {
                 decoration: InputDecoration(labelText: provider.t('teacher')),
               ),
               const SizedBox(height: AppSpacing.xl),
-              DropdownButtonFormField<int>(
-                initialValue: _selectedWeekday,
-                decoration: InputDecoration(
-                  labelText: provider.t('weekday_label'),
-                ),
-                items: [
-                  for (int day = 1; day <= 7; day++)
-                    DropdownMenuItem(
-                      value: day,
-                      child: Text(_weekdayLabel(provider, day)),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      _selectedWeekday = value;
-                    });
-                  }
-                },
+              AppPickerField(
+                label: provider.t('weekday_label'),
+                valueLabel: _weekdayLabel(provider, _selectedWeekday),
+                onTap: () => _pickWeekday(provider),
               ),
               const SizedBox(height: AppSpacing.xxl),
               Text(
@@ -198,59 +183,37 @@ class _CourseFormState extends State<_CourseForm> {
               Row(
                 children: [
                   Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: currentStartValue,
-                      decoration: InputDecoration(
-                        labelText: provider.t('start_period'),
+                    child: AppPickerField(
+                      label: provider.t('start_period'),
+                      valueLabel: _periodLabel(provider, currentStartValue),
+                      onTap: () => _pickPeriod(
+                        provider: provider,
+                        title: provider.t('start_period'),
+                        selectedValue: currentStartValue,
+                        maxPeriod: effectivePeriodCount,
+                        onSelected: (value) {
+                          _selectedStartPeriod = value;
+                          if (_selectedEndPeriod < value) {
+                            _selectedEndPeriod = value;
+                          }
+                        },
                       ),
-                      items: [
-                        for (
-                          int period = 1;
-                          period <= effectivePeriodCount;
-                          period++
-                        )
-                          DropdownMenuItem<int>(
-                            value: period,
-                            child: Text(_periodLabel(provider, period)),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedStartPeriod = value;
-                            if (_selectedEndPeriod < value) {
-                              _selectedEndPeriod = value;
-                            }
-                          });
-                        }
-                      },
                     ),
                   ),
                   const SizedBox(width: AppSpacing.lg),
                   Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: currentEndValue,
-                      decoration: InputDecoration(
-                        labelText: provider.t('end_period'),
+                    child: AppPickerField(
+                      label: provider.t('end_period'),
+                      valueLabel: _periodLabel(provider, currentEndValue),
+                      onTap: () => _pickPeriod(
+                        provider: provider,
+                        title: provider.t('end_period'),
+                        selectedValue: currentEndValue,
+                        maxPeriod: effectivePeriodCount,
+                        onSelected: (value) {
+                          _selectedEndPeriod = value;
+                        },
                       ),
-                      items: [
-                        for (
-                          int period = 1;
-                          period <= effectivePeriodCount;
-                          period++
-                        )
-                          DropdownMenuItem<int>(
-                            value: period,
-                            child: Text(_periodLabel(provider, period)),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedEndPeriod = value;
-                          });
-                        }
-                      },
                     ),
                   ),
                 ],
@@ -330,6 +293,52 @@ class _CourseFormState extends State<_CourseForm> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickWeekday(SettingsProvider provider) async {
+    final selected = await showAppOptionPicker<int>(
+      context,
+      title: provider.t('weekday_label'),
+      selectedValue: _selectedWeekday,
+      grid: true,
+      gridCrossAxisCount: 2,
+      options: [
+        for (int day = 1; day <= 7; day++)
+          AppPickerOption(value: day, label: _weekdayLabel(provider, day)),
+      ],
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    setState(() {
+      _selectedWeekday = selected;
+    });
+  }
+
+  Future<void> _pickPeriod({
+    required SettingsProvider provider,
+    required String title,
+    required int selectedValue,
+    required int maxPeriod,
+    required ValueChanged<int> onSelected,
+  }) async {
+    final selected = await showAppOptionPicker<int>(
+      context,
+      title: title,
+      selectedValue: selectedValue,
+      grid: true,
+      gridCrossAxisCount: 3,
+      options: [
+        for (int period = 1; period <= maxPeriod; period++)
+          AppPickerOption(value: period, label: _periodLabel(provider, period)),
+      ],
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    setState(() {
+      onSelected(selected);
+    });
   }
 
   Future<void> _saveCourse(int periodCount) async {

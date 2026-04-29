@@ -173,8 +173,10 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (event.pointerCount >= 2 || event.actionMasked == MotionEvent.ACTION_CANCEL) {
-            setOverlayVisible(true)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL,
+            MotionEvent.ACTION_POINTER_UP -> setOverlayVisible(false)
         }
         return super.dispatchTouchEvent(event)
     }

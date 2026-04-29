@@ -75,23 +75,11 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
             icon: Icons.calendar_view_week_outlined,
             title: '上课周数',
             subtitle: '${provider.totalWeeks} 周',
-            trailing: DropdownButton<int>(
-              value: provider.totalWeeks,
-              underline: const SizedBox.shrink(),
-              items: [
-                for (int week = 12; week <= 30; week++)
-                  DropdownMenuItem<int>(value: week, child: Text('$week')),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  _updateAndRefresh(
-                    context,
-                    provider,
-                    () => provider.updateTotalWeeks(value),
-                  );
-                }
-              },
+            trailing: AppPickerPill(
+              label: '${provider.totalWeeks} 周',
+              onTap: () => _pickTotalWeeks(context, provider),
             ),
+            onTap: () => _pickTotalWeeks(context, provider),
           ),
         ],
       ),
@@ -186,6 +174,30 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
     );
   }
 
+  Future<void> _pickTotalWeeks(
+    BuildContext context,
+    SettingsProvider provider,
+  ) async {
+    final selected = await showAppOptionPicker<int>(
+      context,
+      title: '上课周数',
+      selectedValue: provider.totalWeeks,
+      grid: true,
+      gridCrossAxisCount: 3,
+      options: [
+        for (int week = 12; week <= 30; week++)
+          AppPickerOption(value: week, label: '$week 周'),
+      ],
+    );
+    if (selected != null && context.mounted) {
+      await _updateAndRefresh(
+        context,
+        provider,
+        () => provider.updateTotalWeeks(selected),
+      );
+    }
+  }
+
   Widget _durationTile({
     required BuildContext context,
     required IconData icon,
@@ -238,20 +250,47 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
       icon: icon,
       title: title,
       subtitle: '$value 节',
-      trailing: DropdownButton<int>(
-        value: value.clamp(0, max).toInt(),
-        underline: const SizedBox.shrink(),
-        items: [
-          for (int count = 0; count <= max; count++)
-            DropdownMenuItem<int>(value: count, child: Text('$count')),
-        ],
-        onChanged: (nextValue) {
-          if (nextValue != null) {
-            onChanged(nextValue);
-          }
-        },
+      trailing: AppPickerPill(
+        label: '$value 节',
+        onTap: () => _pickSessionCount(
+          context: context,
+          title: title,
+          value: value,
+          max: max,
+          onChanged: onChanged,
+        ),
+      ),
+      onTap: () => _pickSessionCount(
+        context: context,
+        title: title,
+        value: value,
+        max: max,
+        onChanged: onChanged,
       ),
     );
+  }
+
+  Future<void> _pickSessionCount({
+    required BuildContext context,
+    required String title,
+    required int value,
+    required int max,
+    required Future<void> Function(int value) onChanged,
+  }) async {
+    final selected = await showAppOptionPicker<int>(
+      context,
+      title: title,
+      selectedValue: value.clamp(0, max).toInt(),
+      grid: true,
+      gridCrossAxisCount: 3,
+      options: [
+        for (int count = 0; count <= max; count++)
+          AppPickerOption(value: count, label: '$count 节'),
+      ],
+    );
+    if (selected != null) {
+      await onChanged(selected);
+    }
   }
 
   Widget _buildSemesterManagementSection(
