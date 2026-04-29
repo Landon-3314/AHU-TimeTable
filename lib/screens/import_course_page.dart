@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../core/app_colors.dart';
 import '../providers/course_provider.dart';
@@ -20,6 +24,10 @@ class ImportCoursePage extends StatefulWidget {
 class _ImportCoursePageState extends State<ImportCoursePage> {
   static const ScheduleParserService _parserService = ScheduleParserService();
   static const Duration _extractScriptSettleDelay = Duration(milliseconds: 350);
+  static final Set<Factory<OneSequenceGestureRecognizer>>
+  _webViewGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
+    Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+  };
 
   late final WebViewController _controller;
   bool _isImporting = false;
@@ -27,14 +35,8 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onNavigationRequest: (request) => NavigationDecision.navigate,
-        ),
-      )
-      ..loadRequest(Uri.parse(ScheduleHtmlExtractor.academicLoginUrl));
+    _controller = WebViewController();
+    unawaited(_initializeController());
   }
 
   @override
@@ -42,7 +44,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     final settingsProvider = context.watch<SettingsProvider>();
     return Scaffold(
       appBar: AppBar(title: Text(settingsProvider.t('academic_import'))),
-      body: WebViewWidget(controller: _controller),
+      body: _buildWebView(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isImporting ? null : _runExtractScript,
         icon: const Icon(Icons.download_for_offline_outlined),
@@ -52,6 +54,40 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
               : settingsProvider.t('extract_timetable'),
         ),
       ),
+    );
+  }
+
+  Widget _buildWebView() {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return WebViewWidget(controller: _controller);
+    }
+
+    return WebViewWidget.fromPlatformCreationParams(
+      params: AndroidWebViewWidgetCreationParams(
+        controller: _controller.platform,
+        displayWithHybridComposition: true,
+        gestureRecognizers: _webViewGestureRecognizers,
+      ),
+    );
+  }
+
+  Future<void> _initializeController() async {
+    await _controller.enableZoom(true);
+
+    if (_controller.platform is AndroidWebViewController) {
+      final androidController =
+          _controller.platform as AndroidWebViewController;
+      await androidController.setUseWideViewPort(true);
+    }
+
+    await _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    await _controller.setNavigationDelegate(
+      NavigationDelegate(
+        onNavigationRequest: (request) => NavigationDecision.navigate,
+      ),
+    );
+    await _controller.loadRequest(
+      Uri.parse(ScheduleHtmlExtractor.academicLoginUrl),
     );
   }
 
