@@ -179,10 +179,10 @@ class TimetableForegroundService : Service() {
         val channel =
             NotificationChannel(
                 CHANNEL_ID,
-                "上课静音前台服务",
+                "课前提醒持久显示",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "用于持续刷新当前课程状态"
+                description = "用于在上课前和上课期间持续显示当前课程状态"
                 setShowBadge(false)
             }
         manager.createNotificationChannel(channel)
@@ -201,7 +201,8 @@ class TimetableForegroundService : Service() {
         private const val CHANNEL_ID = "class_mute_native_foreground"
         private const val NOTIFICATION_ID = 888
         private const val UPDATE_INTERVAL_MILLIS = 60_000L
-        private const val DISPLAY_MARGIN_MILLIS = 60 * 60 * 1000L
+        private const val DISPLAY_LEAD_MILLIS = 10 * 60 * 1000L
+        private const val DISPLAY_TAIL_MILLIS = 0L
         private const val SHOW_REQUEST_CODE = 88007
         private const val HIDE_REQUEST_CODE = 88022
 
@@ -396,8 +397,8 @@ class TimetableForegroundService : Service() {
                 return null
             }
 
-            val startAtMillis = courses.minOf { it.startAtMillis } - DISPLAY_MARGIN_MILLIS
-            val endAtMillis = courses.maxOf { it.endAtMillis } + DISPLAY_MARGIN_MILLIS
+            val startAtMillis = courses.minOf { it.startAtMillis } - DISPLAY_LEAD_MILLIS
+            val endAtMillis = courses.maxOf { it.endAtMillis } + DISPLAY_TAIL_MILLIS
             return if (nowMillis in startAtMillis until endAtMillis) {
                 DisplayWindow(startAtMillis, endAtMillis)
             } else {
@@ -429,8 +430,8 @@ class TimetableForegroundService : Service() {
                     val endAtMillis = courses.maxOfOrNull { it.endAtMillis }
                         ?: return@mapNotNull null
                     DisplayWindow(
-                        startAtMillis = startAtMillis - DISPLAY_MARGIN_MILLIS,
-                        endAtMillis = endAtMillis + DISPLAY_MARGIN_MILLIS,
+                        startAtMillis = startAtMillis - DISPLAY_LEAD_MILLIS,
+                        endAtMillis = endAtMillis + DISPLAY_TAIL_MILLIS,
                     )
                 }
                 .filter { window -> window.endAtMillis > nowMillis }

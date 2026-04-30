@@ -2,6 +2,7 @@
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Rect
@@ -13,6 +14,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import android.view.MotionEvent
 import android.view.ScrollCaptureCallback
 import android.view.ScrollCaptureSession
@@ -23,6 +25,7 @@ import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -40,6 +43,8 @@ import kotlin.math.roundToInt
 private const val REQUEST_POST_NOTIFICATIONS = 5021
 private const val NATIVE_ALARM_CHANNEL = "com.timetable/native_alarm"
 private const val SCROLL_CAPTURE_CHANNEL = "app.scroll_capture"
+private const val NOTIFICATION_DIAG_TAG = "NotificationDiag"
+private const val REMINDER_CHANNEL_ID = "timetable_reminders"
 
 class MainActivity : FlutterActivity() {
     private var notificationPermissionResult: MethodChannel.Result? = null
@@ -69,7 +74,11 @@ class MainActivity : FlutterActivity() {
             "app.timezone",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "getLocalTimezone" -> result.success(TimeZone.getDefault().id)
+                "getLocalTimezone" -> {
+                    val timezone = TimeZone.getDefault().id
+                    notificationLog("timezone getLocalTimezone result=$timezone")
+                    result.success(timezone)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -83,6 +92,7 @@ class MainActivity : FlutterActivity() {
                     hasPostNotificationPermission(),
                 )
                 "requestNotificationPermission" -> requestNotificationPermission(result)
+                "notificationDiagnostics" -> result.success(notificationDiagnostics())
                 else -> result.notImplemented()
             }
         }
@@ -109,6 +119,16 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
 
+                "reconcileMuteState" -> {
+                    val restoreActiveAppMute =
+                        call.argument<Boolean>("restoreActiveAppMute") ?: false
+                    NativeAlarmScheduler.reconcileMuteState(
+                        context = this,
+                        restoreActiveAppMute = restoreActiveAppMute,
+                    )
+                    result.success(true)
+                }
+
                 "cancelAllClasses" -> {
                     NativeAlarmScheduler.cancelAll(this)
                     TimetableForegroundService.requestRefresh(this)
@@ -132,6 +152,24 @@ class MainActivity : FlutterActivity() {
 
                 "runOneMinuteMuteTest" -> {
                     NativeAlarmScheduler.scheduleOneMinuteMuteTest(this)
+                    result.success(true)
+                }
+
+                "runTimedMuteTest" -> {
+                    val muteAfterSeconds = (call.argument<Number>("muteAfterSeconds") ?: 30).toLong()
+                    val restoreAfterSeconds =
+                        (call.argument<Number>("restoreAfterSeconds") ?: 60).toLong()
+                    NativeAlarmScheduler.scheduleDiagnosticMuteWindow(
+                        context = this,
+                        silentDelayMillis = muteAfterSeconds.coerceAtLeast(1L) * 1000L,
+                        restoreDelayMillis =
+                            restoreAfterSeconds.coerceAtLeast(muteAfterSeconds + 1L) * 1000L,
+                    )
+                    result.success(true)
+                }
+
+                "cancelTimedMuteTest" -> {
+                    NativeAlarmScheduler.cancelDiagnosticMuteWindow(this)
                     result.success(true)
                 }
 
@@ -195,6 +233,7 @@ class MainActivity : FlutterActivity() {
             reminderAtMillis = (entry["reminderAtMillis"] as? Number)?.toLong(),
             title = entry["title"] as? String,
             content = entry["content"] as? String,
+            notificationId = (entry["notificationId"] as? Number)?.toInt(),
             reminderAction =
                 (entry["reminderAction"] as? String)
                     ?: NativeAlarmScheduler.ACTION_REMIND_CLASS,
@@ -222,30 +261,41 @@ class MainActivity : FlutterActivity() {
 
     private fun hasPostNotificationPermission(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            notificationLog(
+                "hasPostNotificationPermission sdk=${Build.VERSION.SDK_INT} result=true pre-33",
+            )
             return true
         }
-        return ContextCompat.checkSelfPermission(
+        val granted = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.POST_NOTIFICATIONS,
         ) == PackageManager.PERMISSION_GRANTED
+        notificationLog(
+            "hasPostNotificationPermission sdk=${Build.VERSION.SDK_INT} result=$granted",
+        )
+        return granted
     }
 
     private fun requestNotificationPermission(result: MethodChannel.Result) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            notificationLog("requestNotificationPermission skipped pre-33 result=true")
             result.success(true)
             return
         }
 
         if (hasPostNotificationPermission()) {
+            notificationLog("requestNotificationPermission already granted")
             result.success(true)
             return
         }
 
         if (notificationPermissionResult != null) {
+            notificationLog("requestNotificationPermission rejected: request already in progress")
             result.error("REQUEST_IN_PROGRESS", "Permission request already in progress", null)
             return
         }
 
+        notificationLog("requestNotificationPermission launching runtime dialog")
         notificationPermissionResult = result
         ActivityCompat.requestPermissions(
             this,
@@ -254,9 +304,48 @@ class MainActivity : FlutterActivity() {
         )
     }
 
+    private fun notificationDiagnostics(): Map<String, Any?> {
+        val notificationManager =
+            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val notificationsEnabled =
+            NotificationManagerCompat.from(this).areNotificationsEnabled()
+        val channel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notificationManager.getNotificationChannel(REMINDER_CHANNEL_ID)
+        } else {
+            null
+        }
+        val diagnostics = mutableMapOf<String, Any?>(
+            "packageName" to packageName,
+            "sdkInt" to Build.VERSION.SDK_INT,
+            "postNotificationsPermissionGranted" to hasPostNotificationPermission(),
+            "areNotificationsEnabled" to notificationsEnabled,
+            "exactAlarmPermissionGranted" to hasExactAlarmPermission(),
+            "notificationPolicyAccessGranted" to notificationManager.isNotificationPolicyAccessGranted,
+            "reminderChannelId" to REMINDER_CHANNEL_ID,
+            "reminderChannelExists" to (channel != null),
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && channel != null) {
+            diagnostics["reminderChannelImportance"] = channel.importance
+            diagnostics["reminderChannelCanBypassDnd"] = channel.canBypassDnd()
+            diagnostics["reminderChannelSound"] = channel.sound?.toString()
+            diagnostics["reminderChannelVibration"] = channel.shouldVibrate()
+        }
+        notificationLog("notificationDiagnostics result=$diagnostics")
+        return diagnostics
+    }
+
     private fun hasExactAlarmPermission(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             return true
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasUseExactAlarmPermission =
+                checkSelfPermission(Manifest.permission.USE_EXACT_ALARM) ==
+                    PackageManager.PERMISSION_GRANTED
+            if (hasUseExactAlarmPermission) {
+                notificationLog("hasExactAlarmPermission true via USE_EXACT_ALARM")
+                return true
+            }
         }
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
         return alarmManager.canScheduleExactAlarms()
@@ -286,20 +375,13 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        val directIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-            data = Uri.parse("package:$packageName")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-
-        val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+        val settingsIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
         try {
-            startActivity(directIntent)
-        } catch (_: Exception) {
-            startActivity(fallbackIntent)
-        }
+            startActivity(settingsIntent)
+        } catch (_: Exception) {}
     }
 
     override fun onRequestPermissionsResult(
@@ -310,11 +392,19 @@ class MainActivity : FlutterActivity() {
         if (requestCode == REQUEST_POST_NOTIFICATIONS) {
             val granted =
                 grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            notificationLog(
+                "onRequestPermissionsResult POST_NOTIFICATIONS granted=$granted " +
+                    "grantResults=${grantResults.joinToString()}",
+            )
             notificationPermissionResult?.success(granted)
             notificationPermissionResult = null
             return
         }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
+    private fun notificationLog(message: String) {
+        Log.d(NOTIFICATION_DIAG_TAG, "${System.currentTimeMillis()} $message")
     }
 
     private fun installScrollCaptureCallbackIfNeeded() {

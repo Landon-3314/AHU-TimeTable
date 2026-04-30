@@ -8,6 +8,7 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_services.dart';
 import '../services/native_alarm_service.dart';
+import '../services/permission_service.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/common/app_ui.dart';
 
@@ -18,7 +19,8 @@ class ReminderSettingsPage extends StatefulWidget {
   State<ReminderSettingsPage> createState() => _ReminderSettingsPageState();
 }
 
-class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
+class _ReminderSettingsPageState extends State<ReminderSettingsPage>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   static const List<int> _reminderOffsetOptions = <int>[
     5,
     10,
@@ -30,14 +32,43 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
   ];
 
   final ScrollController _scrollController = ScrollController();
+  final PermissionService _permissionService = PermissionService();
+  late final AnimationController _mutePermissionBlinkController;
+  late final Animation<double> _mutePermissionBlink;
+  _PermissionSnapshot? _permissionSnapshot;
+  bool _mutePermissionsExpanded = false;
 
   bool get _supportsAndroidAutomation =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _mutePermissionBlinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+    _mutePermissionBlink = CurvedAnimation(
+      parent: _mutePermissionBlinkController,
+      curve: Curves.easeInOut,
+    );
+    _refreshPermissionSnapshot();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _mutePermissionBlinkController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshPermissionSnapshot();
+    }
   }
 
   @override
@@ -64,36 +95,67 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
             if (_supportsAndroidAutomation) ...[
               const AppSectionTitle(
                 title: 'Android 自动化',
-                subtitle: '这些能力依赖系统权限与后台保活策略',
+                subtitle: '自动静音需要系统权限；课前提醒的持久显示样式在提醒设置中选择',
               ),
-              AppSurface(
-                child: SwitchListTile(
-                  secondary: const Icon(Icons.shield_outlined),
-                  title: const Text('前台保活服务'),
-                  subtitle: const Text('用于降低息屏或系统限制对提醒与静音触发的影响'),
-                  value: provider.backgroundServiceEnabled,
-                  onChanged: (value) =>
-                      _onForegroundServiceToggled(provider, value),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
               AppSurface(
                 child: Column(
                   children: [
                     SwitchListTile(
                       secondary: const Icon(Icons.volume_off_outlined),
                       title: const Text('上课自动静音'),
-                      subtitle: const Text('仅在需要的课程时间内执行自动静音与恢复'),
+                      subtitle: Text(_autoMuteSubtitle(provider)),
                       value: provider.autoMuteEnabled,
                       onChanged: (value) => _onAutoMuteToggled(provider, value),
                     ),
-                    const Divider(height: 1),
-                    AppActionTile(
-                      icon: Icons.security_update_warning_outlined,
-                      title: '如果静音失效，点此开启后台权限',
-                      subtitle: '将尝试打开自启动管理或后台高耗电允许页面',
-                      onTap: _openRomPermissionHelp,
-                    ),
+                    _buildMutePermissionSummaryTile(),
+                    if (_mutePermissionsExpanded) ...[
+                      const Divider(height: 1),
+                      _buildMutePermissionBlinkWrapper(
+                        child: AppActionTile(
+                          icon: Icons.notifications_active_outlined,
+                          title: '通知权限',
+                          subtitle: _permissionLabel(
+                            _permissionSnapshot?.notificationGranted,
+                          ),
+                          onTap: _openNotificationPermission,
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      _buildMutePermissionBlinkWrapper(
+                        child: AppActionTile(
+                          icon: Icons.alarm_on_outlined,
+                          title: '精确闹钟权限',
+                          subtitle: _permissionLabel(
+                            _permissionSnapshot?.exactAlarmGranted,
+                            grantedText: '已允许，课程和日程核心提醒将使用精确闹钟',
+                            deniedText: '未允许，提醒会降级为非精确，自动静音会改为手动提醒',
+                          ),
+                          onTap: _openExactAlarmSettings,
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      _buildMutePermissionBlinkWrapper(
+                        child: AppActionTile(
+                          icon: Icons.do_not_disturb_on_outlined,
+                          title: '勿扰/静音权限',
+                          subtitle: _permissionLabel(
+                            _permissionSnapshot?.dndGranted,
+                            grantedText: '已允许，应用可在课程时间切换静音并恢复',
+                            deniedText: '未允许，自动静音会降级为通知提醒',
+                          ),
+                          onTap: _openDndSettings,
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      _buildMutePermissionBlinkWrapper(
+                        child: AppActionTile(
+                          icon: Icons.security_update_warning_outlined,
+                          title: '如果静音失效，点此开启后台权限',
+                          subtitle: '将尝试打开自启动管理或后台高耗电允许页面',
+                          onTap: _openRomPermissionHelp,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -106,11 +168,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                   SwitchListTile(
                     secondary: const Icon(Icons.notifications_active_outlined),
                     title: const Text('开启课前提醒'),
-                    subtitle: Text(
-                      provider.courseReminderEnabled
-                          ? '已开启，提前 ${_formatReminderAdvance(provider.reminderAdvanceMinutes)} 提醒'
-                          : '关闭',
-                    ),
+                    subtitle: Text(_courseReminderSubtitle(provider)),
                     value: provider.courseReminderEnabled,
                     onChanged: (value) =>
                         _onCourseReminderChanged(context, provider, value),
@@ -118,13 +176,47 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
                   if (provider.courseReminderEnabled) ...[
                     const Divider(height: 1),
                     AppActionTile(
+                      icon: Icons.style_outlined,
+                      title: '提醒样式',
+                      subtitle: _courseReminderStyleLabel(
+                        provider.courseReminderStyle,
+                      ),
+                      trailing: AppPickerPill(
+                        label: _courseReminderStyleShortLabel(
+                          provider.courseReminderStyle,
+                        ),
+                        onTap: () => _pickCourseReminderStyle(
+                          context: context,
+                          selectedValue: provider.courseReminderStyle,
+                          onSelected: (style) => _onCourseReminderStyleChanged(
+                            context,
+                            provider,
+                            style,
+                          ),
+                        ),
+                      ),
+                      onTap: () => _pickCourseReminderStyle(
+                        context: context,
+                        selectedValue: provider.courseReminderStyle,
+                        onSelected: (style) => _onCourseReminderStyleChanged(
+                          context,
+                          provider,
+                          style,
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    AppActionTile(
                       icon: Icons.timer_outlined,
                       title: '提前提醒时间',
-                      subtitle:
-                          '当前：提前 ${_formatReminderAdvance(provider.reminderAdvanceMinutes)}',
+                      subtitle: provider.courseReminderUsesPersistentDisplay
+                          ? '持久显示样式下由系统自动显示课程状态，不使用提前时间'
+                          : '当前：提前 ${_formatReminderAdvance(provider.reminderAdvanceMinutes)}',
+                      enabled: provider.courseReminderUsesSingleNotification,
                       trailing: AppPickerPill(
                         label:
                             '提前 ${_formatReminderAdvance(courseOffsetValue)}',
+                        enabled: provider.courseReminderUsesSingleNotification,
                         onTap: () => _pickReminderOffset(
                           context: context,
                           title: '提前提醒时间',
@@ -208,6 +300,89 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     );
   }
 
+  Widget _buildMutePermissionSummaryTile() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final requiredGranted = _requiredAutoMutePermissionsGranted;
+    final missingCount = _missingRequiredAutoMutePermissionCount;
+    final statusLabel = requiredGranted ? '已就绪' : '缺少 $missingCount 项';
+
+    return AnimatedBuilder(
+      animation: _mutePermissionBlink,
+      builder: (context, child) {
+        final highlightColor = colorScheme.errorContainer.withValues(
+          alpha: 0.62 * _mutePermissionBlink.value,
+        );
+        return AnimatedContainer(
+          duration: AppDurations.fast,
+          decoration: BoxDecoration(color: highlightColor),
+          child: child,
+        );
+      },
+      child: AppActionTile(
+        icon: requiredGranted
+            ? Icons.verified_outlined
+            : Icons.rule_folder_outlined,
+        title: '静音权限与系统设置',
+        subtitle: _mutePermissionSummarySubtitle(),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: requiredGranted
+                    ? colorScheme.primaryContainer
+                    : colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(AppRadii.pill),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.xxs,
+                ),
+                child: Text(
+                  statusLabel,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: requiredGranted
+                        ? colorScheme.primary
+                        : colorScheme.error,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            AnimatedRotation(
+              duration: AppDurations.fast,
+              turns: _mutePermissionsExpanded ? 0.5 : 0,
+              child: const Icon(Icons.keyboard_arrow_down_rounded),
+            ),
+          ],
+        ),
+        onTap: () {
+          setState(() {
+            _mutePermissionsExpanded = !_mutePermissionsExpanded;
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _buildMutePermissionBlinkWrapper({required Widget child}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _mutePermissionBlink,
+      builder: (context, child) {
+        return ColoredBox(
+          color: colorScheme.errorContainer.withValues(
+            alpha: 0.52 * _mutePermissionBlink.value,
+          ),
+          child: child,
+        );
+      },
+      child: child,
+    );
+  }
+
   Future<void> _pickReminderOffset({
     required BuildContext context,
     required String title,
@@ -233,6 +408,33 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     }
   }
 
+  Future<void> _pickCourseReminderStyle({
+    required BuildContext context,
+    required CourseReminderStyle selectedValue,
+    required Future<void> Function(CourseReminderStyle value) onSelected,
+  }) async {
+    final selected = await showAppOptionPicker<CourseReminderStyle>(
+      context,
+      title: '课前提醒样式',
+      selectedValue: selectedValue,
+      options: const [
+        AppPickerOption(
+          value: CourseReminderStyle.singleNotification,
+          label: '单次通知',
+          subtitle: '按提前时间发送一次系统通知',
+        ),
+        AppPickerOption(
+          value: CourseReminderStyle.persistentDisplay,
+          label: '持久显示',
+          subtitle: '上课前自动显示当前/下一节课状态',
+        ),
+      ],
+    );
+    if (selected != null) {
+      await onSelected(selected);
+    }
+  }
+
   String _formatReminderAdvance(int minutes) {
     if (minutes == 1440) {
       return '1 天';
@@ -246,21 +448,141 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     return '$minutes 分钟';
   }
 
+  String _courseReminderSubtitle(SettingsProvider provider) {
+    if (!provider.courseReminderEnabled) {
+      return '关闭';
+    }
+    switch (provider.courseReminderStyle) {
+      case CourseReminderStyle.singleNotification:
+        return '单次通知，提前 ${_formatReminderAdvance(provider.reminderAdvanceMinutes)} 提醒';
+      case CourseReminderStyle.persistentDisplay:
+        return '持久显示，课前自动展示当前/下一节课状态';
+    }
+  }
+
+  String _courseReminderStyleLabel(CourseReminderStyle style) {
+    switch (style) {
+      case CourseReminderStyle.singleNotification:
+        return '单次通知：按提前时间发送一次系统通知';
+      case CourseReminderStyle.persistentDisplay:
+        return '持久显示：课程状态会在通知栏持续显示';
+    }
+  }
+
+  String _courseReminderStyleShortLabel(CourseReminderStyle style) {
+    switch (style) {
+      case CourseReminderStyle.singleNotification:
+        return '单次通知';
+      case CourseReminderStyle.persistentDisplay:
+        return '持久显示';
+    }
+  }
+
+  String _autoMuteSubtitle(SettingsProvider provider) {
+    if (!provider.autoMuteEnabled) {
+      return '关闭；开启后将优先自动静音，缺少权限时改为通知提醒';
+    }
+    final snapshot = _permissionSnapshot;
+    if (snapshot == null) {
+      return '正在检查系统权限...';
+    }
+    if (snapshot.exactAlarmGranted && snapshot.dndGranted) {
+      return '权限完整，将使用系统精确闹钟自动静音并恢复';
+    }
+    return '已开启，但缺少系统权限时会在上课时通知你手动静音';
+  }
+
+  String _permissionLabel(
+    bool? granted, {
+    String grantedText = '已允许',
+    String deniedText = '未允许，点此打开系统授权',
+  }) {
+    if (granted == null) {
+      return '正在检查...';
+    }
+    return granted ? grantedText : deniedText;
+  }
+
+  bool get _requiredAutoMutePermissionsGranted {
+    final snapshot = _permissionSnapshot;
+    return snapshot != null &&
+        snapshot.notificationGranted &&
+        snapshot.exactAlarmGranted &&
+        snapshot.dndGranted;
+  }
+
+  int get _missingRequiredAutoMutePermissionCount {
+    final snapshot = _permissionSnapshot;
+    if (snapshot == null) {
+      return 3;
+    }
+    return <bool>[
+      snapshot.notificationGranted,
+      snapshot.exactAlarmGranted,
+      snapshot.dndGranted,
+    ].where((granted) => !granted).length;
+  }
+
+  String _mutePermissionSummarySubtitle() {
+    final snapshot = _permissionSnapshot;
+    if (snapshot == null) {
+      return '正在检查通知、精确闹钟和勿扰/静音权限';
+    }
+    if (_requiredAutoMutePermissionsGranted) {
+      return '通知、精确闹钟、勿扰/静音权限已完成；后台权限仅作为排障入口';
+    }
+    return '开启自动静音前需要先完成通知、精确闹钟、勿扰/静音权限';
+  }
+
+  Future<void> _refreshPermissionSnapshot() async {
+    if (!_supportsAndroidAutomation) {
+      return;
+    }
+    final notificationGranted = await _permissionService
+        .hasNotificationPermission();
+    final exactAlarmGranted = await NativeAlarmService.instance
+        .hasExactAlarmPermission();
+    final dndGranted = await _permissionService.hasDndPermission();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _permissionSnapshot = _PermissionSnapshot(
+        notificationGranted: notificationGranted,
+        exactAlarmGranted: exactAlarmGranted,
+        dndGranted: dndGranted,
+      );
+    });
+  }
+
+  Future<void> _flashMutePermissionPanel() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _mutePermissionsExpanded = true;
+    });
+    if (_mutePermissionBlinkController.isAnimating) {
+      return;
+    }
+    _mutePermissionBlinkController.value = 0;
+    for (var i = 0; i < 3; i += 1) {
+      if (!mounted) {
+        return;
+      }
+      await _mutePermissionBlinkController.forward(from: 0);
+      if (!mounted) {
+        return;
+      }
+      await _mutePermissionBlinkController.reverse();
+    }
+    _mutePermissionBlinkController.value = 0;
+  }
+
   Future<bool> _ensureNotificationPermission() async {
     var status = await Permission.notification.status;
     if (!status.isGranted) {
       status = await Permission.notification.request();
-    }
-    return status.isGranted;
-  }
-
-  Future<bool> _ensureDndPermission() async {
-    if (!_supportsAndroidAutomation) {
-      return true;
-    }
-    var status = await Permission.accessNotificationPolicy.status;
-    if (!status.isGranted) {
-      status = await Permission.accessNotificationPolicy.request();
     }
     return status.isGranted;
   }
@@ -272,6 +594,23 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     return NativeAlarmService.instance.ensureExactAlarmPermission();
   }
 
+  Future<void> _openNotificationPermission() async {
+    final granted = await _ensureNotificationPermission();
+    await _refreshPermissionSnapshot();
+    _showSnackBar(granted ? '通知权限已允许' : '请在系统设置中允许通知权限');
+  }
+
+  Future<void> _openExactAlarmSettings() async {
+    final granted = await _ensureExactAlarmPermission();
+    await _refreshPermissionSnapshot();
+    _showSnackBar(granted ? '精确闹钟权限已允许' : '请在系统设置中允许精确闹钟权限');
+  }
+
+  Future<void> _openDndSettings() async {
+    await context.read<SettingsProvider>().openSystemDndSettings();
+    _showSnackBar('请在系统页面中允许安大课表访问勿扰/静音权限');
+  }
+
   Future<void> _openRomPermissionHelp() async {
     if (!_supportsAndroidAutomation) {
       _showSnackBar('当前平台不需要配置 Android 后台权限');
@@ -279,41 +618,6 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     }
     await NativeAlarmService.instance.openRomPermissionSettings();
     _showSnackBar('已尝试打开后台权限页面，请在系统页面中允许自启动或后台运行');
-  }
-
-  Future<void> _onForegroundServiceToggled(
-    SettingsProvider provider,
-    bool value,
-  ) async {
-    if (!_supportsAndroidAutomation) {
-      _showSnackBar('当前平台不需要前台保活服务');
-      return;
-    }
-
-    if (value) {
-      final notifOk = await _ensureNotificationPermission();
-      if (!notifOk) {
-        _showSnackBar('请先授予通知权限再开启保活服务');
-        return;
-      }
-
-      await NativeAlarmService.instance.requestIgnoreBatteryOptimization();
-
-      final result = await provider.toggleBackgroundServiceWithCheck(true);
-      if (!result.success) {
-        _showSnackBar('开启保活服务失败，请检查通知权限');
-        return;
-      }
-      await _refreshSchedules(provider);
-      return;
-    }
-
-    final result = await provider.toggleBackgroundServiceWithCheck(false);
-    if (!result.success) {
-      _showSnackBar('关闭保活服务失败');
-      return;
-    }
-    await _refreshSchedules(provider);
   }
 
   Future<void> _onAutoMuteToggled(SettingsProvider provider, bool value) async {
@@ -328,25 +632,12 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
       return;
     }
 
-    final notifOk = await _ensureNotificationPermission();
-    if (!notifOk) {
-      _showSnackBar('请先授予通知权限再开启自动静音');
+    await _refreshPermissionSnapshot();
+    if (!_requiredAutoMutePermissionsGranted) {
+      await _flashMutePermissionPanel();
+      _showSnackBar('请先完成通知、精确闹钟、勿扰/静音权限，再开启上课自动静音');
       return;
     }
-
-    final alarmOk = await _ensureExactAlarmPermission();
-    if (!alarmOk) {
-      _showSnackBar('请先授予精确闹钟权限');
-      return;
-    }
-
-    final dndOk = await _ensureDndPermission();
-    if (!dndOk) {
-      _showSnackBar('请先授予勿扰权限再开启自动静音');
-      return;
-    }
-
-    await _offerForegroundServiceEnableIfNeeded(provider);
 
     final result = await provider.toggleAutoMuteWithCheck(true);
     if (!result.success) {
@@ -354,7 +645,13 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
       return;
     }
 
+    await _refreshPermissionSnapshot();
     await _refreshSchedules(provider);
+    final snapshot = _permissionSnapshot;
+    if (snapshot != null &&
+        (!snapshot.exactAlarmGranted || !snapshot.dndGranted)) {
+      _showSnackBar('已开启；缺少精确闹钟或勿扰权限时，将改为上课手动静音提醒');
+    }
   }
 
   Future<void> _onCourseReminderChanged(
@@ -368,12 +665,6 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
         _showSnackBar('请先授予通知权限再开启课前提醒');
         return;
       }
-      final alarmOk = await _ensureExactAlarmPermission();
-      if (!alarmOk) {
-        _showSnackBar('请先授予精确闹钟权限');
-        return;
-      }
-      await _offerForegroundServiceEnableIfNeeded(provider);
     }
 
     final result = await provider.toggleCourseReminder(value);
@@ -382,6 +673,22 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     }
     if (!result.success) {
       _showSnackBar('开启课前提醒失败，请先完成权限授权');
+      return;
+    }
+    await _refreshSchedules(provider);
+  }
+
+  Future<void> _onCourseReminderStyleChanged(
+    BuildContext context,
+    SettingsProvider provider,
+    CourseReminderStyle style,
+  ) async {
+    final result = await provider.updateCourseReminderStyle(style);
+    if (!context.mounted) {
+      return;
+    }
+    if (!result.success) {
+      _showSnackBar('请先授予通知权限再切换课前提醒样式');
       return;
     }
     await _refreshSchedules(provider);
@@ -414,12 +721,6 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
         _showSnackBar('请先授予通知权限再开启日程提醒');
         return;
       }
-      final alarmOk = await _ensureExactAlarmPermission();
-      if (!alarmOk) {
-        _showSnackBar('请先授予精确闹钟权限');
-        return;
-      }
-      await _offerForegroundServiceEnableIfNeeded(provider);
     }
 
     final result = await provider.updateEventReminderAdvanceMinutes(
@@ -451,40 +752,6 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
     await _refreshSchedules(provider);
   }
 
-  Future<void> _offerForegroundServiceEnableIfNeeded(
-    SettingsProvider provider,
-  ) async {
-    if (!_supportsAndroidAutomation ||
-        provider.backgroundServiceEnabled ||
-        !mounted) {
-      return;
-    }
-
-    final shouldEnable = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('建议开启保活服务'),
-          content: const Text('为了确保息屏状态下提醒和静音能准时触发，建议开启前台保活服务以防止系统杀后台。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('暂不开启'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('去开启'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldEnable == true) {
-      await _onForegroundServiceToggled(provider, true);
-    }
-  }
-
   Future<void> _refreshSchedules(SettingsProvider provider) async {
     final courseProvider = context.read<CourseProvider>();
     await AppServices.refreshSchedules(
@@ -502,4 +769,16 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+class _PermissionSnapshot {
+  const _PermissionSnapshot({
+    required this.notificationGranted,
+    required this.exactAlarmGranted,
+    required this.dndGranted,
+  });
+
+  final bool notificationGranted;
+  final bool exactAlarmGranted;
+  final bool dndGranted;
 }

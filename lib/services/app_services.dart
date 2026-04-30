@@ -1,19 +1,26 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../models/course.dart';
 import '../models/event.dart';
 import '../providers/settings_provider.dart';
-import 'background_service_manager.dart';
+import 'local_notification_service.dart';
 import 'native_alarm_service.dart';
+import 'permission_service.dart';
+import 'persistent_course_reminder_manager.dart';
+import 'schedule_plan.dart';
 import 'storage_service.dart';
 
 class AppServices {
   const AppServices._();
 
+  static const String _logTag = '[NotificationDiag]';
+
   static Future<StorageService> init() async {
     WidgetsFlutterBinding.ensureInitialized();
     final storageService = await StorageService.create();
-    await BackgroundServiceManager.initialize();
+    await LocalNotificationService.instance.initialize();
+    await PersistentCourseReminderManager.initialize();
     return storageService;
   }
 
@@ -22,33 +29,98 @@ class AppServices {
     required List<Event> events,
     required SettingsProvider settings,
   }) async {
+    _log(
+      'refreshSchedules start courses=${courses.length} events=${events.length} '
+      'semesterInitialized=${settings.isCurrentSemesterInitialized}',
+    );
     if (!settings.isCurrentSemesterInitialized) {
+      _log('refreshSchedules semester not initialized: cancel all schedules');
+      await LocalNotificationService.instance.cancelManagedNotifications();
       await NativeAlarmService.instance.cancelAllClasses();
-      await BackgroundServiceManager.setEnabled(false);
+      await PersistentCourseReminderManager.setEnabled(false);
       return;
     }
 
-    final shouldSyncNativeSchedule =
-        settings.autoMuteEnabled ||
-        settings.courseReminderEnabled ||
-        settings.eventReminderAdvanceMinutes > 0 ||
-        settings.backgroundServiceEnabled;
+    final permissionService = PermissionService();
+    final hasExactAlarmPermission = await NativeAlarmService.instance
+        .hasExactAlarmPermission();
+    final hasDndPermission = await permissionService.hasDndPermission();
+    final canAutoMute =
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        settings.autoMuteEnabled &&
+        hasDndPermission;
+    final maxNotificationCount =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.macOS
+        ? 60
+        : null;
+    _log(
+      'refreshSchedules permissions exact=$hasExactAlarmPermission '
+      'dnd=$hasDndPermission autoMuteEnabled=${settings.autoMuteEnabled} '
+      'canAutoMute=$canAutoMute '
+      'courseReminderStyle=${settings.courseReminderStyle.name} '
+      'maxNotificationCount=$maxNotificationCount',
+    );
+    final courseReminderAdvanceMinutes =
+        settings.courseReminderStyle == CourseReminderStyle.singleNotification
+        ? settings.reminderAdvanceMinutes
+        : 0;
 
-    if (shouldSyncNativeSchedule) {
-      await NativeAlarmService.instance.scheduleClasses(
-        courses: courses,
-        events: events,
-        settings: settings,
+    final plan = SchedulePlanBuilder.build(
+      courses: courses,
+      events: events,
+      timeSlots: settings.timeSlots,
+      semesterStartDate: settings.semesterStartDate,
+      totalWeeks: settings.totalWeeks,
+      courseReminderAdvanceMinutes: courseReminderAdvanceMinutes,
+      eventReminderAdvanceMinutes: settings.eventReminderAdvanceMinutes,
+      autoMuteEnabled: settings.autoMuteEnabled,
+      canAutoMute: canAutoMute,
+      maxNotificationCount: maxNotificationCount,
+    );
+    _log(
+      'refreshSchedules plan notifications=${plan.notifications.length} '
+      'courseAutomationWindows=${plan.courseAutomationWindows.length} '
+      'todayCourses=${plan.todayCourses.length} '
+      'courseStatusWindows=${plan.courseStatusWindows.length}',
+    );
+
+    final isAndroid =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    if (isAndroid) {
+      await NativeAlarmService.instance.reconcileMuteState();
+      await LocalNotificationService.instance
+          .cancelAndroidPluginSchedulesForNativeMigration();
+      _log(
+        'refreshSchedules scheduling Android native plan '
+        'notifications=${plan.notifications.length} '
+        'courseAutomationWindows=${plan.courseAutomationWindows.length} '
+        'includeCourseStatusWindows=${settings.courseReminderPersistentDisplayEnabled}',
+      );
+      await NativeAlarmService.instance.scheduleSystemPlan(
+        plan,
+        includeCourseStatusWindows:
+            settings.courseReminderPersistentDisplayEnabled,
       );
     } else {
       await NativeAlarmService.instance.cancelAllClasses();
+      await LocalNotificationService.instance.schedulePlan(
+        plan,
+        useExactAlarms: hasExactAlarmPermission,
+      );
     }
 
-    if (settings.backgroundServiceEnabled) {
-      await BackgroundServiceManager.setEnabled(true);
-      await BackgroundServiceManager.requestRefresh();
+    if (settings.courseReminderPersistentDisplayEnabled) {
+      await PersistentCourseReminderManager.setEnabled(true);
+      await PersistentCourseReminderManager.requestRefresh();
     } else {
-      await BackgroundServiceManager.setEnabled(false);
+      await PersistentCourseReminderManager.setEnabled(false);
     }
+    _log('refreshSchedules complete');
+  }
+
+  static void _log(String message) {
+    debugPrint('$_logTag ${DateTime.now().toIso8601String()} $message');
   }
 }

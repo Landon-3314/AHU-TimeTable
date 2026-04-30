@@ -1,17 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../models/course.dart';
-import '../models/event.dart';
-import '../providers/settings_provider.dart';
+import 'schedule_plan.dart';
 
 class NativeAlarmService {
   NativeAlarmService._();
 
   static final NativeAlarmService instance = NativeAlarmService._();
+  static const String _logTag = '[NotificationDiag]';
   static const MethodChannel _channel = MethodChannel(
     'com.timetable/native_alarm',
   );
+  static const String _actionRemindClass = 'com.timetable.ACTION_REMIND_CLASS';
+  static const String _actionRemindSchedule =
+      'com.timetable.ACTION_REMIND_SCHEDULE';
 
   bool get _supportsNativeAlarmChannel =>
       !kIsWeb &&
@@ -39,6 +41,23 @@ class NativeAlarmService {
       return recheck;
     } catch (e) {
       debugPrint('[NativeAlarm] ensureExactAlarmPermission failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> hasExactAlarmPermission() async {
+    if (!_supportsAndroidAlarmControls) {
+      _log('hasExactAlarmPermission skipped: non-Android -> true');
+      return true;
+    }
+
+    try {
+      final result =
+          await _channel.invokeMethod<bool>('hasExactAlarmPermission') ?? true;
+      _log('hasExactAlarmPermission result=$result');
+      return result;
+    } catch (e) {
+      debugPrint('[NativeAlarm] hasExactAlarmPermission failed: $e');
       return false;
     }
   }
@@ -130,155 +149,96 @@ class NativeAlarmService {
     }
   }
 
-  Future<void> scheduleClasses({
-    required List<Course> courses,
-    required List<Event> events,
-    required SettingsProvider settings,
-    int horizonDays = 14,
+  Future<bool> runTimedMuteTest({
+    required int muteAfterSeconds,
+    required int restoreAfterSeconds,
   }) async {
-    if (!_supportsNativeAlarmChannel) {
+    if (!_supportsAndroidAlarmControls) {
+      _log('runTimedMuteTest skipped: non-Android');
+      return false;
+    }
+
+    try {
+      _log(
+        'runTimedMuteTest start muteAfterSeconds=$muteAfterSeconds '
+        'restoreAfterSeconds=$restoreAfterSeconds',
+      );
+      await _channel.invokeMethod<void>('runTimedMuteTest', {
+        'muteAfterSeconds': muteAfterSeconds,
+        'restoreAfterSeconds': restoreAfterSeconds,
+      });
+      _log('runTimedMuteTest success');
+      return true;
+    } catch (e) {
+      debugPrint('[NativeAlarm] runTimedMuteTest failed: $e');
+      _log('runTimedMuteTest failed error=$e');
+      return false;
+    }
+  }
+
+  Future<bool> cancelTimedMuteTest() async {
+    if (!_supportsAndroidAlarmControls) {
+      _log('cancelTimedMuteTest skipped: non-Android');
+      return false;
+    }
+
+    try {
+      _log('cancelTimedMuteTest start');
+      await _channel.invokeMethod<void>('cancelTimedMuteTest');
+      _log('cancelTimedMuteTest success');
+      return true;
+    } catch (e) {
+      debugPrint('[NativeAlarm] cancelTimedMuteTest failed: $e');
+      _log('cancelTimedMuteTest failed error=$e');
+      return false;
+    }
+  }
+
+  Future<void> scheduleSystemPlan(
+    SchedulePlan plan, {
+    bool includeCourseStatusWindows = false,
+  }) async {
+    if (!_supportsAndroidAlarmControls) {
       return;
     }
 
     try {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final timeSlots = settings.timeSlots;
-      final payload = <Map<String, dynamic>>[];
-      final todayCourses = <Map<String, dynamic>>[];
-      var courseIndex = 0;
-
-      for (int dayOffset = 0; dayOffset < horizonDays; dayOffset++) {
-        final day = today.add(Duration(days: dayOffset));
-        final weekIndex = _weekIndexOf(day, settings.semesterStartDate);
-        if (weekIndex == null ||
-            weekIndex < 1 ||
-            weekIndex > settings.totalWeeks) {
-          continue;
-        }
-
-        for (final course in courses) {
-          if (course.weekday != day.weekday ||
-              !course.weeks.contains(weekIndex)) {
-            continue;
-          }
-          if (course.startPeriod < 1 || course.startPeriod > timeSlots.length) {
-            continue;
-          }
-
-          final startSlot = timeSlots[course.startPeriod - 1];
-          final endIndex =
-              course.endPeriod.clamp(1, timeSlots.length).toInt() - 1;
-          final endSlot = timeSlots[endIndex];
-
-          final startTime = DateTime(
-            day.year,
-            day.month,
-            day.day,
-            startSlot.startTime.hour,
-            startSlot.startTime.minute,
-          );
-          final endTime = DateTime(
-            day.year,
-            day.month,
-            day.day,
-            endSlot.endTime.hour,
-            endSlot.endTime.minute,
-          );
-          final locationText = course.location.trim();
-
-          if (dayOffset == 0) {
-            todayCourses.add({
-              'courseName': course.name,
-              'location': locationText,
-              'startAtMillis': startTime.millisecondsSinceEpoch,
-              'endAtMillis': endTime.millisecondsSinceEpoch,
-            });
-          }
-
-          if (!endTime.isAfter(now)) {
-            continue;
-          }
-
-          int? reminderAtMillis;
-          if (settings.courseReminderEnabled &&
-              settings.reminderAdvanceMinutes > 0) {
-            final reminderAt = startTime.subtract(
-              Duration(minutes: settings.reminderAdvanceMinutes),
-            );
-            if (reminderAt.isAfter(now)) {
-              reminderAtMillis = reminderAt.millisecondsSinceEpoch;
-            }
-          }
-
-          payload.add({
-            'courseIndex': courseIndex++,
-            'scheduleType': 'course',
-            'courseName': course.name,
-            'location': locationText,
-            'windowStartAtMillis': startTime.millisecondsSinceEpoch,
-            'windowEndAtMillis': endTime.millisecondsSinceEpoch,
-            'silentAtMillis': settings.autoMuteEnabled
-                ? startTime.millisecondsSinceEpoch
-                : null,
-            'restoreAtMillis': settings.autoMuteEnabled
-                ? endTime.millisecondsSinceEpoch
-                : null,
-            'reminderAtMillis': reminderAtMillis,
-            'title': '即将上课: ${course.name}',
-            'content': '上课地点: ${locationText.isEmpty ? '未知' : locationText}',
-            'reminderAction': 'com.timetable.ACTION_REMIND_CLASS',
-          });
-        }
-      }
-
-      todayCourses.sort(
-        (a, b) =>
-            (a['startAtMillis'] as int).compareTo(b['startAtMillis'] as int),
-      );
-
-      if (settings.eventReminderAdvanceMinutes > 0) {
-        for (final event in events) {
-          if (!event.enableAlarm) {
-            continue;
-          }
-          final eventTime = event.dateTime;
-          if (!eventTime.isAfter(now)) {
-            continue;
-          }
-
-          final reminderAt = eventTime.subtract(
-            Duration(minutes: settings.eventReminderAdvanceMinutes),
-          );
-          if (!reminderAt.isAfter(now)) {
-            continue;
-          }
-
-          payload.add({
-            'courseIndex': courseIndex++,
-            'scheduleType': 'event',
-            'courseName': event.name,
-            'location': event.location.trim(),
-            'windowStartAtMillis': null,
-            'windowEndAtMillis': null,
-            'silentAtMillis': null,
-            'restoreAtMillis': null,
-            'reminderAtMillis': reminderAt.millisecondsSinceEpoch,
-            'title': '日程提醒: ${event.name}',
-            'content': event.location.trim().isEmpty
-                ? '即将开始，请注意时间'
-                : '地点: ${event.location.trim()}',
-            'reminderAction': 'com.timetable.ACTION_REMIND_SCHEDULE',
-          });
-        }
-      }
-
+      final classItems = [
+        ...plan.notifications.map(_notificationToJson),
+        ...plan.courseAutomationWindows.map(_automationWindowToJson),
+        if (includeCourseStatusWindows)
+          ...plan.courseStatusWindows.map(_courseStatusWindowToJson),
+      ];
       await _channel.invokeMethod<void>('scheduleAllClasses', {
-        'classes': payload,
-        'todayCourses': todayCourses,
+        'classes': classItems,
+        'todayCourses': plan.todayCourses.map(_todayCourseToJson).toList(),
       });
     } catch (e) {
-      debugPrint('[NativeAlarm] scheduleClasses failed: $e');
+      debugPrint('[NativeAlarm] scheduleMuteWindows failed: $e');
+    }
+  }
+
+  Future<void> scheduleMuteWindows(
+    SchedulePlan plan, {
+    bool includeCourseStatusWindows = false,
+  }) {
+    return scheduleSystemPlan(
+      plan,
+      includeCourseStatusWindows: includeCourseStatusWindows,
+    );
+  }
+
+  Future<void> reconcileMuteState({bool restoreActiveAppMute = false}) async {
+    if (!_supportsAndroidAlarmControls) {
+      return;
+    }
+
+    try {
+      await _channel.invokeMethod<void>('reconcileMuteState', {
+        'restoreActiveAppMute': restoreActiveAppMute,
+      });
+    } catch (e) {
+      debugPrint('[NativeAlarm] reconcileMuteState failed: $e');
     }
   }
 
@@ -294,17 +254,57 @@ class NativeAlarmService {
     }
   }
 
-  int? _weekIndexOf(DateTime day, DateTime semesterStartDate) {
-    final normalizedDay = DateTime(day.year, day.month, day.day);
-    final normalizedStart = DateTime(
-      semesterStartDate.year,
-      semesterStartDate.month,
-      semesterStartDate.day,
-    );
-    final diff = normalizedDay.difference(normalizedStart).inDays;
-    if (diff < 0) {
-      return null;
-    }
-    return (diff ~/ 7) + 1;
+  Map<String, dynamic> _notificationToJson(ManagedNotification notification) {
+    final reminderAction =
+        notification.kind == ManagedNotificationKind.eventReminder
+        ? _actionRemindSchedule
+        : _actionRemindClass;
+    return {
+      'courseIndex': notification.id,
+      'scheduleType': notification.kind.name,
+      'reminderAtMillis': notification.scheduledAt.millisecondsSinceEpoch,
+      'title': notification.title,
+      'content': notification.body,
+      'notificationId': notification.id,
+      'reminderAction': reminderAction,
+    };
+  }
+
+  Map<String, dynamic> _automationWindowToJson(AutoMuteWindow window) {
+    return {
+      'courseIndex': window.id,
+      'scheduleType': 'course',
+      'courseName': window.courseName,
+      'location': window.location,
+      'windowStartAtMillis': window.startAt.millisecondsSinceEpoch,
+      'windowEndAtMillis': window.endAt.millisecondsSinceEpoch,
+      if (window.shouldScheduleSilent)
+        'silentAtMillis': window.startAt.millisecondsSinceEpoch,
+      'restoreAtMillis': window.endAt.millisecondsSinceEpoch,
+    };
+  }
+
+  Map<String, dynamic> _courseStatusWindowToJson(CourseStatusWindow window) {
+    return {
+      'courseIndex': window.id,
+      'scheduleType': 'course',
+      'courseName': window.courseName,
+      'location': window.location,
+      'windowStartAtMillis': window.startAt.millisecondsSinceEpoch,
+      'windowEndAtMillis': window.endAt.millisecondsSinceEpoch,
+    };
+  }
+
+  Map<String, dynamic> _todayCourseToJson(TodayCourseSnapshot course) {
+    return {
+      'courseName': course.courseName,
+      'location': course.location,
+      'startAtMillis': course.startAt.millisecondsSinceEpoch,
+      'endAtMillis': course.endAt.millisecondsSinceEpoch,
+    };
+  }
+
+  static void _log(String message) {
+    debugPrint('$_logTag ${DateTime.now().toIso8601String()} $message');
   }
 }

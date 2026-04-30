@@ -2,16 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetable/providers/settings_provider.dart';
+import 'package:timetable/services/permission_service.dart';
 import 'package:timetable/services/storage_service.dart';
 
 Future<SettingsProvider> _buildSettingsProvider({
   Map<String, Object> initialValues = const {},
+  PermissionService? permissionService,
 }) async {
   SharedPreferences.setMockInitialValues(initialValues);
   final preferences = await SharedPreferences.getInstance();
   final storage = StorageService(sharedPreferences: preferences);
   await storage.ensureSemesterMigration();
-  return SettingsProvider(storageService: storage);
+  return SettingsProvider(
+    storageService: storage,
+    permissionService: permissionService,
+  );
+}
+
+class _FakePermissionService extends PermissionService {
+  _FakePermissionService({
+    this.notificationGranted = true,
+    this.exactAlarmGranted = false,
+    this.dndGranted = false,
+  });
+
+  final bool notificationGranted;
+  final bool exactAlarmGranted;
+  final bool dndGranted;
+
+  @override
+  Future<bool> ensureNotificationPermission() async => notificationGranted;
+
+  @override
+  Future<bool> ensureExactAlarmPermission() async => exactAlarmGranted;
+
+  @override
+  Future<bool> hasExactAlarmPermission() async => exactAlarmGranted;
+
+  @override
+  Future<bool> ensureDndPermission() async => dndGranted;
+
+  @override
+  Future<bool> hasDndPermission() async => dndGranted;
 }
 
 void main() {
@@ -116,6 +148,94 @@ void main() {
         settings.eveningPeriodStartTimes[1],
         const TimeOfDay(hour: 19, minute: 55),
       );
+    },
+  );
+
+  test('course reminders do not require exact alarm permission', () async {
+    final settings = await _buildSettingsProvider(
+      permissionService: _FakePermissionService(exactAlarmGranted: false),
+    );
+
+    final result = await settings.updateReminderAdvanceMinutes(10);
+
+    expect(result.success, isTrue);
+    expect(settings.reminderAdvanceMinutes, 10);
+    expect(settings.courseReminderPersistentDisplayEnabled, isFalse);
+  });
+
+  test('persistent display is restored as a course reminder style', () async {
+    final settings = await _buildSettingsProvider(
+      initialValues: const {'settings.backgroundServiceEnabled': true},
+    );
+
+    expect(settings.courseReminderEnabled, isTrue);
+    expect(settings.courseReminderStyle, CourseReminderStyle.persistentDisplay);
+    expect(settings.courseReminderUsesPersistentDisplay, isTrue);
+  });
+
+  test(
+    'turning off course reminders also disables persistent display',
+    () async {
+      final settings = await _buildSettingsProvider(
+        initialValues: const {
+          'settings.backgroundServiceEnabled': true,
+          'settings.reminderAdvanceMinutes': 10,
+        },
+      );
+
+      final result = await settings.toggleCourseReminder(false);
+
+      expect(result.success, isTrue);
+      expect(settings.courseReminderEnabled, isFalse);
+      expect(settings.courseReminderPersistentDisplayEnabled, isFalse);
+      expect(settings.reminderAdvanceMinutes, 0);
+    },
+  );
+
+  test('changing course reminder style toggles persistent display', () async {
+    final settings = await _buildSettingsProvider(
+      permissionService: _FakePermissionService(notificationGranted: true),
+    );
+
+    var result = await settings.toggleCourseReminder(true);
+    expect(result.success, isTrue);
+    expect(
+      settings.courseReminderStyle,
+      CourseReminderStyle.singleNotification,
+    );
+
+    result = await settings.updateCourseReminderStyle(
+      CourseReminderStyle.persistentDisplay,
+    );
+    expect(result.success, isTrue);
+    expect(settings.courseReminderPersistentDisplayEnabled, isTrue);
+    expect(settings.courseReminderUsesPersistentDisplay, isTrue);
+
+    result = await settings.updateCourseReminderStyle(
+      CourseReminderStyle.singleNotification,
+    );
+    expect(result.success, isTrue);
+    expect(settings.courseReminderPersistentDisplayEnabled, isFalse);
+    expect(settings.courseReminderUsesSingleNotification, isTrue);
+    expect(settings.reminderAdvanceMinutes, greaterThan(0));
+  });
+
+  test(
+    'auto mute stores user intent when native mute permissions are missing',
+    () async {
+      final settings = await _buildSettingsProvider(
+        permissionService: _FakePermissionService(
+          notificationGranted: true,
+          exactAlarmGranted: false,
+          dndGranted: false,
+        ),
+      );
+
+      final result = await settings.toggleAutoMuteWithCheck(true);
+
+      expect(result.success, isTrue);
+      expect(settings.autoMuteEnabled, isTrue);
+      expect(settings.courseReminderPersistentDisplayEnabled, isFalse);
     },
   );
 }

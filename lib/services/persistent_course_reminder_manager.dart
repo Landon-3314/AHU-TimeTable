@@ -1,7 +1,7 @@
 import 'native_alarm_service.dart';
 
-class BackgroundServiceManager {
-  BackgroundServiceManager._();
+class PersistentCourseReminderManager {
+  PersistentCourseReminderManager._();
 
   static Future<void> initialize() async {}
 

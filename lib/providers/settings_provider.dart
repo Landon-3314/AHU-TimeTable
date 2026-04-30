@@ -26,6 +26,8 @@ class SettingsActionResult {
 
 enum ClassDayPeriod { morning, afternoon, evening }
 
+enum CourseReminderStyle { singleNotification, persistentDisplay }
+
 class SettingsProvider extends ChangeNotifier {
   SettingsProvider({
     required StorageService storageService,
@@ -137,9 +139,8 @@ class SettingsProvider extends ChangeNotifier {
        _autoMuteEnabled = storageService.readAutoMuteEnabled(fallback: false),
        _semesters = storageService.loadSemesters(),
        _currentSemesterId = storageService.currentSemesterId,
-       _backgroundServiceEnabled = storageService.readBackgroundServiceEnabled(
-         fallback: false,
-       );
+       _courseReminderPersistentDisplayEnabled = storageService
+           .readCourseReminderPersistentDisplayEnabled(fallback: false);
 
   static const double _defaultPixelsPerMinute = 1.2;
   static const int _defaultClassDuration = 45;
@@ -183,7 +184,7 @@ class SettingsProvider extends ChangeNotifier {
   int _customThemePrimaryValue;
   int _customThemeAccentValue;
   bool _autoMuteEnabled;
-  bool _backgroundServiceEnabled;
+  bool _courseReminderPersistentDisplayEnabled;
   List<Semester> _semesters;
   String? _currentSemesterId;
   Future<void> Function()? _reminderScheduler;
@@ -226,7 +227,18 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   bool get autoMuteEnabled => _autoMuteEnabled;
-  bool get backgroundServiceEnabled => _backgroundServiceEnabled;
+  bool get courseReminderPersistentDisplayEnabled =>
+      _courseReminderPersistentDisplayEnabled;
+  CourseReminderStyle get courseReminderStyle =>
+      _courseReminderPersistentDisplayEnabled
+      ? CourseReminderStyle.persistentDisplay
+      : CourseReminderStyle.singleNotification;
+  bool get courseReminderUsesSingleNotification =>
+      courseReminderEnabled &&
+      courseReminderStyle == CourseReminderStyle.singleNotification;
+  bool get courseReminderUsesPersistentDisplay =>
+      courseReminderEnabled &&
+      courseReminderStyle == CourseReminderStyle.persistentDisplay;
   List<Semester> get semesters => List.unmodifiable(_semesters);
   String? get currentSemesterId => _currentSemesterId;
   Semester? get currentSemester {
@@ -246,7 +258,8 @@ class SettingsProvider extends ChangeNotifier {
       currentSemester?.isInitialized != true;
   bool get isCurrentSemesterInitialized =>
       currentSemester?.isInitialized == true;
-  bool get courseReminderEnabled => _reminderAdvanceMinutes > 0;
+  bool get courseReminderEnabled =>
+      _reminderAdvanceMinutes > 0 || _courseReminderPersistentDisplayEnabled;
   List<TimeSlot> get timeSlots => generateTimeSlots();
   String t(String key) => AppStrings.get(key, _languageCode);
 
@@ -582,10 +595,6 @@ class SettingsProvider extends ChangeNotifier {
       if (!notifOk) {
         return SettingsActionResult.failure('NOTIFICATION_REQUIRED');
       }
-      final alarmOk = await _permissionService.ensureExactAlarmPermission();
-      if (!alarmOk) {
-        return SettingsActionResult.failure('EXACT_ALARM_REQUIRED');
-      }
     }
 
     _reminderAdvanceMinutes = safeValue;
@@ -597,12 +606,71 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<SettingsActionResult> toggleCourseReminder(bool value) async {
     if (!value) {
-      return updateReminderAdvanceMinutes(0);
+      var changed = false;
+      if (_reminderAdvanceMinutes != 0) {
+        _reminderAdvanceMinutes = 0;
+        await _storageService.writeReminderAdvanceMinutes(0);
+        changed = true;
+      }
+      if (_courseReminderPersistentDisplayEnabled) {
+        _courseReminderPersistentDisplayEnabled = false;
+        await _storageService.writeCourseReminderPersistentDisplayEnabled(
+          false,
+        );
+        changed = true;
+      }
+      if (changed) {
+        notifyListeners();
+        await _refreshReminders();
+      }
+      return SettingsActionResult.success();
     }
     if (_reminderAdvanceMinutes > 0) {
       return SettingsActionResult.success();
     }
     return updateReminderAdvanceMinutes(10);
+  }
+
+  Future<SettingsActionResult> updateCourseReminderStyle(
+    CourseReminderStyle style,
+  ) async {
+    final notifOk = await _permissionService.ensureNotificationPermission();
+    if (!notifOk) {
+      return SettingsActionResult.failure('NOTIFICATION_REQUIRED');
+    }
+
+    switch (style) {
+      case CourseReminderStyle.singleNotification:
+        var changed = false;
+        if (_courseReminderPersistentDisplayEnabled) {
+          _courseReminderPersistentDisplayEnabled = false;
+          await _storageService.writeCourseReminderPersistentDisplayEnabled(
+            false,
+          );
+          changed = true;
+        }
+        if (_reminderAdvanceMinutes == 0) {
+          _reminderAdvanceMinutes = 10;
+          await _storageService.writeReminderAdvanceMinutes(
+            _reminderAdvanceMinutes,
+          );
+          changed = true;
+        }
+        if (changed) {
+          notifyListeners();
+          await _refreshReminders();
+        }
+        return SettingsActionResult.success();
+      case CourseReminderStyle.persistentDisplay:
+        if (_courseReminderPersistentDisplayEnabled) {
+          return SettingsActionResult.success();
+        }
+        _courseReminderPersistentDisplayEnabled = true;
+        await _storageService.writeCourseReminderPersistentDisplayEnabled(true);
+        notifyListeners();
+        await _refreshReminders();
+        return SettingsActionResult.success();
+    }
   }
 
   Future<SettingsActionResult> updateEventReminderAdvanceMinutes(
@@ -617,10 +685,6 @@ class SettingsProvider extends ChangeNotifier {
       final notifOk = await _permissionService.ensureNotificationPermission();
       if (!notifOk) {
         return SettingsActionResult.failure('NOTIFICATION_REQUIRED');
-      }
-      final alarmOk = await _permissionService.ensureExactAlarmPermission();
-      if (!alarmOk) {
-        return SettingsActionResult.failure('EXACT_ALARM_REQUIRED');
       }
     }
 
@@ -655,63 +719,12 @@ class SettingsProvider extends ChangeNotifier {
       return SettingsActionResult.success();
     }
 
-    final alarmOk = await _permissionService.ensureExactAlarmPermission();
-    if (!alarmOk) {
-      return SettingsActionResult.failure('EXACT_ALARM_REQUIRED');
-    }
-
-    final dndOk = await _permissionService.ensureDndPermission();
-    if (!dndOk) {
-      return SettingsActionResult.failure('DND_PERMISSION_REQUIRED');
-    }
-
-    await updateAutoMuteEnabled(true, fromUserAction: true);
-    return SettingsActionResult.success();
-  }
-
-  Future<SettingsActionResult> toggleBackgroundServiceWithCheck(
-    bool value,
-  ) async {
-    if (!value) {
-      if (!_backgroundServiceEnabled) {
-        return SettingsActionResult.success();
-      }
-      _backgroundServiceEnabled = false;
-      notifyListeners();
-      await _storageService.writeBackgroundServiceEnabled(false);
-      await _refreshReminders();
-      return SettingsActionResult.success();
-    }
-
     final notifOk = await _permissionService.ensureNotificationPermission();
     if (!notifOk) {
       return SettingsActionResult.failure('NOTIFICATION_REQUIRED');
     }
 
-    if (_backgroundServiceEnabled) {
-      return SettingsActionResult.success();
-    }
-    _backgroundServiceEnabled = true;
-    notifyListeners();
-    await _storageService.writeBackgroundServiceEnabled(true);
-    await _refreshReminders();
-    return SettingsActionResult.success();
-  }
-
-  Future<SettingsActionResult> toggleAutoMuteServiceSwitch(bool value) async {
-    if (value) {
-      final dndOk = await _permissionService.ensureDndPermission();
-      if (!dndOk) {
-        return SettingsActionResult.failure('DND_PERMISSION_REQUIRED');
-      }
-    }
-
-    _autoMuteEnabled = value;
-    _backgroundServiceEnabled = value;
-    notifyListeners();
-    await _storageService.writeAutoMuteEnabled(value);
-    await _storageService.writeBackgroundServiceEnabled(value);
-    await _refreshReminders();
+    await updateAutoMuteEnabled(true, fromUserAction: true);
     return SettingsActionResult.success();
   }
 
@@ -723,18 +736,6 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<bool> ensureSoundModePermission() =>
       _permissionService.ensureSoundModePermission();
-
-  Future<void> setAutoMuteServiceEnabled(bool value) async {
-    if (_autoMuteEnabled == value && _backgroundServiceEnabled == value) {
-      return;
-    }
-    _autoMuteEnabled = value;
-    _backgroundServiceEnabled = value;
-    notifyListeners();
-    await _storageService.writeAutoMuteEnabled(value);
-    await _storageService.writeBackgroundServiceEnabled(value);
-    await _refreshReminders();
-  }
 
   Future<void> openAppOrAlarmSettings() async {
     await _permissionService.openAppOrAlarmSettings();

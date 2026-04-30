@@ -51,7 +51,10 @@ class StorageService {
   static const String _customThemeAccentValueKey =
       'settings.customThemeAccentValue';
   static const String _autoMuteEnabledKey = 'settings.autoMuteEnabled';
-  static const String _backgroundServiceEnabledKey =
+  static const String _courseReminderPersistentDisplayEnabledKey =
+      'settings.courseReminderPersistentDisplayEnabled';
+  // Legacy key from the former standalone foreground-service switch.
+  static const String _legacyBackgroundServiceEnabledKey =
       'settings.backgroundServiceEnabled';
 
   static Future<StorageService> create() async {
@@ -550,12 +553,20 @@ class StorageService {
     return _sharedPreferences.setBool(_autoMuteEnabledKey, value);
   }
 
-  bool readBackgroundServiceEnabled({required bool fallback}) {
-    return _sharedPreferences.getBool(_backgroundServiceEnabledKey) ?? fallback;
+  bool readCourseReminderPersistentDisplayEnabled({required bool fallback}) {
+    return _sharedPreferences.getBool(
+          _courseReminderPersistentDisplayEnabledKey,
+        ) ??
+        _sharedPreferences.getBool(_legacyBackgroundServiceEnabledKey) ??
+        fallback;
   }
 
-  Future<void> writeBackgroundServiceEnabled(bool value) {
-    return _sharedPreferences.setBool(_backgroundServiceEnabledKey, value);
+  Future<void> writeCourseReminderPersistentDisplayEnabled(bool value) async {
+    await _sharedPreferences.setBool(
+      _courseReminderPersistentDisplayEnabledKey,
+      value,
+    );
+    await _sharedPreferences.setBool(_legacyBackgroundServiceEnabledKey, value);
   }
 
   String _currentSemesterKey(String key) {

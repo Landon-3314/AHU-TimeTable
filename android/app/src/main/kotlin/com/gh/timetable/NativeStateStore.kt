@@ -36,6 +36,7 @@ object NativeStateStore {
                     putOpt("reminderAtMillis", item.reminderAtMillis)
                     putOpt("title", item.title)
                     putOpt("content", item.content)
+                    putOpt("notificationId", item.notificationId)
                     put("reminderAction", item.reminderAction)
                     put("scheduleType", item.scheduleType)
                     putOpt("courseName", item.courseName)
@@ -67,6 +68,7 @@ object NativeStateStore {
                             reminderAtMillis = item.optNullableLong("reminderAtMillis"),
                             title = item.optNullableString("title"),
                             content = item.optNullableString("content"),
+                            notificationId = item.optNullableInt("notificationId"),
                             reminderAction =
                                 item.optNullableString("reminderAction")
                                     ?: NativeAlarmScheduler.ACTION_REMIND_CLASS,
@@ -170,7 +172,27 @@ object NativeStateStore {
         context: Context,
         index: Int,
     ) {
-        prefs(context).edit().remove(mutedKey(index)).apply()
+        prefs(context).edit()
+            .remove(mutedKey(index))
+            .remove(originalRingerModeKey(index))
+            .apply()
+    }
+
+    fun recordOriginalRingerMode(
+        context: Context,
+        index: Int,
+        ringerMode: Int,
+    ) {
+        prefs(context).edit().putInt(originalRingerModeKey(index), ringerMode).apply()
+    }
+
+    fun originalRingerMode(
+        context: Context,
+        index: Int,
+    ): Int? {
+        val key = originalRingerModeKey(index)
+        val values = prefs(context)
+        return if (values.contains(key)) values.getInt(key, -1) else null
     }
 
     fun recordAlarmAction(
@@ -213,8 +235,14 @@ object NativeStateStore {
 
     private fun mutedKey(index: Int) = "app_did_mute_$index"
 
+    private fun originalRingerModeKey(index: Int) = "original_ringer_mode_$index"
+
     private fun JSONObject.optNullableLong(key: String): Long? {
         return if (has(key) && !isNull(key)) optLong(key) else null
+    }
+
+    private fun JSONObject.optNullableInt(key: String): Int? {
+        return if (has(key) && !isNull(key)) optInt(key) else null
     }
 
     private fun JSONObject.optNullableString(key: String): String? {
