@@ -90,6 +90,7 @@ class _MainScaffoldState extends State<MainScaffold> {
     final selectedDate = await showSemesterStartDateDialog(
       context: context,
       initialDate: provider.semesterStartDate,
+      canCancel: false,
     );
 
     if (!mounted || selectedDate == null) {

@@ -3,6 +3,7 @@ class Event {
     String? id,
     required this.name,
     required this.location,
+    this.note = '',
     required this.dateTime,
     required this.enableAlarm,
     this.semesterId,
@@ -11,6 +12,7 @@ class Event {
   final String id;
   final String name;
   final String location;
+  final String note;
   final DateTime dateTime;
   final bool enableAlarm;
   final String? semesterId;
@@ -19,6 +21,7 @@ class Event {
     String? id,
     String? name,
     String? location,
+    String? note,
     DateTime? dateTime,
     bool? enableAlarm,
     String? semesterId,
@@ -27,6 +30,7 @@ class Event {
       id: id ?? this.id,
       name: name ?? this.name,
       location: location ?? this.location,
+      note: note ?? this.note,
       dateTime: dateTime ?? this.dateTime,
       enableAlarm: enableAlarm ?? this.enableAlarm,
       semesterId: semesterId ?? this.semesterId,
@@ -38,6 +42,7 @@ class Event {
       'id': id,
       'name': name,
       'location': location,
+      'note': note,
       'dateTime': dateTime.toIso8601String(),
       'enableAlarm': enableAlarm,
       'semesterId': semesterId,
@@ -47,6 +52,7 @@ class Event {
   factory Event.fromJson(Map<String, dynamic> json) {
     final name = (json['name'] as String?) ?? 'Untitled Event';
     final location = (json['location'] as String?) ?? '';
+    final note = (json['note'] as String?) ?? '';
     final dateTime =
         DateTime.tryParse((json['dateTime'] as String?) ?? '') ??
         DateTime.now();
@@ -64,6 +70,7 @@ class Event {
           ),
       name: name,
       location: location,
+      note: note,
       dateTime: dateTime,
       enableAlarm: enableAlarm,
       semesterId: semesterId,

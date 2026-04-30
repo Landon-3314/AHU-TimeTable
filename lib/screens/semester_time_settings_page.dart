@@ -537,6 +537,7 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
         context,
         provider.semesterStartDate,
         title: '创建第一学期',
+        canCancel: false,
       );
       if (replacementStartDate == null || !context.mounted) {
         return;
@@ -573,11 +574,13 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
     BuildContext context,
     DateTime initialDate, {
     String title = '选择学期开始日期',
+    bool canCancel = true,
   }) {
     return showSemesterStartDateDialog(
       context: context,
       initialDate: initialDate,
       title: title,
+      canCancel: canCancel,
     );
   }
 

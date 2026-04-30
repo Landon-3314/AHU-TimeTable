@@ -13,6 +13,9 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/schedule_html_extractor.dart';
 import '../services/schedule_parser_service.dart';
+import '../widgets/common/guided_tour_overlay.dart';
+
+enum _ImportAction { timetable, exam }
 
 class ImportCoursePage extends StatefulWidget {
   const ImportCoursePage({super.key});
@@ -30,29 +33,61 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   };
 
   late final WebViewController _controller;
-  bool _isImporting = false;
+  _ImportAction? _activeAction;
+  final GlobalKey _webViewGuideKey = GlobalKey();
+  final GlobalKey _examGuideKey = GlobalKey();
+  final GlobalKey _timetableGuideKey = GlobalKey();
+  bool _isImportGuideShowing = false;
 
   @override
   void initState() {
     super.initState();
     _controller = WebViewController();
     unawaited(_initializeController());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _showImportWebViewGuideIfNeeded();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final settingsProvider = context.watch<SettingsProvider>();
+    final activeAction = _activeAction;
+    final isExtracting = activeAction != null;
     return Scaffold(
       appBar: AppBar(title: Text(settingsProvider.t('academic_import'))),
-      body: _buildWebView(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isImporting ? null : _runExtractScript,
-        icon: const Icon(Icons.download_for_offline_outlined),
-        label: Text(
-          _isImporting
-              ? settingsProvider.t('extracting')
-              : settingsProvider.t('extract_timetable'),
-        ),
+      body: KeyedSubtree(key: _webViewGuideKey, child: _buildWebView()),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            key: _examGuideKey,
+            heroTag: 'extract_exam',
+            onPressed: isExtracting ? null : _runExamExtractScript,
+            icon: const Icon(Icons.assignment_outlined),
+            label: Text(
+              activeAction == _ImportAction.exam
+                  ? settingsProvider.t('extracting_exam')
+                  : settingsProvider.t('extract_exam'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            key: _timetableGuideKey,
+            heroTag: 'extract_timetable',
+            onPressed: isExtracting ? null : _runTimetableExtractScript,
+            icon: const Icon(Icons.download_for_offline_outlined),
+            label: Text(
+              activeAction == _ImportAction.timetable
+                  ? settingsProvider.t('extracting')
+                  : settingsProvider.t('extract_timetable'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -91,7 +126,55 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     );
   }
 
-  Future<void> _runExtractScript() async {
+  Future<void> _showImportWebViewGuideIfNeeded() async {
+    if (_isImportGuideShowing || !mounted) {
+      return;
+    }
+
+    final settingsProvider = context.read<SettingsProvider>();
+    if (!settingsProvider.shouldShowImportWebViewGuide) {
+      return;
+    }
+
+    _isImportGuideShowing = true;
+    await showGuidedTourOverlay(
+      context: context,
+      steps: [
+        GuidedTourStep(
+          targetKey: _webViewGuideKey,
+          title: settingsProvider.t('guide_import_webview_title'),
+          body: settingsProvider.t('guide_import_webview_body'),
+        ),
+        GuidedTourStep(
+          targetKey: _examGuideKey,
+          title: settingsProvider.t('guide_import_exam_title'),
+          body: settingsProvider.t('guide_import_exam_body'),
+        ),
+        GuidedTourStep(
+          targetKey: _timetableGuideKey,
+          title: settingsProvider.t('guide_import_timetable_title'),
+          body: settingsProvider.t('guide_import_timetable_body'),
+        ),
+      ],
+      nextLabel: settingsProvider.t('guide_next'),
+      doneLabel: settingsProvider.t('guide_done'),
+      stepLabelBuilder: (currentStep, totalSteps) {
+        return settingsProvider
+            .t('guide_step_counter')
+            .replaceAll('{current}', currentStep.toString())
+            .replaceAll('{total}', totalSteps.toString());
+      },
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    await context.read<SettingsProvider>().confirmImportWebViewGuide();
+    _isImportGuideShowing = false;
+  }
+
+  Future<bool> _ensureSemesterInitializedForImport() async {
     final settingsProvider = context.read<SettingsProvider>();
     if (!settingsProvider.isCurrentSemesterInitialized) {
       await showDialog<void>(
@@ -109,26 +192,73 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
           );
         },
       );
+      return false;
+    }
+
+    return true;
+  }
+
+  Future<void> _runTimetableExtractScript() async {
+    if (!await _ensureSemesterInitializedForImport()) {
       return;
     }
 
     setState(() {
-      _isImporting = true;
+      _activeAction = _ImportAction.timetable;
     });
 
     try {
-      await Future<void>.delayed(_extractScriptSettleDelay);
-      final rawResult = await _controller.runJavaScriptReturningResult(
+      final rawHtml = await _runJavaScriptExtraction(
         ScheduleHtmlExtractor.extractTimetableHtmlScript,
       );
-      final rawHtml = _normalizeJavaScriptResult(rawResult);
-      await _handleImportedHtml(rawHtml);
+      await _handleTimetableHtml(rawHtml);
     } catch (error) {
       _finishImportWithMessage('Timetable extraction failed: $error');
     }
   }
 
-  Future<void> _handleImportedHtml(String rawMessage) async {
+  Future<void> _runExamExtractScript() async {
+    if (!await _ensureSemesterInitializedForImport()) {
+      return;
+    }
+
+    setState(() {
+      _activeAction = _ImportAction.exam;
+    });
+
+    try {
+      await _runJavaScriptExtraction(
+        ScheduleHtmlExtractor.extractExamHtmlScript,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.read<SettingsProvider>().t('exam_extract_pending'),
+          ),
+        ),
+      );
+    } catch (error) {
+      _finishImportWithMessage('Exam extraction failed: $error');
+      return;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _activeAction = null;
+        });
+      }
+    }
+  }
+
+  Future<String> _runJavaScriptExtraction(String script) async {
+    await Future<void>.delayed(_extractScriptSettleDelay);
+    final rawResult = await _controller.runJavaScriptReturningResult(script);
+    return _normalizeJavaScriptResult(rawResult);
+  }
+
+  Future<void> _handleTimetableHtml(String rawMessage) async {
     try {
       if (rawMessage.startsWith('JS_ERROR:')) {
         throw ScheduleParseException('教务系统连接失败，请检查网络或重新登录后重试。');
@@ -156,7 +286,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     } finally {
       if (mounted) {
         setState(() {
-          _isImporting = false;
+          _activeAction = null;
         });
       }
     }
@@ -168,7 +298,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     }
 
     setState(() {
-      _isImporting = false;
+      _activeAction = null;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(

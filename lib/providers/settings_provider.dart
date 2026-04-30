@@ -140,7 +140,11 @@ class SettingsProvider extends ChangeNotifier {
        _semesters = storageService.loadSemesters(),
        _currentSemesterId = storageService.currentSemesterId,
        _courseReminderPersistentDisplayEnabled = storageService
-           .readCourseReminderPersistentDisplayEnabled(fallback: false);
+           .readCourseReminderPersistentDisplayEnabled(fallback: false),
+       _timetableToolbarGuideConfirmed = storageService
+           .readTimetableToolbarGuideConfirmed(fallback: false),
+       _importWebViewGuideConfirmed = storageService
+           .readImportWebViewGuideConfirmed(fallback: false);
 
   static const double _defaultPixelsPerMinute = 1.2;
   static const int _defaultClassDuration = 45;
@@ -185,6 +189,8 @@ class SettingsProvider extends ChangeNotifier {
   int _customThemeAccentValue;
   bool _autoMuteEnabled;
   bool _courseReminderPersistentDisplayEnabled;
+  bool _timetableToolbarGuideConfirmed;
+  bool _importWebViewGuideConfirmed;
   List<Semester> _semesters;
   String? _currentSemesterId;
   Future<void> Function()? _reminderScheduler;
@@ -258,6 +264,8 @@ class SettingsProvider extends ChangeNotifier {
       currentSemester?.isInitialized != true;
   bool get isCurrentSemesterInitialized =>
       currentSemester?.isInitialized == true;
+  bool get shouldShowTimetableToolbarGuide => !_timetableToolbarGuideConfirmed;
+  bool get shouldShowImportWebViewGuide => !_importWebViewGuideConfirmed;
   bool get courseReminderEnabled =>
       _reminderAdvanceMinutes > 0 || _courseReminderPersistentDisplayEnabled;
   List<TimeSlot> get timeSlots => generateTimeSlots();
@@ -367,6 +375,24 @@ class SettingsProvider extends ChangeNotifier {
     _themePaletteId = palette.id;
     notifyListeners();
     await _storageService.writeThemePaletteId(palette.id);
+  }
+
+  Future<void> confirmTimetableToolbarGuide() async {
+    if (_timetableToolbarGuideConfirmed) {
+      return;
+    }
+    _timetableToolbarGuideConfirmed = true;
+    notifyListeners();
+    await _storageService.writeTimetableToolbarGuideConfirmed(true);
+  }
+
+  Future<void> confirmImportWebViewGuide() async {
+    if (_importWebViewGuideConfirmed) {
+      return;
+    }
+    _importWebViewGuideConfirmed = true;
+    notifyListeners();
+    await _storageService.writeImportWebViewGuideConfirmed(true);
   }
 
   Future<void> changeCustomThemeColors({
@@ -954,6 +980,10 @@ class SettingsProvider extends ChangeNotifier {
       scheduleCalculator: _scheduleCalculator,
     );
     _totalWeeks = _storageService.readTotalWeeks(fallback: _defaultTotalWeeks);
+    _timetableToolbarGuideConfirmed = _storageService
+        .readTimetableToolbarGuideConfirmed(fallback: false);
+    _importWebViewGuideConfirmed = _storageService
+        .readImportWebViewGuideConfirmed(fallback: false);
   }
 
   Semester? _semesterById(String semesterId) {

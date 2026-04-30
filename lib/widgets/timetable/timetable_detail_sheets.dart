@@ -204,75 +204,87 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
 
   await showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     showDragHandle: true,
     builder: (sheetContext) {
       return SafeArea(
-        child: Padding(
-          padding: AppSpacing.floatingSheetPadding,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                event.name,
-                style: Theme.of(sheetContext).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.9,
+          ),
+          child: SingleChildScrollView(
+            padding: AppSpacing.floatingSheetPadding,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.name,
+                  style: Theme.of(sheetContext).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              DetailRow(
-                label: settingsProvider.t('time'),
-                value: DateFormat('yyyy/MM/dd HH:mm').format(event.dateTime),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DetailRow(
-                label: settingsProvider.t('location'),
-                value: event.location.isEmpty
-                    ? settingsProvider.t('not_set')
-                    : event.location,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DetailRow(
-                label: settingsProvider.t('alarm'),
-                value: event.enableAlarm
-                    ? settingsProvider.t('enabled')
-                    : settingsProvider.t('disabled'),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.danger,
-                    foregroundColor: AppColors.onPrimary,
+                const SizedBox(height: AppSpacing.xl),
+                DetailRow(
+                  label: settingsProvider.t('time'),
+                  value: DateFormat('yyyy/MM/dd HH:mm').format(event.dateTime),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DetailRow(
+                  label: settingsProvider.t('location'),
+                  value: event.location.isEmpty
+                      ? settingsProvider.t('not_set')
+                      : event.location,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DetailRow(
+                  label: settingsProvider.t('note'),
+                  value: event.note.isEmpty
+                      ? settingsProvider.t('not_set')
+                      : event.note,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DetailRow(
+                  label: settingsProvider.t('alarm'),
+                  value: event.enableAlarm
+                      ? settingsProvider.t('enabled')
+                      : settingsProvider.t('disabled'),
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.danger,
+                      foregroundColor: AppColors.onPrimary,
+                    ),
+                    onPressed: () async {
+                      final confirmed = await _confirmDestructiveAction(
+                        sheetContext,
+                        title: settingsProvider.t('confirm_delete_event_title'),
+                        message: settingsProvider.t(
+                          'confirm_delete_event_message',
+                        ),
+                        confirmLabel: settingsProvider.t('delete_event'),
+                        cancelLabel: settingsProvider.t('cancel'),
+                      );
+                      if (!confirmed) {
+                        return;
+                      }
+                      if (!sheetContext.mounted) {
+                        return;
+                      }
+                      Navigator.of(sheetContext).pop();
+                      unawaited(
+                        Future<void>.delayed(
+                          AppDurations.sheetActionDelay,
+                        ).then((_) => courseProvider.deleteEvent(event.id)),
+                      );
+                    },
+                    child: Text(settingsProvider.t('delete_event')),
                   ),
-                  onPressed: () async {
-                    final confirmed = await _confirmDestructiveAction(
-                      sheetContext,
-                      title: settingsProvider.t('confirm_delete_event_title'),
-                      message: settingsProvider.t(
-                        'confirm_delete_event_message',
-                      ),
-                      confirmLabel: settingsProvider.t('delete_event'),
-                      cancelLabel: settingsProvider.t('cancel'),
-                    );
-                    if (!confirmed) {
-                      return;
-                    }
-                    if (!sheetContext.mounted) {
-                      return;
-                    }
-                    Navigator.of(sheetContext).pop();
-                    unawaited(
-                      Future<void>.delayed(
-                        AppDurations.sheetActionDelay,
-                      ).then((_) => courseProvider.deleteEvent(event.id)),
-                    );
-                  },
-                  child: Text(settingsProvider.t('delete_event')),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );

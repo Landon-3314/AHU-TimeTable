@@ -105,4 +105,10 @@ class ScheduleHtmlExtractor {
   }
 })();
 ''';
+
+  static const String extractExamHtmlScript = r'''
+(function() {
+  return 'ERROR: Exam extraction is not implemented yet.';
+})();
+''';
 }

@@ -58,12 +58,10 @@ class AppSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: padding,
+    final borderRadius = BorderRadius.circular(AppRadii.xxl);
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(AppRadii.xxl),
-        border: Border.all(color: borderColor),
+        borderRadius: borderRadius,
         boxShadow: [
           BoxShadow(
             color: Theme.of(
@@ -74,7 +72,18 @@ class AppSurface extends StatelessWidget {
           ),
         ],
       ),
-      child: child,
+      child: Material(
+        color: color,
+        borderRadius: borderRadius,
+        clipBehavior: Clip.antiAlias,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            border: Border.all(color: borderColor),
+          ),
+          child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+        ),
+      ),
     );
   }
 }
@@ -103,7 +112,9 @@ class AppActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final effectiveColor = danger ? AppColors.danger : colorScheme.primary;
+    final borderRadius = BorderRadius.circular(AppRadii.xxl);
     return ListTile(
+      shape: RoundedRectangleBorder(borderRadius: borderRadius),
       enabled: enabled,
       minLeadingWidth: 32,
       contentPadding: const EdgeInsets.symmetric(
@@ -532,50 +543,72 @@ class _AppPickerGrid<T> extends StatelessWidget {
       itemBuilder: (context, index) {
         final option = options[index];
         final selected = option.value == selectedValue;
-        return InkWell(
-          onTap: () => Navigator.of(context).pop(option.value),
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-          child: AnimatedContainer(
-            duration: AppDurations.fast,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: selected
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : AppColors.surfaceRaised,
-              borderRadius: BorderRadius.circular(AppRadii.lg),
-              border: Border.all(
-                color: selected
-                    ? Theme.of(context).colorScheme.primary
-                    : AppColors.divider,
-                width: selected ? 1.4 : 1,
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    option.label,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: selected
-                          ? Theme.of(context).colorScheme.primary
-                          : AppColors.textPrimary,
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+        final colorScheme = Theme.of(context).colorScheme;
+        final borderRadius = BorderRadius.circular(AppRadii.lg);
+        return AnimatedContainer(
+          duration: AppDurations.fast,
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: colorScheme.primary.withValues(alpha: 0.16),
+                      blurRadius: 16,
+                      offset: const Offset(0, 7),
                     ),
+                  ]
+                : null,
+          ),
+          child: Material(
+            color: AppColors.transparent,
+            borderRadius: borderRadius,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => Navigator.of(context).pop(option.value),
+              customBorder: RoundedRectangleBorder(borderRadius: borderRadius),
+              child: AnimatedContainer(
+                duration: AppDurations.fast,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? colorScheme.primaryContainer
+                      : AppColors.surfaceRaised,
+                  borderRadius: borderRadius,
+                  border: Border.all(
+                    color: selected ? colorScheme.primary : AppColors.divider,
+                    width: selected ? 1.4 : 1,
                   ),
                 ),
-                if (selected) ...[
-                  const SizedBox(width: AppSpacing.xxs),
-                  Icon(
-                    Icons.check_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 16,
-                  ),
-                ],
-              ],
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        option.label,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: selected
+                              ? colorScheme.primary
+                              : AppColors.textPrimary,
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (selected) ...[
+                      const SizedBox(width: AppSpacing.xxs),
+                      Icon(
+                        Icons.check_rounded,
+                        color: colorScheme.primary,
+                        size: 16,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         );

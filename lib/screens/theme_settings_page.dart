@@ -123,47 +123,56 @@ class _ThemePaletteTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final borderRadius = BorderRadius.circular(AppRadii.lg);
     return Semantics(
       button: true,
       selected: selected,
       label: label,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadii.lg),
-        child: AnimatedContainer(
-          duration: AppDurations.fast,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.xl,
-          ),
-          decoration: BoxDecoration(
-            color: selected ? palette.primarySoft : AppColors.transparent,
-            borderRadius: BorderRadius.circular(AppRadii.lg),
-            border: Border.all(
-              color: selected ? palette.primary : AppColors.transparent,
-              width: 1.4,
+      child: Material(
+        color: AppColors.transparent,
+        borderRadius: borderRadius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: RoundedRectangleBorder(borderRadius: borderRadius),
+          child: AnimatedContainer(
+            duration: AppDurations.fast,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.xl,
             ),
-          ),
-          child: Row(
-            children: [
-              _PalettePreview(palette: palette),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: selected
-                        ? palette.primaryDark
-                        : Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w800,
+            decoration: BoxDecoration(
+              color: selected ? palette.primarySoft : AppColors.transparent,
+              borderRadius: borderRadius,
+              border: Border.all(
+                color: selected ? palette.primary : AppColors.transparent,
+                width: 1.4,
+              ),
+            ),
+            child: Row(
+              children: [
+                _PalettePreview(palette: palette),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: selected
+                          ? palette.primaryDark
+                          : Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
-              if (selected)
-                Icon(Icons.check_circle, color: palette.primary)
-              else
-                const Icon(Icons.chevron_right, color: AppColors.textTertiary),
-            ],
+                if (selected)
+                  Icon(Icons.check_circle, color: palette.primary)
+                else
+                  const Icon(
+                    Icons.chevron_right,
+                    color: AppColors.textTertiary,
+                  ),
+              ],
+            ),
           ),
         ),
       ),

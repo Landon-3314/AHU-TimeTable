@@ -173,6 +173,31 @@ void main() {
     expect(settings.courseReminderUsesPersistentDisplay, isTrue);
   });
 
+  test('onboarding guides are shown until confirmed', () async {
+    final settings = await _buildSettingsProvider();
+
+    expect(settings.shouldShowTimetableToolbarGuide, isTrue);
+    expect(settings.shouldShowImportWebViewGuide, isTrue);
+
+    await settings.confirmTimetableToolbarGuide();
+    await settings.confirmImportWebViewGuide();
+
+    expect(settings.shouldShowTimetableToolbarGuide, isFalse);
+    expect(settings.shouldShowImportWebViewGuide, isFalse);
+  });
+
+  test('onboarding guide confirmations are restored from storage', () async {
+    final settings = await _buildSettingsProvider(
+      initialValues: const {
+        'onboarding.timetableToolbarGuideConfirmed.v1': true,
+        'onboarding.importWebViewGuideConfirmed.v1': true,
+      },
+    );
+
+    expect(settings.shouldShowTimetableToolbarGuide, isFalse);
+    expect(settings.shouldShowImportWebViewGuide, isFalse);
+  });
+
   test(
     'turning off course reminders also disables persistent display',
     () async {

@@ -462,6 +462,7 @@ class _EventFormState extends State<_EventForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
 
   DateTime? _selectedDateTime;
   bool _enableAlarm = true;
@@ -471,6 +472,7 @@ class _EventFormState extends State<_EventForm> {
   void dispose() {
     _nameController.dispose();
     _locationController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
@@ -508,6 +510,17 @@ class _EventFormState extends State<_EventForm> {
                 controller: _locationController,
                 decoration: sharedDecoration.copyWith(
                   labelText: provider.t('location'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              TextFormField(
+                controller: _noteController,
+                minLines: 1,
+                maxLines: 2,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                decoration: sharedDecoration.copyWith(
+                  labelText: provider.t('note'),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
@@ -637,6 +650,7 @@ class _EventFormState extends State<_EventForm> {
     final event = Event(
       name: _nameController.text.trim(),
       location: _locationController.text.trim(),
+      note: _noteController.text.trim(),
       dateTime: _selectedDateTime!,
       enableAlarm: _enableAlarm,
     );

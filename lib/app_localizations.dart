@@ -107,6 +107,7 @@ class AppStrings {
     },
     'teacher': {'zh': '教师', 'en': 'Teacher'},
     'location': {'zh': '地点', 'en': 'Location'},
+    'note': {'zh': '备注', 'en': 'Note'},
     'periods': {'zh': '节次', 'en': 'Periods'},
     'time': {'zh': '时间', 'en': 'Time'},
     'weekday': {'zh': '星期', 'en': 'Weekday'},
@@ -207,9 +208,65 @@ class AppStrings {
     'sat_short': {'zh': '周六', 'en': 'Sat'},
     'sun_short': {'zh': '周日', 'en': 'Sun'},
     'event_marker': {'zh': '日程', 'en': 'Event'},
-    'academic_import': {'zh': '教务课表导入', 'en': 'Academic Timetable Import'},
+    'academic_import': {'zh': '教务信息导入', 'en': 'Academic Info Import'},
     'extract_timetable': {'zh': '一键提取课表', 'en': 'Extract Timetable'},
     'extracting': {'zh': '正在提取...', 'en': 'Extracting...'},
+    'extract_exam': {'zh': '一键提取考试', 'en': 'Extract Exams'},
+    'extracting_exam': {'zh': '正在提取考试...', 'en': 'Extracting exams...'},
+    'exam_extract_pending': {
+      'zh': '考试信息解析功能框架已就绪，具体解析逻辑待实现',
+      'en':
+          'The exam extraction framework is ready. Parsing logic is not implemented yet.',
+    },
+    'guide_next': {'zh': '下一步', 'en': 'Next'},
+    'guide_done': {'zh': '我知道了', 'en': 'Got it'},
+    'guide_step_counter': {
+      'zh': '第 {current}/{total} 步',
+      'en': 'Step {current}/{total}',
+    },
+    'guide_timetable_week_title': {'zh': '切换周次', 'en': 'Switch Weeks'},
+    'guide_timetable_week_body': {
+      'zh': '点这里可以跳转到指定教学周，快速查看不同周的课程安排。',
+      'en': 'Jump to a teaching week and review that week quickly.',
+    },
+    'guide_timetable_today_title': {'zh': '回到今天', 'en': 'Back to Today'},
+    'guide_timetable_today_body': {
+      'zh': '无论滑到了哪一天，点这里都会回到今天所在的位置。',
+      'en': 'Return to today no matter where you have scrolled.',
+    },
+    'guide_timetable_overview_title': {'zh': '课程总览', 'en': 'Course Overview'},
+    'guide_timetable_overview_body': {
+      'zh': '查看当前学期的全部课程列表，适合快速查找课程。',
+      'en': 'View all courses in the current semester for quick lookup.',
+    },
+    'guide_timetable_import_title': {'zh': '导入课表', 'en': 'Import Timetable'},
+    'guide_timetable_import_body': {
+      'zh': '从教务系统打开导入页面，登录后可以一键解析课程信息和考试信息。',
+      'en': 'Open the academic import page and extract courses and exam after login.',
+    },
+    'guide_timetable_add_title': {'zh': '手动添加', 'en': 'Add Manually'},
+    'guide_timetable_add_body': {
+      'zh': '需要补充课程或日程时，可以从这里手动新增。',
+      'en': 'Add a course or schedule manually when you need to fill gaps.',
+    },
+    'guide_import_webview_title': {'zh': '教务系统页面', 'en': 'Academic WebView'},
+    'guide_import_webview_body': {
+      'zh': '这里会打开智慧安大。请先登录并进教务系统学生端，点击我的课表或考试信息查询页面。',
+      'en':
+          'The academic system opens here. Log in and navigate to the timetable or exam page first.',
+    },
+    'guide_import_exam_title': {'zh': '解析考试', 'en': 'Extract Exams'},
+    'guide_import_exam_body': {
+      'zh': '进入考试安排页面后点这里，应用会读取页面内容并导入考试信息。',
+      'en':
+          'Tap this after opening the exam schedule page and import exam.',
+    },
+    'guide_import_timetable_title': {'zh': '解析课表', 'en': 'Extract Timetable'},
+    'guide_import_timetable_body': {
+      'zh': '进入课表页面后点这里，应用会读取页面内容并导入课程。',
+      'en':
+          'Tap this after opening the timetable page to read and import courses.',
+    },
     'import_success': {'zh': '成功导入课程', 'en': 'Successfully imported courses'},
     'reschedule_course': {'zh': '\u8c03\u8bfe', 'en': 'Reschedule Course'},
     'reschedule_success': {

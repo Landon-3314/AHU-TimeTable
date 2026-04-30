@@ -155,6 +155,12 @@ class _SessionStartTimeSection extends StatelessWidget {
     final result = await showTimePicker(
       context: context,
       initialTime: _toTimeOfDay(slot.startTime),
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
     if (result != null) {
       await onChanged(index, result);

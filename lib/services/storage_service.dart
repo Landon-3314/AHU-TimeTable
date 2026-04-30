@@ -39,6 +39,10 @@ class StorageService {
   static const String _semesterStartDateKey = 'settings.semesterStartDate';
   static const String _semesterStartDatePromptShownKey =
       'settings.semesterStartDatePromptShown';
+  static const String _timetableToolbarGuideConfirmedKey =
+      'onboarding.timetableToolbarGuideConfirmed.v1';
+  static const String _importWebViewGuideConfirmedKey =
+      'onboarding.importWebViewGuideConfirmed.v1';
   static const String _totalWeeksKey = 'settings.totalWeeks';
   static const String _reminderAdvanceMinutesKey =
       'settings.reminderAdvanceMinutes';
@@ -482,6 +486,27 @@ class StorageService {
 
   Future<void> writeSemesterStartDatePromptShown(bool value) {
     return _sharedPreferences.setBool(_semesterStartDatePromptShownKey, value);
+  }
+
+  bool readTimetableToolbarGuideConfirmed({required bool fallback}) {
+    return _sharedPreferences.getBool(_timetableToolbarGuideConfirmedKey) ??
+        fallback;
+  }
+
+  Future<void> writeTimetableToolbarGuideConfirmed(bool value) {
+    return _sharedPreferences.setBool(
+      _timetableToolbarGuideConfirmedKey,
+      value,
+    );
+  }
+
+  bool readImportWebViewGuideConfirmed({required bool fallback}) {
+    return _sharedPreferences.getBool(_importWebViewGuideConfirmedKey) ??
+        fallback;
+  }
+
+  Future<void> writeImportWebViewGuideConfirmed(bool value) {
+    return _sharedPreferences.setBool(_importWebViewGuideConfirmedKey, value);
   }
 
   int readTotalWeeks({required int fallback}) {
