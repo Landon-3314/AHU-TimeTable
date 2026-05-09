@@ -112,7 +112,6 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     return WebViewWidget.fromPlatformCreationParams(
       params: AndroidWebViewWidgetCreationParams(
         controller: _controller.platform,
-        displayWithHybridComposition: true,
         gestureRecognizers: _webViewGestureRecognizers,
       ),
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_constants.dart';
+import 'app_page_transitions.dart';
 
 class AppTheme {
   const AppTheme._();
@@ -29,6 +30,15 @@ class AppTheme {
       scaffoldBackgroundColor: palette.scaffoldBackground,
       useMaterial3: true,
       visualDensity: VisualDensity.standard,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: <TargetPlatform, PageTransitionsBuilder>{
+          TargetPlatform.android: AppPageTransitionsBuilder(),
+          TargetPlatform.iOS: AppPageTransitionsBuilder(),
+          TargetPlatform.macOS: AppPageTransitionsBuilder(),
+          TargetPlatform.windows: AppPageTransitionsBuilder(),
+          TargetPlatform.linux: AppPageTransitionsBuilder(),
+        },
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: palette.scaffoldBackground,
         foregroundColor: AppColors.textPrimary,
