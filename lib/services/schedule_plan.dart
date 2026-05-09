@@ -1,3 +1,4 @@
+import '../models/clock_time.dart';
 import '../models/course.dart';
 import '../models/event.dart';
 import '../models/time_slot.dart';
@@ -291,6 +292,11 @@ class SchedulePlanBuilder {
 
     final startSlot = timeSlots[course.startPeriod - 1];
     final endSlot = timeSlots[endPeriod - 1];
+    if (!_isValidClockTime(startSlot.startTime) ||
+        !_isValidClockTime(endSlot.endTime)) {
+      return null;
+    }
+
     final startAt = DateTime(
       day.year,
       day.month,
@@ -319,6 +325,8 @@ class SchedulePlanBuilder {
 
     return _CourseOccurrence(key: key, startAt: startAt, endAt: endAt);
   }
+
+  static bool _isValidClockTime(ClockTime time) => time.isValid24Hour;
 
   static DateTime? _effectiveCourseReminderAt({
     required DateTime reminderAt,

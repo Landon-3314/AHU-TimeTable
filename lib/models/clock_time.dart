@@ -1,6 +1,8 @@
 class ClockTime {
   const ClockTime({required this.hour, required this.minute});
 
+  static const int minutesPerDay = 24 * 60;
+
   final int hour;
   final int minute;
 
@@ -13,14 +15,22 @@ class ClockTime {
   }
 
   factory ClockTime.fromMinutes(int totalMinutes) {
-    return ClockTime(hour: totalMinutes ~/ 60, minute: totalMinutes % 60);
+    final normalizedMinutes = totalMinutes.remainder(minutesPerDay);
+    final safeMinutes = normalizedMinutes < 0
+        ? normalizedMinutes + minutesPerDay
+        : normalizedMinutes;
+    return ClockTime(hour: safeMinutes ~/ 60, minute: safeMinutes % 60);
   }
+
+  bool get isValid24Hour =>
+      hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 
   int toMinutes() => hour * 60 + minute;
 
   String format24Hour() {
-    final normalizedHour = hour.toString().padLeft(2, '0');
-    final normalizedMinute = minute.toString().padLeft(2, '0');
-    return '$normalizedHour:$normalizedMinute';
+    final normalized = ClockTime.fromMinutes(toMinutes());
+    final formattedHour = normalized.hour.toString().padLeft(2, '0');
+    final formattedMinute = normalized.minute.toString().padLeft(2, '0');
+    return '$formattedHour:$formattedMinute';
   }
 }

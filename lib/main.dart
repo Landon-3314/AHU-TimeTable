@@ -18,7 +18,7 @@ void main() {
   runApp(_MainApp(initFuture: initFuture));
 }
 
-Future<_AppInitBundle?> _initAppSafely() async {
+Future<_AppInitBundle> _initAppSafely() async {
   try {
     final storageService = await AppServices.init();
 
@@ -54,7 +54,7 @@ Future<_AppInitBundle?> _initAppSafely() async {
     );
   } catch (e) {
     debugPrint('[Main] 初始化异常: $e');
-    return null;
+    rethrow;
   }
 }
 
@@ -66,24 +66,53 @@ class AppScrollBehavior extends MaterialScrollBehavior {
       Set<PointerDeviceKind>.from(PointerDeviceKind.values);
 }
 
-class _MainApp extends StatelessWidget {
+class _MainApp extends StatefulWidget {
   const _MainApp({required this.initFuture});
 
-  final Future<_AppInitBundle?> initFuture;
+  final Future<_AppInitBundle> initFuture;
+
+  @override
+  State<_MainApp> createState() => _MainAppState();
+}
+
+class _MainAppState extends State<_MainApp> {
+  late Future<_AppInitBundle> _initFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFuture = widget.initFuture;
+  }
+
+  void _retryInitialization() {
+    setState(() {
+      _initFuture = _initAppSafely();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_AppInitBundle?>(
-      future: initFuture,
+    return FutureBuilder<_AppInitBundle>(
+      future: _initFuture,
       builder: (context, snapshot) {
         final bundle = snapshot.data;
-        if (snapshot.connectionState != ConnectionState.done ||
-            bundle == null) {
+        if (snapshot.connectionState != ConnectionState.done) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(),
             home: const Scaffold(
               body: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        if (snapshot.hasError || bundle == null) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(),
+            home: _AppInitErrorPage(
+              error: snapshot.error,
+              onRetry: _retryInitialization,
             ),
           );
         }
@@ -114,6 +143,59 @@ class _MainApp extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _AppInitErrorPage extends StatelessWidget {
+  const _AppInitErrorPage({required this.error, required this.onRetry});
+
+  final Object? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final errorMessage = error?.toString() ?? 'Unknown initialization error';
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: Colors.redAccent,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '应用初始化失败',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    errorMessage,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('重试'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

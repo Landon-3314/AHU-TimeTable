@@ -11,6 +11,11 @@ class BootRescheduleReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         val action = intent.action.orEmpty()
+        if (action !in ALLOWED_ACTIONS) {
+            Log.w(TAG, "Ignoring unexpected reschedule action=$action")
+            return
+        }
+
         Log.d(TAG, "Reschedule requested by action=$action")
         runCatching {
             NativeAlarmScheduler.rescheduleStored(context)
@@ -22,5 +27,11 @@ class BootRescheduleReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "BootRescheduleReceiver"
+        private val ALLOWED_ACTIONS = setOf(
+            Intent.ACTION_LOCKED_BOOT_COMPLETED,
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED",
+        )
     }
 }

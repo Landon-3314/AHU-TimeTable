@@ -39,7 +39,7 @@ class ScheduleParserService {
 
     try {
       final document = parser.parse(normalizedHtml);
-      final table = document.querySelector('table.courseTable');
+      final table = _findTimetableTable(document);
       if (table == null) {
         throw ScheduleParseException('未找到课表表格，请确认当前页面仍然是教务课表页。');
       }
@@ -136,6 +136,20 @@ class ScheduleParserService {
     } catch (error) {
       throw ScheduleParseException('DOM解析失败: ${error.toString()}');
     }
+  }
+
+  Element? _findTimetableTable(Document document) {
+    final tables = document.querySelectorAll('table.courseTable, table.Wjkc');
+    if (tables.isEmpty) {
+      return null;
+    }
+
+    for (final table in tables) {
+      if (table.querySelectorAll('.tdHtml').isNotEmpty) {
+        return table;
+      }
+    }
+    return tables.first;
   }
 
   List<Element> _extractUniqueLessonBlocks(List<Element> blocks) {

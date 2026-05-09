@@ -65,6 +65,24 @@ void main() {
     expect(settings.totalClassPeriods, 13);
   });
 
+  test('drops stored period start times with invalid hours', () async {
+    final settings = await _buildSettingsProvider(
+      initialValues: const {
+        'settings.morningClasses': 2,
+        'settings.morningPeriodStartTimes': ['25:00', '08:00'],
+      },
+    );
+
+    expect(settings.morningPeriodStartTimes, hasLength(2));
+    expect(
+      settings.morningPeriodStartTimes,
+      containsAllInOrder([
+        const TimeOfDay(hour: 8, minute: 0),
+        const TimeOfDay(hour: 8, minute: 50),
+      ]),
+    );
+  });
+
   test(
     'changing a period start time only shifts the same session tail',
     () async {

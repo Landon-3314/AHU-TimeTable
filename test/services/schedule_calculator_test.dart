@@ -26,4 +26,16 @@ void main() {
     expect(slots[3].periodNumber, 4);
     expect(slots[3].label, 'Evening');
   });
+
+  test('normalizes generated slot end times to a 24 hour clock', () {
+    final slots = const ScheduleCalculator().generateTimeSlots(
+      classDuration: 45,
+      morningStartTimes: const [],
+      afternoonStartTimes: const [],
+      eveningStartTimes: const [ClockTime(hour: 23, minute: 30)],
+    );
+
+    expect(slots.single.startTime.format24Hour(), '23:30');
+    expect(slots.single.endTime.format24Hour(), '00:15');
+  });
 }

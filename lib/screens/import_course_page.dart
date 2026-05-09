@@ -27,6 +27,10 @@ class ImportCoursePage extends StatefulWidget {
 class _ImportCoursePageState extends State<ImportCoursePage> {
   static const ScheduleParserService _parserService = ScheduleParserService();
   static const Duration _extractScriptSettleDelay = Duration(milliseconds: 350);
+  static const Set<String> _allowedAcademicHosts = <String>{
+    'wvpn.ahu.edu.cn',
+    'ahu.edu.cn',
+  };
   static final Set<Factory<OneSequenceGestureRecognizer>>
   _webViewGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
     Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
@@ -37,6 +41,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   final GlobalKey _webViewGuideKey = GlobalKey();
   final GlobalKey _examGuideKey = GlobalKey();
   final GlobalKey _timetableGuideKey = GlobalKey();
+  int _pageLoadProgress = 100;
   bool _isImportGuideShowing = false;
 
   @override
@@ -59,7 +64,14 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     final isExtracting = activeAction != null;
     return Scaffold(
       appBar: AppBar(title: Text(settingsProvider.t('academic_import'))),
-      body: KeyedSubtree(key: _webViewGuideKey, child: _buildWebView()),
+      body: Column(
+        children: [
+          _buildPageLoadProgress(),
+          Expanded(
+            child: KeyedSubtree(key: _webViewGuideKey, child: _buildWebView()),
+          ),
+        ],
+      ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -106,6 +118,17 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     );
   }
 
+  Widget _buildPageLoadProgress() {
+    if (_pageLoadProgress >= 100) {
+      return const SizedBox.shrink();
+    }
+
+    return LinearProgressIndicator(
+      minHeight: 3,
+      value: _pageLoadProgress / 100,
+    );
+  }
+
   Future<void> _initializeController() async {
     await _controller.enableZoom(true);
 
@@ -118,7 +141,22 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     await _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
     await _controller.setNavigationDelegate(
       NavigationDelegate(
-        onNavigationRequest: (request) => NavigationDecision.navigate,
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _pageLoadProgress = progress.clamp(0, 100).toInt();
+          });
+        },
+        onNavigationRequest: (request) {
+          final uri = Uri.tryParse(request.url);
+          if (uri == null || !_isAllowedAcademicUri(uri)) {
+            _showBlockedNavigationMessage(request.url);
+            return NavigationDecision.prevent;
+          }
+          return NavigationDecision.navigate;
+        },
       ),
     );
     await _controller.loadRequest(
@@ -254,8 +292,41 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
   Future<String> _runJavaScriptExtraction(String script) async {
     await Future<void>.delayed(_extractScriptSettleDelay);
+    await _ensureCurrentPageCanBeExtracted();
     final rawResult = await _controller.runJavaScriptReturningResult(script);
     return _normalizeJavaScriptResult(rawResult);
+  }
+
+  Future<void> _ensureCurrentPageCanBeExtracted() async {
+    final currentUrl = await _controller.currentUrl();
+    final uri = currentUrl == null ? null : Uri.tryParse(currentUrl);
+    if (uri == null || !_isAllowedAcademicUri(uri)) {
+      throw ScheduleParseException(
+        'Current page is outside the allowed academic domains. Please return to the AHU academic page before importing.',
+      );
+    }
+  }
+
+  bool _isAllowedAcademicUri(Uri uri) {
+    if (uri.scheme != 'https') {
+      return false;
+    }
+
+    final host = uri.host.toLowerCase();
+    return _allowedAcademicHosts.contains(host) || host.endsWith('.ahu.edu.cn');
+  }
+
+  void _showBlockedNavigationMessage(String url) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.danger,
+        content: Text('Blocked non-academic navigation: $url'),
+      ),
+    );
   }
 
   Future<void> _handleTimetableHtml(String rawMessage) async {

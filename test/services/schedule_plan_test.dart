@@ -71,6 +71,44 @@ void main() {
     },
   );
 
+  test('skips courses with invalid time slot hours', () {
+    final course = Course(
+      id: 'course-invalid-time',
+      name: 'Invalid Time',
+      location: 'A101',
+      teacher: 'Teacher',
+      weekday: DateTime.monday,
+      weeks: const [1],
+      startPeriod: 1,
+      endPeriod: 1,
+      colorValue: 0xFF7C9AF2,
+    );
+
+    final plan = SchedulePlanBuilder.build(
+      courses: [course],
+      events: const [],
+      timeSlots: const [
+        TimeSlot(
+          periodNumber: 1,
+          startTime: ClockTime(hour: 24, minute: 0),
+          endTime: ClockTime(hour: 24, minute: 45),
+          label: 'Evening',
+        ),
+      ],
+      semesterStartDate: DateTime(2026, 4, 27),
+      totalWeeks: 20,
+      courseReminderAdvanceMinutes: 10,
+      eventReminderAdvanceMinutes: 0,
+      autoMuteEnabled: true,
+      canAutoMute: true,
+      now: DateTime(2026, 4, 27, 7, 0),
+    );
+
+    expect(plan.notifications, isEmpty);
+    expect(plan.courseAutomationWindows, isEmpty);
+    expect(plan.todayCourses, isEmpty);
+  });
+
   test('moves adjacent single-period reminder out of previous mute window', () {
     final courses = <Course>[
       Course(

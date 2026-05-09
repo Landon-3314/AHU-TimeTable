@@ -1018,9 +1018,7 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   String _formatClockTime(ClockTime time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
+    return time.format24Hour();
   }
 
   String _nextStartTime(String previousStartTime) {
@@ -1065,6 +1063,7 @@ class SettingsProvider extends ChangeNotifier {
     return hour != null &&
         minute != null &&
         hour >= 0 &&
+        hour <= 23 &&
         minute >= 0 &&
         minute <= 59;
   }
@@ -1133,6 +1132,7 @@ class SettingsProvider extends ChangeNotifier {
     return hour != null &&
         minute != null &&
         hour >= 0 &&
+        hour <= 23 &&
         minute >= 0 &&
         minute <= 59;
   }
