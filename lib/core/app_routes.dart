@@ -53,7 +53,7 @@ class AppRoutes {
           settings: settings,
         );
       case importCourses:
-        return MaterialPageRoute<int>(
+        return MaterialPageRoute<AcademicImportResult>(
           builder: (_) => const ImportCoursePage(),
           settings: settings,
         );

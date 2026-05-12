@@ -163,6 +163,10 @@ class AppStrings {
       'zh': '请输入日程名称',
       'en': 'Please enter an event name',
     },
+    'please_select_weekday': {
+      'zh': '请至少选择一个星期几',
+      'en': 'Please select at least one weekday',
+    },
     'please_select_teaching_week': {
       'zh': '请至少选择一个上课周次',
       'en': 'Please select at least one teaching week',
@@ -218,6 +222,14 @@ class AppStrings {
       'en':
           'The exam extraction framework is ready. Parsing logic is not implemented yet.',
     },
+    'exam_import_empty': {
+      'zh': '当前页面没有未结束考试安排',
+      'en': 'No unfinished exams were found on this page.',
+    },
+    'exam_import_duplicated': {
+      'zh': '考试信息已存在，未重复导入',
+      'en': 'Exam information already exists. Nothing was imported.',
+    },
     'guide_next': {'zh': '下一步', 'en': 'Next'},
     'guide_done': {'zh': '我知道了', 'en': 'Got it'},
     'guide_step_counter': {
@@ -242,7 +254,8 @@ class AppStrings {
     'guide_timetable_import_title': {'zh': '导入课表', 'en': 'Import Timetable'},
     'guide_timetable_import_body': {
       'zh': '从教务系统打开导入页面，登录后可以一键解析课程信息和考试信息。',
-      'en': 'Open the academic import page and extract courses and exam after login.',
+      'en':
+          'Open the academic import page and extract courses and exam after login.',
     },
     'guide_timetable_add_title': {'zh': '手动添加', 'en': 'Add Manually'},
     'guide_timetable_add_body': {
@@ -258,8 +271,7 @@ class AppStrings {
     'guide_import_exam_title': {'zh': '解析考试', 'en': 'Extract Exams'},
     'guide_import_exam_body': {
       'zh': '进入考试安排页面后点这里，应用会读取页面内容并导入考试信息。',
-      'en':
-          'Tap this after opening the exam schedule page and import exam.',
+      'en': 'Tap this after opening the exam schedule page and import exam.',
     },
     'guide_import_timetable_title': {'zh': '解析课表', 'en': 'Extract Timetable'},
     'guide_import_timetable_body': {

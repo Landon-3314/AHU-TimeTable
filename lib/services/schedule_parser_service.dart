@@ -2,6 +2,7 @@ import 'package:html/dom.dart';
 import 'package:html/parser.dart' as parser;
 
 import '../models/course.dart';
+import '../models/event.dart';
 
 class ScheduleParseException implements Exception {
   ScheduleParseException(this.message);
@@ -135,6 +136,63 @@ class ScheduleParserService {
       rethrow;
     } catch (error) {
       throw ScheduleParseException('DOM解析失败: ${error.toString()}');
+    }
+  }
+
+  List<Event> parseExams(String html) {
+    final normalizedHtml = html.trim();
+    if (normalizedHtml.isEmpty) {
+      throw ScheduleParseException('考试源码为空，无法解析。');
+    }
+
+    try {
+      final document = parser.parse(normalizedHtml);
+      final rows = document.querySelectorAll('tr.unfinished');
+      if (rows.isEmpty) {
+        return const <Event>[];
+      }
+
+      final exams = <Event>[];
+      final seen = <String>{};
+      for (final row in rows) {
+        final cells = row.children
+            .where((node) {
+              return node.localName == 'td' || node.localName == 'th';
+            })
+            .cast<Element>()
+            .toList();
+        final timeText = row.querySelector('.time')?.text.trim() ?? '';
+        final startAt = _parseExamStartTime(timeText);
+        final locationParts = _extractExamLocationParts(
+          cells.isEmpty ? row : cells.first,
+        );
+        final courseCell = cells.length > 1 ? cells[1] : row;
+        final courseName = _extractExamCourseName(courseCell);
+        final examType = _normalizeText(
+          courseCell.querySelector('.tag-span')?.text ?? '',
+        );
+
+        if (courseName.isEmpty) {
+          throw ScheduleParseException('无法识别考试课程名称。');
+        }
+
+        final event = Event(
+          name: examType.isEmpty ? courseName : '$courseName（$examType）',
+          location: locationParts.location,
+          note: locationParts.seat,
+          dateTime: startAt,
+          enableAlarm: true,
+        );
+        if (seen.add(_examEventKey(event))) {
+          exams.add(event);
+        }
+      }
+
+      return exams;
+    } on ScheduleParseException {
+      rethrow;
+    } catch (error) {
+      throw ScheduleParseException('考试DOM解析失败: ${error.toString()}');
     }
   }
 
@@ -366,6 +424,90 @@ class ScheduleParserService {
       course.endPeriod,
     ].join('|');
   }
+
+  DateTime _parseExamStartTime(String rawTime) {
+    final match = RegExp(
+      r'(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})',
+    ).firstMatch(rawTime);
+    if (match == null) {
+      throw ScheduleParseException('无法识别考试开始时间: $rawTime');
+    }
+
+    final year = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final day = int.parse(match.group(3)!);
+    final hour = int.parse(match.group(4)!);
+    final minute = int.parse(match.group(5)!);
+    final parsed = DateTime(year, month, day, hour, minute);
+    if (parsed.year != year ||
+        parsed.month != month ||
+        parsed.day != day ||
+        parsed.hour != hour ||
+        parsed.minute != minute) {
+      throw ScheduleParseException('无法识别考试开始时间: $rawTime');
+    }
+    return parsed;
+  }
+
+  _ExamLocationParts _extractExamLocationParts(Element cell) {
+    final locations = <String>[];
+    var seat = '';
+    for (final span in cell.querySelectorAll('span')) {
+      final text = _normalizeText(span.text);
+      if (text.isEmpty) {
+        continue;
+      }
+
+      final id = span.attributes['id'] ?? '';
+      if (id.startsWith('seat-') || text.startsWith('座位号')) {
+        seat = text;
+      } else {
+        locations.add(text);
+      }
+    }
+
+    return _ExamLocationParts(
+      location: locations.isEmpty ? '' : locations.last,
+      seat: seat,
+    );
+  }
+
+  String _extractExamCourseName(Element cell) {
+    for (final span in cell.querySelectorAll('span')) {
+      if (span.classes.contains('tag-span')) {
+        continue;
+      }
+      final text = _normalizeText(span.text);
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+
+    final examType = _normalizeText(
+      cell.querySelector('.tag-span')?.text ?? '',
+    );
+    var text = _normalizeText(cell.text);
+    if (examType.isNotEmpty) {
+      text = text.replaceFirst(examType, '').trim();
+    }
+    return text;
+  }
+
+  String _normalizeText(String value) {
+    return value
+        .replaceAll('\u00a0', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String _examEventKey(Event event) {
+    return [
+      event.name.trim(),
+      event.location.trim(),
+      event.note.trim(),
+      event.dateTime.toIso8601String(),
+    ].join('|');
+  }
 }
 
 class _LessonFragment {
@@ -380,4 +522,11 @@ class _PeriodRange {
 
   final int start;
   final int end;
+}
+
+class _ExamLocationParts {
+  const _ExamLocationParts({required this.location, required this.seat});
+
+  final String location;
+  final String seat;
 }

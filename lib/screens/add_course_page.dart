@@ -9,11 +9,28 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/app_wheel_pickers.dart';
+import '../widgets/common/capsule_multi_select.dart';
 
-class AddCoursePage extends StatelessWidget {
+class AddCoursePage extends StatefulWidget {
   const AddCoursePage({super.key, this.existingCourse});
 
   final Course? existingCourse;
+
+  @override
+  State<AddCoursePage> createState() => _AddCoursePageState();
+}
+
+class _AddCoursePageState extends State<AddCoursePage> {
+  bool _isWeekDragSelectionActive = false;
+
+  void _setWeekDragSelectionActive(bool value) {
+    if (_isWeekDragSelectionActive == value) {
+      return;
+    }
+    setState(() {
+      _isWeekDragSelectionActive = value;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +48,15 @@ class AddCoursePage extends StatelessWidget {
           ),
         ),
         body: TabBarView(
+          physics: _isWeekDragSelectionActive
+              ? const NeverScrollableScrollPhysics()
+              : null,
           children: [
-            _CourseForm(existingCourse: existingCourse),
+            _CourseForm(
+              existingCourse: widget.existingCourse,
+              weekDragSelectionActive: _isWeekDragSelectionActive,
+              onWeekDragSelectionActiveChanged: _setWeekDragSelectionActive,
+            ),
             const _EventForm(),
           ],
         ),
@@ -42,15 +66,22 @@ class AddCoursePage extends StatelessWidget {
 }
 
 class _CourseForm extends StatefulWidget {
-  const _CourseForm({this.existingCourse});
+  const _CourseForm({
+    this.existingCourse,
+    required this.weekDragSelectionActive,
+    required this.onWeekDragSelectionActiveChanged,
+  });
 
   final Course? existingCourse;
+  final bool weekDragSelectionActive;
+  final ValueChanged<bool> onWeekDragSelectionActiveChanged;
 
   @override
   State<_CourseForm> createState() => _CourseFormState();
 }
 
-class _CourseFormState extends State<_CourseForm> {
+class _CourseFormState extends State<_CourseForm>
+    with AutomaticKeepAliveClientMixin<_CourseForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
@@ -58,26 +89,29 @@ class _CourseFormState extends State<_CourseForm> {
 
   static const List<int> _presetColors = AppColors.coursePaletteValues;
 
-  int _selectedWeekday = 1;
   int _selectedColorValue = _presetColors.first;
   int _selectedStartPeriod = 1;
   int _selectedEndPeriod = 2;
   bool _isSaving = false;
+  late final Set<int> _selectedWeekdays;
   late final Set<int> _selectedWeeks;
 
   bool get _isEditMode => widget.existingCourse != null;
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
     final course = widget.existingCourse;
+    _selectedWeekdays = course == null ? <int>{1} : <int>{course.weekday};
     _selectedWeeks = course == null ? <int>{1} : course.weeks.toSet();
 
     if (course != null) {
       _nameController.text = course.name;
       _locationController.text = course.location;
       _teacherController.text = course.teacher;
-      _selectedWeekday = course.weekday;
       _selectedColorValue = course.colorValue;
       _selectedStartPeriod = course.startPeriod;
       _selectedEndPeriod = course.endPeriod;
@@ -94,6 +128,7 @@ class _CourseFormState extends State<_CourseForm> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final provider = context.watch<SettingsProvider>();
     final periodCount = provider.timeSlots.length;
     final effectivePeriodCount = periodCount == 0 ? 1 : periodCount;
@@ -113,6 +148,9 @@ class _CourseFormState extends State<_CourseForm> {
         child: Form(
           key: _formKey,
           child: ListView(
+            physics: widget.weekDragSelectionActive
+                ? const NeverScrollableScrollPhysics()
+                : null,
             padding: AppSpacing.pagePadding,
             children: [
               TextFormField(
@@ -147,10 +185,24 @@ class _CourseFormState extends State<_CourseForm> {
                 decoration: InputDecoration(labelText: provider.t('teacher')),
               ),
               const SizedBox(height: AppSpacing.xl),
-              AppPickerField(
-                label: provider.t('weekday_label'),
-                valueLabel: _weekdayLabel(provider, _selectedWeekday),
-                onTap: () => _pickWeekday(provider),
+              Text(
+                provider.t('weekday_label'),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              CapsuleMultiSelect<int>(
+                options: [
+                  for (int day = 1; day <= 7; day++)
+                    CapsuleMultiSelectOption<int>(
+                      value: day,
+                      label: _weekdayLabel(provider, day),
+                    ),
+                ],
+                selectedValues: _selectedWeekdays,
+                singleLine: true,
+                onChanged: _handleWeekdaysChanged,
               ),
               const SizedBox(height: AppSpacing.xxl),
               Text(
@@ -160,25 +212,25 @@ class _CourseFormState extends State<_CourseForm> {
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
+              CapsuleMultiSelect<int>(
+                options: [
                   for (int week = 1; week <= provider.totalWeeks; week++)
-                    FilterChip(
-                      label: Text(_weekLabel(provider, week)),
-                      selected: _selectedWeeks.contains(week),
-                      onSelected: (selected) {
-                        setState(() {
-                          if (selected) {
-                            _selectedWeeks.add(week);
-                          } else {
-                            _selectedWeeks.remove(week);
-                          }
-                        });
-                      },
+                    CapsuleMultiSelectOption<int>(
+                      value: week,
+                      label: _weekLabel(provider, week),
                     ),
                 ],
+                selectedValues: _selectedWeeks,
+                enableDragSelect: true,
+                onDragSelectionActiveChanged:
+                    widget.onWeekDragSelectionActiveChanged,
+                onChanged: (selectedWeeks) {
+                  setState(() {
+                    _selectedWeeks
+                      ..clear()
+                      ..addAll(selectedWeeks);
+                  });
+                },
               ),
               const SizedBox(height: AppSpacing.xxl),
               Row(
@@ -296,24 +348,28 @@ class _CourseFormState extends State<_CourseForm> {
     );
   }
 
-  Future<void> _pickWeekday(SettingsProvider provider) async {
-    final selected = await showAppOptionPicker<int>(
-      context,
-      title: provider.t('weekday_label'),
-      selectedValue: _selectedWeekday,
-      grid: true,
-      gridCrossAxisCount: 2,
-      options: [
-        for (int day = 1; day <= 7; day++)
-          AppPickerOption(value: day, label: _weekdayLabel(provider, day)),
-      ],
-    );
-    if (!mounted || selected == null) {
+  void _handleWeekdaysChanged(Set<int> selectedWeekdays) {
+    if (_isEditMode && selectedWeekdays.isEmpty) {
       return;
     }
+
+    final nextWeekdays = _isEditMode
+        ? _singleEditWeekdaySelection(selectedWeekdays)
+        : selectedWeekdays;
+
     setState(() {
-      _selectedWeekday = selected;
+      _selectedWeekdays
+        ..clear()
+        ..addAll(nextWeekdays);
     });
+  }
+
+  Set<int> _singleEditWeekdaySelection(Set<int> selectedWeekdays) {
+    final newlySelected = selectedWeekdays.difference(_selectedWeekdays);
+    if (newlySelected.isNotEmpty) {
+      return {newlySelected.first};
+    }
+    return {selectedWeekdays.first};
   }
 
   Future<void> _pickPeriod({
@@ -348,6 +404,11 @@ class _CourseFormState extends State<_CourseForm> {
       return;
     }
 
+    if (_selectedWeekdays.isEmpty) {
+      _showMessage(provider.t('please_select_weekday'));
+      return;
+    }
+
     if (_selectedWeeks.isEmpty) {
       _showMessage(provider.t('please_select_teaching_week'));
       return;
@@ -372,25 +433,35 @@ class _CourseFormState extends State<_CourseForm> {
       _isSaving = true;
     });
 
-    final course = Course(
-      id: widget.existingCourse?.id,
-      name: _nameController.text.trim(),
-      location: _locationController.text.trim(),
-      teacher: _teacherController.text.trim(),
-      weekday: _selectedWeekday,
-      weeks: _selectedWeeks.toList()..sort(),
-      startPeriod: _selectedStartPeriod,
-      endPeriod: _selectedEndPeriod,
-      colorValue: _selectedColorValue,
-    );
+    final selectedWeeks = _selectedWeeks.toList()..sort();
+    final selectedWeekdays = _selectedWeekdays.toList()..sort();
+    Course buildCourse(int weekday, {String? id}) {
+      return Course(
+        id: id,
+        name: _nameController.text.trim(),
+        location: _locationController.text.trim(),
+        teacher: _teacherController.text.trim(),
+        weekday: weekday,
+        weeks: selectedWeeks,
+        startPeriod: _selectedStartPeriod,
+        endPeriod: _selectedEndPeriod,
+        colorValue: _selectedColorValue,
+      );
+    }
 
     final courseProvider = context.read<CourseProvider>();
     final didSave = _isEditMode
         ? await courseProvider.updateCourse(
             originalCourse: widget.existingCourse!,
-            updatedCourse: course,
+            updatedCourse: buildCourse(
+              selectedWeekdays.first,
+              id: widget.existingCourse!.id,
+            ),
           )
-        : await courseProvider.addCourse(course);
+        : (await courseProvider.addCourses([
+                for (final weekday in selectedWeekdays) buildCourse(weekday),
+              ])) >
+              0;
 
     if (!mounted) {
       return;

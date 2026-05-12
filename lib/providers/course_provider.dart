@@ -7,6 +7,16 @@ import '../models/event.dart';
 
 import '../services/storage_service.dart';
 
+class CourseGroup {
+  CourseGroup({required this.name, required List<Course> courses})
+    : courses = List<Course>.unmodifiable(courses);
+
+  final String name;
+  final List<Course> courses;
+
+  int get recordCount => courses.length;
+}
+
 class CourseProvider extends ChangeNotifier {
   CourseProvider({required StorageService storageService})
     : _storageService = storageService,
@@ -20,6 +30,28 @@ class CourseProvider extends ChangeNotifier {
 
   UnmodifiableListView<Course> get courses => UnmodifiableListView(_courses);
   UnmodifiableListView<Event> get events => UnmodifiableListView(_events);
+  List<CourseGroup> get sortedCourseGroups {
+    final byName = <String, List<Course>>{};
+    for (final course in _courses) {
+      final key = course.name.trim().toLowerCase();
+      if (key.isEmpty) {
+        continue;
+      }
+      byName.putIfAbsent(key, () => <Course>[]).add(course);
+    }
+
+    final groups = byName.values.map((records) {
+      final sortedRecords = records.toList()..sort(_compareCourseRecords);
+      return CourseGroup(name: records.first.name, courses: sortedRecords);
+    }).toList();
+
+    groups.sort(
+      (a, b) =>
+          a.name.trim().toUpperCase().compareTo(b.name.trim().toUpperCase()),
+    );
+    return groups;
+  }
+
   List<Course> get sortedUniqueCourses {
     final byName = <String, Course>{};
     for (final course in _courses) {
@@ -36,6 +68,36 @@ class CourseProvider extends ChangeNotifier {
             a.name.trim().toUpperCase().compareTo(b.name.trim().toUpperCase()),
       );
     return result;
+  }
+
+  int _compareCourseRecords(Course left, Course right) {
+    final weekdayOrder = left.weekday.compareTo(right.weekday);
+    if (weekdayOrder != 0) {
+      return weekdayOrder;
+    }
+
+    final startOrder = left.startPeriod.compareTo(right.startPeriod);
+    if (startOrder != 0) {
+      return startOrder;
+    }
+
+    final endOrder = left.endPeriod.compareTo(right.endPeriod);
+    if (endOrder != 0) {
+      return endOrder;
+    }
+
+    return _compareIntLists(left.weeks, right.weeks);
+  }
+
+  int _compareIntLists(List<int> left, List<int> right) {
+    final length = left.length < right.length ? left.length : right.length;
+    for (var index = 0; index < length; index++) {
+      final order = left[index].compareTo(right[index]);
+      if (order != 0) {
+        return order;
+      }
+    }
+    return left.length.compareTo(right.length);
   }
 
   void bindReminderScheduler(Future<void> Function() callback) {
@@ -270,6 +332,39 @@ class CourseProvider extends ChangeNotifier {
     await _refreshReminders();
   }
 
+  Future<int> mergeImportedEvents(List<Event> events) async {
+    if (events.isEmpty) {
+      return 0;
+    }
+
+    final uniqueImported = <String, Event>{};
+    for (final event in events) {
+      final sanitizedEvent = event.copyWith(
+        semesterId: _storageService.currentSemesterId,
+      );
+      uniqueImported.putIfAbsent(
+        _exactEventKey(sanitizedEvent),
+        () => sanitizedEvent,
+      );
+    }
+
+    final existingKeys = _events.map(_exactEventKey).toSet();
+    final newEvents = uniqueImported.values
+        .where((event) => !existingKeys.contains(_exactEventKey(event)))
+        .toList();
+
+    if (newEvents.isEmpty) {
+      return 0;
+    }
+
+    _events.addAll(newEvents);
+    notifyListeners();
+    await _persistEvents();
+    await _syncBackgroundRuntimeIfEnabled();
+    await _refreshReminders();
+    return newEvents.length;
+  }
+
   Future<void> deleteEvent(String eventId) async {
     _events.removeWhere((event) => event.id == eventId);
     notifyListeners();
@@ -381,6 +476,15 @@ class CourseProvider extends ChangeNotifier {
   String _exactCourseKey(Course course) {
     final sortedWeeks = course.weeks.toList()..sort();
     return [course.sessionKey, sortedWeeks.join(',')].join('|');
+  }
+
+  String _exactEventKey(Event event) {
+    return [
+      event.name.trim().toLowerCase(),
+      event.location.trim().toLowerCase(),
+      event.note.trim().toLowerCase(),
+      event.dateTime.toIso8601String(),
+    ].join('|');
   }
 
   bool _shouldReplaceWithImported(

@@ -108,7 +108,102 @@ class ScheduleHtmlExtractor {
 
   static const String extractExamHtmlScript = r'''
 (function() {
-  return 'ERROR: Exam extraction is not implemented yet.';
+  try {
+    function formatError(prefix, error) {
+      var detail = '';
+      try {
+        detail = error && error.message ? error.message : String(error);
+      } catch (_) {
+        detail = 'unknown error';
+      }
+      return prefix + ': ' + detail;
+    }
+
+    function collectWindows(targetWindow, bucket, visited, errors) {
+      if (!targetWindow || visited.indexOf(targetWindow) !== -1) {
+        return;
+      }
+      visited.push(targetWindow);
+      bucket.push(targetWindow);
+
+      var childFrameCount = 0;
+      try {
+        childFrameCount = targetWindow.frames ? targetWindow.frames.length : 0;
+      } catch (frameCountError) {
+        errors.push(formatError('FRAME_COUNT_ERROR', frameCountError));
+        childFrameCount = 0;
+      }
+
+      for (var index = 0; index < childFrameCount; index += 1) {
+        try {
+          collectWindows(targetWindow.frames[index], bucket, visited, errors);
+        } catch (frameError) {
+          errors.push(formatError('FRAME_TRAVERSAL_ERROR', frameError));
+        }
+      }
+    }
+
+    function extractExamHtml(doc) {
+      if (!doc || !doc.querySelectorAll) {
+        return '';
+      }
+
+      var table =
+        doc.querySelector('table.exam-table#exams') ||
+        doc.querySelector('table#exams') ||
+        doc.querySelector('#exams') ||
+        doc.querySelector('table.exam-table');
+      if (table && table.outerHTML) {
+        return table.outerHTML;
+      }
+
+      var rows = doc.querySelectorAll('tr.unfinished');
+      if (rows && rows.length > 0) {
+        return '<table id="exams" class="exam-table"><tbody>' +
+          Array.from(rows).map(function(row) {
+            return row.outerHTML || '';
+          }).join('') +
+          '</tbody></table>';
+      }
+
+      return '';
+    }
+
+    var windows = [];
+    var jsErrors = [];
+    collectWindows(window, windows, [], jsErrors);
+
+    var fragments = [];
+    for (var windowIndex = 0; windowIndex < windows.length; windowIndex += 1) {
+      try {
+        var currentWindow = windows[windowIndex];
+        var currentDoc = currentWindow.document;
+        var extracted = extractExamHtml(currentDoc);
+        if (extracted && extracted.trim()) {
+          fragments.push(extracted);
+        }
+      } catch (documentError) {
+        jsErrors.push(formatError('DOCUMENT_EXTRACTION_ERROR', documentError));
+      }
+    }
+
+    if (fragments.length === 0) {
+      if (jsErrors.length > 0) {
+        return 'JS_ERROR: ' + jsErrors.join(' | ');
+      }
+      return 'ERROR: No exam table was detected. Open the exam page first.';
+    }
+
+    var html = Array.from(new Set(fragments)).join('\n<!--DOCUMENT_SPLIT-->\n');
+    if (!html.trim()) {
+      return 'ERROR: Exam HTML was empty.';
+    }
+
+    return html;
+  } catch (error) {
+    return 'JS_ERROR: ' +
+      (error && error.message ? error.message : String(error));
+  }
 })();
 ''';
 }

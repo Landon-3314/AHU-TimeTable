@@ -212,7 +212,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byType(InputDecorator).at(4));
+    await tester.tap(find.text('第 1 节'));
     await tester.pumpAndSettle();
 
     expect(find.text('确定'), findsOneWidget);

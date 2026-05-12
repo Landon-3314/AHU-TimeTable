@@ -17,6 +17,15 @@ import '../widgets/common/guided_tour_overlay.dart';
 
 enum _ImportAction { timetable, exam }
 
+enum AcademicImportKind { timetable, exam }
+
+class AcademicImportResult {
+  const AcademicImportResult({required this.kind, required this.importedCount});
+
+  final AcademicImportKind kind;
+  final int importedCount;
+}
+
 class ImportCoursePage extends StatefulWidget {
   const ImportCoursePage({super.key});
 
@@ -264,28 +273,12 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     });
 
     try {
-      await _runJavaScriptExtraction(
+      final rawHtml = await _runJavaScriptExtraction(
         ScheduleHtmlExtractor.extractExamHtmlScript,
       );
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.read<SettingsProvider>().t('exam_extract_pending'),
-          ),
-        ),
-      );
+      await _handleExamHtml(rawHtml);
     } catch (error) {
       _finishImportWithMessage('Exam extraction failed: $error');
-      return;
-    } finally {
-      if (mounted) {
-        setState(() {
-          _activeAction = null;
-        });
-      }
     }
   }
 
@@ -348,7 +341,12 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(importedCount);
+      Navigator.of(context).pop(
+        AcademicImportResult(
+          kind: AcademicImportKind.timetable,
+          importedCount: importedCount,
+        ),
+      );
     } on ScheduleParseException catch (error) {
       _finishImportWithMessage('Import failed: ${error.message}');
     } catch (error) {
@@ -360,6 +358,74 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         });
       }
     }
+  }
+
+  Future<void> _handleExamHtml(String rawMessage) async {
+    try {
+      if (rawMessage.startsWith('JS_ERROR:')) {
+        throw ScheduleParseException('教务系统连接失败，请检查网络或重新登录后重试。');
+      }
+
+      if (rawMessage.startsWith('ERROR:')) {
+        throw ScheduleParseException(
+          rawMessage.replaceFirst('ERROR:', '').trim(),
+        );
+      }
+
+      final importedEvents = _parserService.parseExams(rawMessage);
+      if (importedEvents.isEmpty) {
+        _finishImportWithNeutralMessage(
+          context.read<SettingsProvider>().t('exam_import_empty'),
+        );
+        return;
+      }
+
+      final importedCount = await context
+          .read<CourseProvider>()
+          .mergeImportedEvents(importedEvents);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (importedCount == 0) {
+        _finishImportWithNeutralMessage(
+          context.read<SettingsProvider>().t('exam_import_duplicated'),
+        );
+        return;
+      }
+
+      Navigator.of(context).pop(
+        AcademicImportResult(
+          kind: AcademicImportKind.exam,
+          importedCount: importedCount,
+        ),
+      );
+    } on ScheduleParseException catch (error) {
+      _finishImportWithMessage('Exam import failed: ${error.message}');
+    } catch (error) {
+      _finishImportWithMessage('Exam import failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _activeAction = null;
+        });
+      }
+    }
+  }
+
+  void _finishImportWithNeutralMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _activeAction = null;
+    });
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _finishImportWithMessage(String message) {
