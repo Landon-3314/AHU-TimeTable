@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timetable/models/timetable_view_data.dart';
 import 'package:timetable/widgets/timetable/timetable_grid.dart';
+import 'package:timetable/widgets/timetable/week_selector.dart';
 
 void main() {
   const chips = <TimetableDayChipData>[
@@ -53,5 +54,30 @@ void main() {
     final selectedChipRect = tester.getRect(find.text('Sun'));
     expect(selectedChipRect.left, greaterThanOrEqualTo(scrollRect.left - 0.5));
     expect(selectedChipRect.right, lessThanOrEqualTo(scrollRect.right + 0.5));
+  });
+
+  testWidgets('week selector uses confirmable wheel picker', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WeekSelector(
+            currentWeek: 2,
+            tooltip: '选择周数',
+            options: const [
+              TimetableWeekOption(value: 1, label: '第 1 周'),
+              TimetableWeekOption(value: 2, label: '第 2 周'),
+              TimetableWeekOption(value: 3, label: '第 3 周'),
+            ],
+            onSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('第 2 周'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('确定'), findsOneWidget);
+    expect(find.text('第 3 周'), findsOneWidget);
   });
 }

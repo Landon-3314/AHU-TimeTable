@@ -160,6 +160,8 @@ class SettingsProvider extends ChangeNotifier {
   static const int _defaultTotalWeeks = AppConstants.defaultSemesterTotalWeeks;
   static const int _defaultReminderAdvanceMinutes = 0;
   static const int _defaultEventReminderAdvanceMinutes = 0;
+  static const int _maxCourseReminderAdvanceMinutes = 23 * 60 + 59;
+  static const int _maxEventReminderAdvanceMinutes = 7 * 24 * 60 + 23 * 60 + 59;
 
   final StorageService _storageService;
   final ScheduleCalculator _scheduleCalculator;
@@ -611,7 +613,7 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<SettingsActionResult> updateReminderAdvanceMinutes(int value) async {
-    final safeValue = value.clamp(0, 1440).toInt();
+    final safeValue = value.clamp(0, _maxCourseReminderAdvanceMinutes).toInt();
     if (safeValue == _reminderAdvanceMinutes) {
       return SettingsActionResult.success();
     }
@@ -702,7 +704,7 @@ class SettingsProvider extends ChangeNotifier {
   Future<SettingsActionResult> updateEventReminderAdvanceMinutes(
     int value,
   ) async {
-    final safeValue = value.clamp(0, 1440).toInt();
+    final safeValue = value.clamp(0, _maxEventReminderAdvanceMinutes).toInt();
     if (safeValue == _eventReminderAdvanceMinutes) {
       return SettingsActionResult.success();
     }

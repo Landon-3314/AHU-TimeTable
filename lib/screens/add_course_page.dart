@@ -8,6 +8,7 @@ import '../models/event.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/common/app_wheel_pickers.dart';
 
 class AddCoursePage extends StatelessWidget {
   const AddCoursePage({super.key, this.existingCourse});
@@ -612,9 +613,11 @@ class _EventFormState extends State<_EventForm> {
   Future<void> _pickTime() async {
     final now = DateTime.now();
     final base = _selectedDateTime ?? now;
-    final pickedTime = await showTimePicker(
-      context: context,
+    final provider = context.read<SettingsProvider>();
+    final pickedTime = await showAppClockTimePicker(
+      context,
       initialTime: TimeOfDay.fromDateTime(base),
+      title: provider.t('time'),
     );
 
     if (pickedTime == null) {

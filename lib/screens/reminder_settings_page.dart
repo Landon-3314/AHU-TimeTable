@@ -9,8 +9,9 @@ import '../providers/settings_provider.dart';
 import '../services/app_services.dart';
 import '../services/native_alarm_service.dart';
 import '../services/permission_service.dart';
-import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/common/app_wheel_pickers.dart';
+import '../widgets/long_screenshot_scroll_capture.dart';
 
 class ReminderSettingsPage extends StatefulWidget {
   const ReminderSettingsPage({super.key});
@@ -21,15 +22,8 @@ class ReminderSettingsPage extends StatefulWidget {
 
 class _ReminderSettingsPageState extends State<ReminderSettingsPage>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  static const List<int> _reminderOffsetOptions = <int>[
-    5,
-    10,
-    15,
-    30,
-    60,
-    120,
-    1440,
-  ];
+  static const int _maxCourseReminderAdvanceMinutes = 23 * 60 + 59;
+  static const int _maxEventReminderAdvanceMinutes = 7 * 24 * 60 + 23 * 60 + 59;
 
   final ScrollController _scrollController = ScrollController();
   final PermissionService _permissionService = PermissionService();
@@ -75,14 +69,14 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
   Widget build(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
 
-    final courseOffsetValue =
-        _reminderOffsetOptions.contains(provider.reminderAdvanceMinutes)
-        ? provider.reminderAdvanceMinutes
-        : 10;
-    final eventOffsetValue =
-        _reminderOffsetOptions.contains(provider.eventReminderAdvanceMinutes)
-        ? provider.eventReminderAdvanceMinutes
-        : 10;
+    final courseOffsetValue = _normalizeReminderAdvance(
+      provider.reminderAdvanceMinutes,
+      _maxCourseReminderAdvanceMinutes,
+    );
+    final eventOffsetValue = _normalizeReminderAdvance(
+      provider.eventReminderAdvanceMinutes,
+      _maxEventReminderAdvanceMinutes,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('上课静音与提醒')),
@@ -221,6 +215,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                           context: context,
                           title: '提前提醒时间',
                           selectedValue: courseOffsetValue,
+                          isEventReminder: false,
                           onSelected: (value) => _onCourseReminderOffsetChanged(
                             context,
                             provider,
@@ -232,6 +227,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                         context: context,
                         title: '提前提醒时间',
                         selectedValue: courseOffsetValue,
+                        isEventReminder: false,
                         onSelected: (value) => _onCourseReminderOffsetChanged(
                           context,
                           provider,
@@ -272,6 +268,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                           context: context,
                           title: '日程提前提醒时间',
                           selectedValue: eventOffsetValue,
+                          isEventReminder: true,
                           onSelected: (value) => _onEventReminderOffsetChanged(
                             context,
                             provider,
@@ -283,6 +280,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                         context: context,
                         title: '日程提前提醒时间',
                         selectedValue: eventOffsetValue,
+                        isEventReminder: true,
                         onSelected: (value) => _onEventReminderOffsetChanged(
                           context,
                           provider,
@@ -387,22 +385,26 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
     required BuildContext context,
     required String title,
     required int selectedValue,
+    required bool isEventReminder,
     required Future<void> Function(int value) onSelected,
   }) async {
-    final selected = await showAppOptionPicker<int>(
-      context,
-      title: title,
-      selectedValue: selectedValue,
-      grid: true,
-      gridCrossAxisCount: 2,
-      options: [
-        for (final minutes in _reminderOffsetOptions)
-          AppPickerOption(
-            value: minutes,
-            label: '提前 ${_formatReminderAdvance(minutes)}',
-          ),
-      ],
-    );
+    final int? selected;
+    if (isEventReminder) {
+      selected = await showEventReminderAdvancePicker(
+        context,
+        title: title,
+        initialMinutes: selectedValue,
+      );
+    } else {
+      selected = await showCourseReminderAdvancePicker(
+        context,
+        title: title,
+        initialMinutes: selectedValue,
+      );
+    }
+    if (!context.mounted) {
+      return;
+    }
     if (selected != null) {
       await onSelected(selected);
     }
@@ -436,16 +438,27 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
   }
 
   String _formatReminderAdvance(int minutes) {
-    if (minutes == 1440) {
-      return '1 天';
+    final safeMinutes = minutes.clamp(0, _maxEventReminderAdvanceMinutes);
+    if (safeMinutes <= 0) {
+      return '0 分钟';
     }
-    if (minutes == 120) {
-      return '2 小时';
+    final days = safeMinutes ~/ (24 * 60);
+    final remainingAfterDays = safeMinutes % (24 * 60);
+    final hours = remainingAfterDays ~/ 60;
+    final mins = remainingAfterDays % 60;
+    final parts = <String>[
+      if (days > 0) '$days 天',
+      if (hours > 0) '$hours 小时',
+      if (mins > 0) '$mins 分钟',
+    ];
+    return parts.join(' ');
+  }
+
+  int _normalizeReminderAdvance(int minutes, int maxMinutes) {
+    if (minutes <= 0) {
+      return 10;
     }
-    if (minutes == 60) {
-      return '1 小时';
-    }
-    return '$minutes 分钟';
+    return minutes.clamp(1, maxMinutes).toInt();
   }
 
   String _courseReminderSubtitle(SettingsProvider provider) {

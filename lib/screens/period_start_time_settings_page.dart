@@ -8,6 +8,7 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_services.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/common/app_wheel_pickers.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 
 class PeriodStartTimeSettingsPage extends StatefulWidget {
@@ -152,15 +153,10 @@ class _SessionStartTimeSection extends StatelessWidget {
   }
 
   Future<void> _pickTime(BuildContext context, int index, TimeSlot slot) async {
-    final result = await showTimePicker(
-      context: context,
+    final result = await showAppClockTimePicker(
+      context,
       initialTime: _toTimeOfDay(slot.startTime),
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
+      title: '第 ${slot.periodNumber} 节开始时间',
     );
     if (result != null) {
       await onChanged(index, result);

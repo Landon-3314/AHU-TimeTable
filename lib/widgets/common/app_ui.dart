@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
 import '../../core/app_constants.dart';
+import 'app_wheel_pickers.dart';
 
 class AppSectionTitle extends StatelessWidget {
   const AppSectionTitle({super.key, required this.title, this.subtitle});
@@ -422,197 +423,17 @@ Future<T?> showAppOptionPicker<T>(
   bool grid = false,
   int gridCrossAxisCount = 3,
 }) {
-  final screenHeight = MediaQuery.sizeOf(context).height;
-  return showModalBottomSheet<T>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
-    builder: (sheetContext) {
-      return ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: screenHeight * 0.72),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xxl,
-            0,
-            AppSpacing.xxl,
-            AppSpacing.xxl,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(sheetContext).textTheme.titleLarge
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: MaterialLocalizations.of(
-                      sheetContext,
-                    ).closeButtonTooltip,
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Flexible(
-                child: grid
-                    ? _AppPickerGrid<T>(
-                        options: options,
-                        selectedValue: selectedValue,
-                        crossAxisCount: gridCrossAxisCount,
-                      )
-                    : _AppPickerList<T>(
-                        options: options,
-                        selectedValue: selectedValue,
-                      ),
-              ),
-            ],
-          ),
+  return showAppWheelValuePicker<T>(
+    context,
+    title: title,
+    selectedValue: selectedValue,
+    options: [
+      for (final option in options)
+        AppWheelPickerOption<T>(
+          value: option.value,
+          label: option.label,
+          subtitle: option.subtitle,
         ),
-      );
-    },
+    ],
   );
-}
-
-class _AppPickerList<T> extends StatelessWidget {
-  const _AppPickerList({required this.options, required this.selectedValue});
-
-  final List<AppPickerOption<T>> options;
-  final T selectedValue;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      shrinkWrap: true,
-      itemCount: options.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final option = options[index];
-        final selected = option.value == selectedValue;
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-          title: Text(
-            option.label,
-            style: TextStyle(
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-            ),
-          ),
-          subtitle: option.subtitle == null ? null : Text(option.subtitle!),
-          trailing: selected
-              ? Icon(
-                  Icons.check_circle,
-                  color: Theme.of(context).colorScheme.primary,
-                )
-              : null,
-          onTap: () => Navigator.of(context).pop(option.value),
-        );
-      },
-    );
-  }
-}
-
-class _AppPickerGrid<T> extends StatelessWidget {
-  const _AppPickerGrid({
-    required this.options,
-    required this.selectedValue,
-    required this.crossAxisCount,
-  });
-
-  final List<AppPickerOption<T>> options;
-  final T selectedValue;
-  final int crossAxisCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        mainAxisSpacing: AppSpacing.md,
-        crossAxisSpacing: AppSpacing.md,
-        childAspectRatio: 2.45,
-      ),
-      itemCount: options.length,
-      itemBuilder: (context, index) {
-        final option = options[index];
-        final selected = option.value == selectedValue;
-        final colorScheme = Theme.of(context).colorScheme;
-        final borderRadius = BorderRadius.circular(AppRadii.lg);
-        return AnimatedContainer(
-          duration: AppDurations.fast,
-          decoration: BoxDecoration(
-            borderRadius: borderRadius,
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: colorScheme.primary.withValues(alpha: 0.16),
-                      blurRadius: 16,
-                      offset: const Offset(0, 7),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Material(
-            color: AppColors.transparent,
-            borderRadius: borderRadius,
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => Navigator.of(context).pop(option.value),
-              customBorder: RoundedRectangleBorder(borderRadius: borderRadius),
-              child: AnimatedContainer(
-                duration: AppDurations.fast,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? colorScheme.primaryContainer
-                      : AppColors.surfaceRaised,
-                  borderRadius: borderRadius,
-                  border: Border.all(
-                    color: selected ? colorScheme.primary : AppColors.divider,
-                    width: selected ? 1.4 : 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        option.label,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: selected
-                              ? colorScheme.primary
-                              : AppColors.textPrimary,
-                          fontWeight: selected
-                              ? FontWeight.w800
-                              : FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    if (selected) ...[
-                      const SizedBox(width: AppSpacing.xxs),
-                      Icon(
-                        Icons.check_rounded,
-                        color: colorScheme.primary,
-                        size: 16,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
