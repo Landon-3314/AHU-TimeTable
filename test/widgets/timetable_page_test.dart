@@ -54,6 +54,26 @@ void main() {
           endPeriod: 4,
           colorValue: 0xFF7C9AF2,
         ),
+        Course(
+          name: 'Grouped Course',
+          location: 'Room C',
+          teacher: 'Dr. Wang',
+          weekday: 4,
+          weeks: const [5],
+          startPeriod: 5,
+          endPeriod: 6,
+          colorValue: 0xFF7C9AF2,
+        ),
+        Course(
+          name: 'Grouped Course',
+          location: 'Room D',
+          teacher: 'Dr. Zhao',
+          weekday: 5,
+          weeks: const [6],
+          startPeriod: 7,
+          endPeriod: 8,
+          colorValue: 0xFF7C9AF2,
+        ),
       ]);
 
       await tester.pumpWidget(_buildPage(bundle));
@@ -62,17 +82,45 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Grouped Course'), findsOneWidget);
-      expect(find.text('2个时段'), findsOneWidget);
+      expect(find.text('4个时段'), findsOneWidget);
       expect(find.byType(AppSurface), findsWidgets);
       expect(find.textContaining('Room A'), findsNothing);
 
       await tester.tap(find.text('Grouped Course'));
       await tester.pumpAndSettle();
 
-      expect(find.text('周一 第1-2节 第1-2周 Room A'), findsOneWidget);
-      expect(find.text('周三 第3-4节 第3-4周 Room B'), findsOneWidget);
+      expect(find.text('周一 第1-2节 第1-2周 Room A'), findsNothing);
+      expect(find.text('周三 第3-4节 第3-4周 Room B'), findsNothing);
+      expect(find.text('周四 第5-6节 第5周 Room C'), findsNothing);
+      expect(find.text('教师'), findsNWidgets(4));
+      expect(find.text('地点'), findsNWidgets(4));
+      expect(find.text('节次'), findsNWidgets(4));
+      expect(find.text('时间'), findsNWidgets(4));
+      expect(find.text('星期'), findsNWidgets(4));
+      expect(find.text('周次'), findsNWidgets(4));
+      expect(find.text('Dr. Chen'), findsNWidgets(2));
+      expect(find.text('Room A'), findsOneWidget);
+      expect(find.text('第 1-2 节'), findsOneWidget);
+      expect(find.text('周一'), findsAtLeastNWidgets(1));
+      expect(find.text('1, 2'), findsOneWidget);
+      expect(find.text('Room D'), findsOneWidget);
+      expect(find.text('查看更多'), findsNothing);
+      expect(find.text('收起'), findsNothing);
 
-      await tester.tap(find.text('周三 第3-4节 第3-4周 Room B'));
+      expect(
+        tester.getTopLeft(find.text('Room A')).dy,
+        lessThan(tester.getTopLeft(find.text('Room B')).dy),
+      );
+      expect(
+        tester.getTopLeft(find.text('Room B')).dy,
+        lessThan(tester.getTopLeft(find.text('Room C')).dy),
+      );
+      expect(
+        tester.getTopLeft(find.text('Room C')).dy,
+        lessThan(tester.getTopLeft(find.text('Room D')).dy),
+      );
+
+      await tester.tap(find.text('Room B'));
       await tester.pumpAndSettle();
 
       expect(find.byType(AddCoursePage), findsOneWidget);
@@ -83,7 +131,7 @@ void main() {
 
       expect(find.byType(AddCoursePage), findsNothing);
       expect(find.text('Grouped Course'), findsOneWidget);
-      expect(find.text('2个时段'), findsOneWidget);
+      expect(find.text('4个时段'), findsOneWidget);
     },
   );
 }

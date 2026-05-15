@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../core/app_colors.dart';
 import '../core/app_constants.dart';
 import '../core/app_routes.dart';
+import '../models/clock_time.dart';
 import '../models/course.dart';
 import '../models/timetable_view_data.dart';
 import '../providers/course_provider.dart';
@@ -281,8 +281,14 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   String _buildCoursePeriodText(Course course) {
-    return context
-        .read<SettingsProvider>()
+    return _buildCoursePeriodTextFor(context.read<SettingsProvider>(), course);
+  }
+
+  String _buildCoursePeriodTextFor(
+    SettingsProvider settingsProvider,
+    Course course,
+  ) {
+    return settingsProvider
         .t('period_range_format')
         .replaceAll('{start}', course.startPeriod.toString())
         .replaceAll('{end}', course.endPeriod.toString());
@@ -367,35 +373,17 @@ class _TimetablePageState extends State<TimetablePage> {
             constraints: BoxConstraints(
               maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
             ),
-            child: ListView.separated(
-              shrinkWrap: true,
-              padding: AppSpacing.floatingSheetPadding,
-              itemCount: group.courses.length + 1,
-              separatorBuilder: (_, index) =>
-                  const SizedBox(height: AppSpacing.sm),
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: Text(
-                      group.name,
-                      style: Theme.of(sheetContext).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  );
-                }
-
-                final course = group.courses[index - 1];
-                return _CourseRecordTile(
-                  title: _buildCourseOverviewRecordText(
-                    settingsProvider,
-                    course,
-                  ),
-                  teacher: course.teacher.trim(),
-                  accentColor: Color(course.colorValue),
-                  onTap: () => Navigator.of(sheetContext).pop(course),
-                );
-              },
+            child: _CourseGroupRecordList(
+              group: group,
+              settingsProvider: settingsProvider,
+              periodTextBuilder: (course) =>
+                  _buildCoursePeriodTextFor(settingsProvider, course),
+              timeTextBuilder: (course) =>
+                  _buildCourseTimeText(settingsProvider, course),
+              weekdayTextBuilder: (course) =>
+                  _buildWeekdayText(settingsProvider, course.weekday),
+              weeksTextBuilder: (course) =>
+                  _buildCourseWeeksDetailText(settingsProvider, course),
             ),
           ),
         );
@@ -403,19 +391,27 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  String _buildCourseOverviewRecordText(
+  String _buildCourseTimeText(
     SettingsProvider settingsProvider,
     Course course,
   ) {
-    final weekday = _buildWeekdayText(settingsProvider, course.weekday);
-    final periodText = settingsProvider.languageCode == 'en'
-        ? 'Period ${course.startPeriod}-${course.endPeriod}'
-        : '第${course.startPeriod}-${course.endPeriod}节';
-    final weeksText = _buildWeeksText(settingsProvider, course.weeks);
-    final location = course.location.trim().isEmpty
-        ? settingsProvider.t('not_set')
-        : course.location.trim();
-    return '$weekday $periodText $weeksText $location';
+    final timeSlots = settingsProvider.timeSlots;
+    final startSlot =
+        course.startPeriod > 0 && course.startPeriod <= timeSlots.length
+        ? timeSlots[course.startPeriod - 1]
+        : null;
+    final endSlot = course.endPeriod > 0 && course.endPeriod <= timeSlots.length
+        ? timeSlots[course.endPeriod - 1]
+        : null;
+    final periodText = _buildCoursePeriodTextFor(settingsProvider, course);
+    if (startSlot == null || endSlot == null) {
+      return periodText;
+    }
+
+    return '${settingsProvider.t('time')}: '
+        '${_formatClockTime(startSlot.startTime)} - '
+        '${_formatClockTime(endSlot.endTime)} '
+        '($periodText)';
   }
 
   String _buildWeekdayText(SettingsProvider settingsProvider, int weekday) {
@@ -426,38 +422,20 @@ class _TimetablePageState extends State<TimetablePage> {
     return settingsProvider.t(TimetableViewDataService.weekdayKeys[index]);
   }
 
-  String _buildWeeksText(SettingsProvider settingsProvider, List<int> weeks) {
-    if (weeks.isEmpty) {
+  String _buildCourseWeeksDetailText(
+    SettingsProvider settingsProvider,
+    Course course,
+  ) {
+    if (course.weeks.isEmpty) {
       return settingsProvider.t('not_set');
     }
-
-    final sortedWeeks = weeks.toSet().toList()..sort();
-    if (sortedWeeks.length == 1) {
-      return settingsProvider.languageCode == 'en'
-          ? 'Week ${sortedWeeks.first}'
-          : '第${sortedWeeks.first}周';
-    }
-
-    final isContinuous = _isContinuousRange(sortedWeeks);
-    if (isContinuous) {
-      return settingsProvider.languageCode == 'en'
-          ? 'Week ${sortedWeeks.first}-${sortedWeeks.last}'
-          : '第${sortedWeeks.first}-${sortedWeeks.last}周';
-    }
-
-    final joinedWeeks = sortedWeeks.join(',');
-    return settingsProvider.languageCode == 'en'
-        ? 'Weeks $joinedWeeks'
-        : '第$joinedWeeks周';
+    return course.weeks.join(', ');
   }
 
-  bool _isContinuousRange(List<int> sortedValues) {
-    for (var index = 1; index < sortedValues.length; index++) {
-      if (sortedValues[index] != sortedValues[index - 1] + 1) {
-        return false;
-      }
-    }
-    return true;
+  String _formatClockTime(ClockTime time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 
   Future<bool> _ensureSemesterInitializedBeforeImport(
@@ -615,19 +593,52 @@ class _TimetablePageState extends State<TimetablePage> {
 
 class _CourseRecordTile extends StatelessWidget {
   const _CourseRecordTile({
-    required this.title,
-    required this.teacher,
+    required this.course,
+    required this.settingsProvider,
+    required this.periodText,
+    required this.timeText,
+    required this.weekdayText,
+    required this.weeksText,
     required this.accentColor,
     required this.onTap,
   });
 
-  final String title;
-  final String teacher;
+  final Course course;
+  final SettingsProvider settingsProvider;
+  final String periodText;
+  final String timeText;
+  final String weekdayText;
+  final String weeksText;
   final Color accentColor;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final details = <_CourseRecordDetail>[
+      _CourseRecordDetail(
+        label: settingsProvider.t('teacher'),
+        value: course.teacher.trim().isEmpty
+            ? settingsProvider.t('not_set')
+            : course.teacher.trim(),
+      ),
+      _CourseRecordDetail(
+        label: settingsProvider.t('location'),
+        value: course.location.trim().isEmpty
+            ? settingsProvider.t('not_set')
+            : course.location.trim(),
+      ),
+      _CourseRecordDetail(
+        label: settingsProvider.t('periods'),
+        value: periodText,
+      ),
+      _CourseRecordDetail(label: settingsProvider.t('time'), value: timeText),
+      _CourseRecordDetail(
+        label: settingsProvider.t('weekday'),
+        value: weekdayText,
+      ),
+      _CourseRecordDetail(label: settingsProvider.t('weeks'), value: weeksText),
+    ];
+
     return AppSurface(
       padding: EdgeInsets.zero,
       borderColor: accentColor.withValues(alpha: 0.16),
@@ -637,6 +648,7 @@ class _CourseRecordTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 38,
@@ -656,26 +668,13 @@ class _CourseRecordTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w800,
+                    for (var index = 0; index < details.length; index++) ...[
+                      DetailRow(
+                        label: details[index].label,
+                        value: details[index].value,
                       ),
-                    ),
-                    if (teacher.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        teacher,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      if (index != details.length - 1)
+                        const SizedBox(height: AppSpacing.md),
                     ],
                   ],
                 ),
@@ -683,6 +682,148 @@ class _CourseRecordTile extends StatelessWidget {
               const SizedBox(width: AppSpacing.md),
               Icon(Icons.edit_outlined, color: accentColor, size: 21),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CourseRecordDetail {
+  const _CourseRecordDetail({required this.label, required this.value});
+
+  final String label;
+  final String value;
+}
+
+class _CourseGroupRecordList extends StatelessWidget {
+  const _CourseGroupRecordList({
+    required this.group,
+    required this.settingsProvider,
+    required this.periodTextBuilder,
+    required this.timeTextBuilder,
+    required this.weekdayTextBuilder,
+    required this.weeksTextBuilder,
+  });
+
+  final CourseGroup group;
+  final SettingsProvider settingsProvider;
+  final String Function(Course course) periodTextBuilder;
+  final String Function(Course course) timeTextBuilder;
+  final String Function(Course course) weekdayTextBuilder;
+  final String Function(Course course) weeksTextBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(context),
+          _buildShrinkWrappedRecordList(
+            context,
+            group.courses,
+            bottomPadding: AppSpacing.xxl,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xxl,
+        AppSpacing.sm,
+        AppSpacing.xxl,
+        AppSpacing.lg,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              group.name,
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          _RecordCountPill(
+            text: settingsProvider.languageCode == 'en'
+                ? '${group.recordCount} records'
+                : '${group.recordCount}条',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShrinkWrappedRecordList(
+    BuildContext context,
+    List<Course> courses, {
+    required double bottomPadding,
+  }) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.xxl,
+        0,
+        AppSpacing.xxl,
+        bottomPadding,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < courses.length; index++) ...[
+            _buildRecordTile(context, courses[index]),
+            if (index != courses.length - 1)
+              const SizedBox(height: AppSpacing.sm),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordTile(BuildContext context, Course course) {
+    return _CourseRecordTile(
+      course: course,
+      settingsProvider: settingsProvider,
+      periodText: periodTextBuilder(course),
+      timeText: timeTextBuilder(course),
+      weekdayText: weekdayTextBuilder(course),
+      weeksText: weeksTextBuilder(course),
+      accentColor: Color(course.colorValue),
+      onTap: () => Navigator.of(context).pop(course),
+    );
+  }
+}
+
+class _RecordCountPill extends StatelessWidget {
+  const _RecordCountPill({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 32),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+      ),
+      child: Center(
+        child: Text(
+          text,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: colorScheme.primary,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
