@@ -3,6 +3,7 @@
 import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationManager
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Rect
@@ -10,6 +11,7 @@ import android.graphics.RectF
 import android.net.Uri
 import android.os.Build
 import android.os.CancellationSignal
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -27,6 +29,7 @@ import android.widget.FrameLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.flutter.embedding.android.FlutterView
@@ -34,6 +37,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.RenderMode
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 import java.util.TimeZone
 import java.util.function.Consumer
 import kotlin.math.max
@@ -43,8 +47,11 @@ import kotlin.math.roundToInt
 private const val REQUEST_POST_NOTIFICATIONS = 5021
 private const val NATIVE_ALARM_CHANNEL = "com.timetable/native_alarm"
 private const val SCROLL_CAPTURE_CHANNEL = "app.scroll_capture"
+private const val APP_UPDATER_CHANNEL = "app.updater"
 private const val NOTIFICATION_DIAG_TAG = "NotificationDiag"
 private const val REMINDER_CHANNEL_ID = "timetable_reminders"
+private const val UPDATER_PREFS = "app_updater"
+private const val LAST_DOWNLOADED_APK_PATH = "lastDownloadedApkPath"
 
 class MainActivity : FlutterActivity() {
     private var notificationPermissionResult: MethodChannel.Result? = null
@@ -191,6 +198,23 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
 
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            APP_UPDATER_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getVersionCode" -> result.success(currentVersionCode())
+                "getSupportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
+                "getDownloadDirectory" -> result.success(downloadDirectory().absolutePath)
+                "installApk" -> installApk(call.argument<String>("path"), result)
+                "cleanupDownloadedApks" -> {
+                    cleanupDownloadedApk()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -405,6 +429,88 @@ class MainActivity : FlutterActivity() {
 
     private fun notificationLog(message: String) {
         Log.d(NOTIFICATION_DIAG_TAG, "${System.currentTimeMillis()} $message")
+    }
+
+    private fun currentVersionCode(): Long {
+        val packageInfo = packageManager.getPackageInfo(packageName, 0)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfo.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            packageInfo.versionCode.toLong()
+        }
+    }
+
+    private fun downloadDirectory(): File {
+        return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    }
+
+    private fun installApk(path: String?, result: MethodChannel.Result) {
+        if (path.isNullOrBlank()) {
+            result.success(false)
+            return
+        }
+        val apkFile = File(path)
+        if (!isAllowedDownloadedApk(apkFile) || !apkFile.exists()) {
+            result.success(false)
+            return
+        }
+
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) {
+            val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:$packageName")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                startActivity(settingsIntent)
+            } catch (_: ActivityNotFoundException) {}
+            result.success(false)
+            return
+        }
+
+        val uri = FileProvider.getUriForFile(
+            this,
+            "$packageName.fileprovider",
+            apkFile,
+        )
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        return try {
+            getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
+                .edit()
+                .putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
+                .apply()
+            startActivity(installIntent)
+            result.success(true)
+        } catch (_: ActivityNotFoundException) {
+            result.success(false)
+        }
+    }
+
+    private fun cleanupDownloadedApk() {
+        val prefs = getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
+        val path = prefs.getString(LAST_DOWNLOADED_APK_PATH, null) ?: return
+        val apkFile = File(path)
+        if (isAllowedDownloadedApk(apkFile) && apkFile.exists()) {
+            apkFile.delete()
+        }
+        prefs.edit().remove(LAST_DOWNLOADED_APK_PATH).apply()
+    }
+
+    private fun isAllowedDownloadedApk(file: File): Boolean {
+        val downloads = downloadDirectory().canonicalFile
+        val candidate = file.canonicalFile
+        val name = candidate.name
+        return candidate.parentFile == downloads &&
+            name.startsWith("timetable-") &&
+            name.endsWith(".apk")
     }
 
     private fun installScrollCaptureCallbackIfNeeded() {

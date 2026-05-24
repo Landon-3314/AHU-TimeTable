@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - update.json
 
 permissions:
   contents: write
@@ -104,6 +106,47 @@ jobs:
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "release/timetable-${VERSION}-arm64-v8a.apk"
           cp build/app/outputs/flutter-apk/app-x86_64-release.apk "release/timetable-${VERSION}-x86_64.apk"
 
+      - name: Prepare update manifest
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import urllib.parse
+
+          version = os.environ["VERSION"]
+          repository = os.environ["GITHUB_REPOSITORY"]
+          tag = f"v{version}"
+          release_base = (
+              f"https://github.com/{repository}/releases/download/"
+              f"{urllib.parse.quote(tag, safe='')}"
+          )
+          assets = []
+          for abi in ["armeabi-v7a", "arm64-v8a", "x86_64"]:
+              name = f"timetable-{version}-{abi}.apk"
+              path = os.path.join("release", name)
+              with open(path, "rb") as handle:
+                  digest = hashlib.sha256(handle.read()).hexdigest()
+              assets.append({
+                  "abi": abi,
+                  "url": f"{release_base}/{urllib.parse.quote(name, safe='')}",
+                  "sha256": digest,
+                  "size": os.path.getsize(path),
+              })
+          manifest = {
+              "versionName": version.split("+", 1)[0],
+              "versionCode": int(version.split("+", 1)[1]),
+              "releaseNotes": f"安课 {version} 更新。",
+              "assets": assets,
+          }
+          with open("update.json", "w", encoding="utf-8") as handle:
+              json.dump(manifest, handle, ensure_ascii=False, indent=2)
+              handle.write("\n")
+          PY
+
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -112,6 +155,7 @@ jobs:
             release/timetable-${{ steps.version.outputs.version }}-armeabi-v7a.apk
             release/timetable-${{ steps.version.outputs.version }}-arm64-v8a.apk
             release/timetable-${{ steps.version.outputs.version }}-x86_64.apk
+            update.json
           if-no-files-found: error
 
       - name: Create or update GitHub Release
@@ -127,12 +171,25 @@ jobs:
               --title "$RELEASE_NAME" \
               --latest
             gh release upload "$TAG" \
-              release/*.apk \
+              release/*.apk update.json \
               --clobber
           else
             gh release create "$TAG" \
-              release/*.apk \
+              release/*.apk update.json \
               --target "${GITHUB_SHA}" \
               --title "$RELEASE_NAME" \
               --generate-notes
           fi
+
+      - name: Commit update manifest
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore: update app update manifest [skip ci]"
+          git push
