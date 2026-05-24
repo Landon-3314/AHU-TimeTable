@@ -6,7 +6,11 @@ import 'package:provider/provider.dart';
 import '../core/app_routes.dart';
 import '../providers/settings_provider.dart';
 import '../providers/timetable_view_provider.dart';
+import '../services/app_update_platform.dart';
+import '../services/update_check_service.dart';
+import '../services/update_download_service.dart';
 import '../widgets/semester_start_date_dialog.dart';
+import '../widgets/update_prompt.dart';
 import 'settings_page.dart';
 import 'timetable_page.dart';
 
@@ -25,6 +29,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
   int _devTapCount = 0;
   bool _hasHandledInitialSemesterPrompt = false;
+  bool _hasCheckedForAppUpdate = false;
   Timer? _devTapTimer;
 
   static const List<Widget> _pages = [TimetablePage(), SettingsPage()];
@@ -36,7 +41,7 @@ class _MainScaffoldState extends State<MainScaffold> {
       if (!mounted) {
         return;
       }
-      _showInitialSemesterStartDatePrompt();
+      unawaited(_runStartupPrompts());
     });
   }
 
@@ -76,6 +81,14 @@ class _MainScaffoldState extends State<MainScaffold> {
     );
   }
 
+  Future<void> _runStartupPrompts() async {
+    await _showInitialSemesterStartDatePrompt();
+    if (!mounted) {
+      return;
+    }
+    await _checkForAppUpdate();
+  }
+
   Future<void> _showInitialSemesterStartDatePrompt() async {
     if (_hasHandledInitialSemesterPrompt) {
       return;
@@ -106,6 +119,76 @@ class _MainScaffoldState extends State<MainScaffold> {
       week: provider.currentRealWeek,
       weekday: provider.currentRealWeekday,
     );
+  }
+
+  Future<void> _checkForAppUpdate() async {
+    if (_hasCheckedForAppUpdate) {
+      return;
+    }
+    _hasCheckedForAppUpdate = true;
+
+    const platform = AppUpdatePlatform();
+    if (!platform.isSupported) {
+      return;
+    }
+
+    await platform.cleanupDownloadedApks();
+    final service = UpdateCheckService.githubManifest(platform: platform);
+    final update = await service.checkForUpdate();
+    if (!mounted || update == null) {
+      return;
+    }
+
+    final action = await showUpdatePrompt(context: context, update: update);
+    if (!mounted || action == null || action == UpdatePromptAction.later) {
+      return;
+    }
+
+    if (action == UpdatePromptAction.ignore) {
+      await service.ignoreUpdate(update);
+      return;
+    }
+
+    await _downloadAndInstallUpdate(update);
+  }
+
+  Future<void> _downloadAndInstallUpdate(AvailableUpdate update) async {
+    final result = await showDialog<UpdateDownloadResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) {
+        return UpdateDownloadTaskDialog(
+          update: update,
+          downloadService: const UpdateDownloadService(),
+        );
+      },
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+
+    if (result.error != null || result.file == null) {
+      _showUpdateSnackBar('更新下载失败，请稍后重试');
+      return;
+    }
+
+    final installStarted = await const UpdateDownloadService().install(
+      result.file!,
+    );
+    if (!mounted) {
+      return;
+    }
+    _showUpdateSnackBar(
+      installStarted
+          ? '已打开系统安装器，请确认安装'
+          : '无法打开安装器，请允许安装未知应用后重试',
+    );
+  }
+
+  void _showUpdateSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _handleDeveloperTap(int index) {
