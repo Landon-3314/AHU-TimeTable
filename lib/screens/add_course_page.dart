@@ -10,6 +10,7 @@ import '../providers/settings_provider.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/app_wheel_pickers.dart';
 import '../widgets/common/capsule_multi_select.dart';
+import '../widgets/long_screenshot_scroll_capture.dart';
 
 class AddCoursePage extends StatefulWidget {
   const AddCoursePage({super.key, this.existingCourse});
@@ -83,6 +84,7 @@ class _CourseForm extends StatefulWidget {
 class _CourseFormState extends State<_CourseForm>
     with AutomaticKeepAliveClientMixin<_CourseForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final ScrollController _scrollController = ScrollController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _teacherController = TextEditingController();
@@ -120,6 +122,7 @@ class _CourseFormState extends State<_CourseForm>
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _nameController.dispose();
     _locationController.dispose();
     _teacherController.dispose();
@@ -147,189 +150,197 @@ class _CourseFormState extends State<_CourseForm>
       body: SafeArea(
         child: Form(
           key: _formKey,
-          child: ListView(
-            physics: widget.weekDragSelectionActive
-                ? const NeverScrollableScrollPhysics()
-                : null,
-            padding: AppSpacing.pagePadding,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: provider.t('course_name'),
+          child: LongScreenshotScrollCapture(
+            controller: _scrollController,
+            child: ListView(
+              controller: _scrollController,
+              physics: widget.weekDragSelectionActive
+                  ? const NeverScrollableScrollPhysics()
+                  : null,
+              padding: AppSpacing.pagePadding,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: provider.t('course_name'),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return provider.t('please_enter_course_name');
+                    }
+                    return null;
+                  },
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return provider.t('please_enter_course_name');
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              TextFormField(
-                controller: _locationController,
-                textInputAction: TextInputAction.done,
-                decoration: InputDecoration(labelText: provider.t('location')),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return provider.t('please_enter_location');
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              TextFormField(
-                controller: _teacherController,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(labelText: provider.t('teacher')),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Text(
-                provider.t('weekday_label'),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              CapsuleMultiSelect<int>(
-                options: [
-                  for (int day = 1; day <= 7; day++)
-                    CapsuleMultiSelectOption<int>(
-                      value: day,
-                      label: _weekdayLabel(provider, day),
-                    ),
-                ],
-                selectedValues: _selectedWeekdays,
-                singleLine: true,
-                onChanged: _handleWeekdaysChanged,
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              Text(
-                provider.t('teaching_weeks'),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              CapsuleMultiSelect<int>(
-                options: [
-                  for (int week = 1; week <= provider.totalWeeks; week++)
-                    CapsuleMultiSelectOption<int>(
-                      value: week,
-                      label: _weekLabel(provider, week),
-                    ),
-                ],
-                selectedValues: _selectedWeeks,
-                enableDragSelect: true,
-                onDragSelectionActiveChanged:
-                    widget.onWeekDragSelectionActiveChanged,
-                onChanged: (selectedWeeks) {
-                  setState(() {
-                    _selectedWeeks
-                      ..clear()
-                      ..addAll(selectedWeeks);
-                  });
-                },
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              Row(
-                children: [
-                  Expanded(
-                    child: AppPickerField(
-                      label: provider.t('start_period'),
-                      valueLabel: _periodLabel(provider, currentStartValue),
-                      onTap: () => _pickPeriod(
-                        provider: provider,
-                        title: provider.t('start_period'),
-                        selectedValue: currentStartValue,
-                        maxPeriod: effectivePeriodCount,
-                        onSelected: (value) {
-                          _selectedStartPeriod = value;
-                          if (_selectedEndPeriod < value) {
-                            _selectedEndPeriod = value;
-                          }
-                        },
-                      ),
-                    ),
+                const SizedBox(height: AppSpacing.xl),
+                TextFormField(
+                  controller: _locationController,
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                    labelText: provider.t('location'),
                   ),
-                  const SizedBox(width: AppSpacing.lg),
-                  Expanded(
-                    child: AppPickerField(
-                      label: provider.t('end_period'),
-                      valueLabel: _periodLabel(provider, currentEndValue),
-                      onTap: () => _pickPeriod(
-                        provider: provider,
-                        title: provider.t('end_period'),
-                        selectedValue: currentEndValue,
-                        maxPeriod: effectivePeriodCount,
-                        onSelected: (value) {
-                          _selectedEndPeriod = value;
-                        },
-                      ),
-                    ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return provider.t('please_enter_location');
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                TextFormField(
+                  controller: _teacherController,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(labelText: provider.t('teacher')),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Text(
+                  provider.t('weekday_label'),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              Text(
-                provider.t('card_color'),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Wrap(
-                spacing: AppSpacing.lg,
-                runSpacing: AppSpacing.lg,
-                children: _presetColors.map((colorValue) {
-                  final isSelected = colorValue == _selectedColorValue;
-                  return Semantics(
-                    button: true,
-                    selected: isSelected,
-                    label: provider.t('card_color'),
-                    child: InkResponse(
-                      onTap: () {
-                        setState(() {
-                          _selectedColorValue = colorValue;
-                        });
-                      },
-                      radius: 28,
-                      child: AnimatedContainer(
-                        duration: AppDurations.fast,
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Color(colorValue),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.textPrimary
-                                : AppColors.surface,
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(colorValue).withValues(alpha: 0.24),
-                              blurRadius: 12,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                CapsuleMultiSelect<int>(
+                  options: [
+                    for (int day = 1; day <= 7; day++)
+                      CapsuleMultiSelectOption<int>(
+                        value: day,
+                        label: _weekdayLabel(provider, day),
+                      ),
+                  ],
+                  selectedValues: _selectedWeekdays,
+                  singleLine: true,
+                  onChanged: _handleWeekdaysChanged,
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                Text(
+                  provider.t('teaching_weeks'),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                CapsuleMultiSelect<int>(
+                  options: [
+                    for (int week = 1; week <= provider.totalWeeks; week++)
+                      CapsuleMultiSelectOption<int>(
+                        value: week,
+                        label: _weekLabel(provider, week),
+                      ),
+                  ],
+                  selectedValues: _selectedWeeks,
+                  enableDragSelect: true,
+                  onDragSelectionActiveChanged:
+                      widget.onWeekDragSelectionActiveChanged,
+                  onChanged: (selectedWeeks) {
+                    setState(() {
+                      _selectedWeeks
+                        ..clear()
+                        ..addAll(selectedWeeks);
+                    });
+                  },
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppPickerField(
+                        label: provider.t('start_period'),
+                        valueLabel: _periodLabel(provider, currentStartValue),
+                        onTap: () => _pickPeriod(
+                          provider: provider,
+                          title: provider.t('start_period'),
+                          selectedValue: currentStartValue,
+                          maxPeriod: effectivePeriodCount,
+                          onSelected: (value) {
+                            _selectedStartPeriod = value;
+                            if (_selectedEndPeriod < value) {
+                              _selectedEndPeriod = value;
+                            }
+                          },
                         ),
-                        child: isSelected
-                            ? const Icon(
-                                Icons.check,
-                                color: AppColors.onPrimary,
-                                size: 20,
-                              )
-                            : null,
                       ),
                     ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: AppSpacing.formBottomSafeArea),
-            ],
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(
+                      child: AppPickerField(
+                        label: provider.t('end_period'),
+                        valueLabel: _periodLabel(provider, currentEndValue),
+                        onTap: () => _pickPeriod(
+                          provider: provider,
+                          title: provider.t('end_period'),
+                          selectedValue: currentEndValue,
+                          maxPeriod: effectivePeriodCount,
+                          onSelected: (value) {
+                            _selectedEndPeriod = value;
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                Text(
+                  provider.t('card_color'),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Wrap(
+                  spacing: AppSpacing.lg,
+                  runSpacing: AppSpacing.lg,
+                  children: _presetColors.map((colorValue) {
+                    final isSelected = colorValue == _selectedColorValue;
+                    return Semantics(
+                      button: true,
+                      selected: isSelected,
+                      label: provider.t('card_color'),
+                      child: InkResponse(
+                        onTap: () {
+                          setState(() {
+                            _selectedColorValue = colorValue;
+                          });
+                        },
+                        radius: 28,
+                        child: AnimatedContainer(
+                          duration: AppDurations.fast,
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Color(colorValue),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.textPrimary
+                                  : AppColors.surface,
+                              width: 3,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(
+                                  colorValue,
+                                ).withValues(alpha: 0.24),
+                                blurRadius: 12,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: isSelected
+                              ? const Icon(
+                                  Icons.check,
+                                  color: AppColors.onPrimary,
+                                  size: 20,
+                                )
+                              : null,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: AppSpacing.formBottomSafeArea),
+              ],
+            ),
           ),
         ),
       ),
@@ -532,6 +543,7 @@ class _EventForm extends StatefulWidget {
 
 class _EventFormState extends State<_EventForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final ScrollController _scrollController = ScrollController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
@@ -542,6 +554,7 @@ class _EventFormState extends State<_EventForm> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _nameController.dispose();
     _locationController.dispose();
     _noteController.dispose();
@@ -562,84 +575,88 @@ class _EventFormState extends State<_EventForm> {
       body: SafeArea(
         child: Form(
           key: _formKey,
-          child: ListView(
-            padding: AppSpacing.pagePadding,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: sharedDecoration.copyWith(
-                  labelText: provider.t('event_name'),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return provider.t('please_enter_event_name');
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              TextFormField(
-                controller: _locationController,
-                decoration: sharedDecoration.copyWith(
-                  labelText: provider.t('location'),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              TextFormField(
-                controller: _noteController,
-                minLines: 1,
-                maxLines: 2,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                decoration: sharedDecoration.copyWith(
-                  labelText: provider.t('note'),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              InkWell(
-                onTap: _pickDate,
-                borderRadius: BorderRadius.circular(AppRadii.sm),
-                child: InputDecorator(
+          child: LongScreenshotScrollCapture(
+            controller: _scrollController,
+            child: ListView(
+              controller: _scrollController,
+              padding: AppSpacing.pagePadding,
+              children: [
+                TextFormField(
+                  controller: _nameController,
                   decoration: sharedDecoration.copyWith(
-                    labelText: provider.t('date'),
+                    labelText: provider.t('event_name'),
                   ),
-                  child: Text(
-                    _selectedDateTime == null
-                        ? provider.t('select_date')
-                        : _formatDate(_selectedDateTime!),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return provider.t('please_enter_event_name');
+                    }
+                    return null;
+                  },
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              InkWell(
-                onTap: _pickTime,
-                borderRadius: BorderRadius.circular(AppRadii.sm),
-                child: InputDecorator(
+                const SizedBox(height: AppSpacing.xl),
+                TextFormField(
+                  controller: _locationController,
                   decoration: sharedDecoration.copyWith(
-                    labelText: provider.t('time'),
-                  ),
-                  child: Text(
-                    _selectedDateTime == null
-                        ? provider.t('select_time')
-                        : _formatTime(_selectedDateTime!),
-                    style: Theme.of(context).textTheme.titleMedium,
+                    labelText: provider.t('location'),
                   ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(provider.t('enable_alarm_reminder')),
-                value: _enableAlarm,
-                onChanged: (value) {
-                  setState(() {
-                    _enableAlarm = value;
-                  });
-                },
-              ),
-              const SizedBox(height: AppSpacing.formBottomSafeArea),
-            ],
+                const SizedBox(height: AppSpacing.xl),
+                TextFormField(
+                  controller: _noteController,
+                  minLines: 1,
+                  maxLines: 2,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  decoration: sharedDecoration.copyWith(
+                    labelText: provider.t('note'),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                InkWell(
+                  onTap: _pickDate,
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  child: InputDecorator(
+                    decoration: sharedDecoration.copyWith(
+                      labelText: provider.t('date'),
+                    ),
+                    child: Text(
+                      _selectedDateTime == null
+                          ? provider.t('select_date')
+                          : _formatDate(_selectedDateTime!),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                InkWell(
+                  onTap: _pickTime,
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  child: InputDecorator(
+                    decoration: sharedDecoration.copyWith(
+                      labelText: provider.t('time'),
+                    ),
+                    child: Text(
+                      _selectedDateTime == null
+                          ? provider.t('select_time')
+                          : _formatTime(_selectedDateTime!),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(provider.t('enable_alarm_reminder')),
+                  value: _enableAlarm,
+                  onChanged: (value) {
+                    setState(() {
+                      _enableAlarm = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: AppSpacing.formBottomSafeArea),
+              ],
+            ),
           ),
         ),
       ),

@@ -5,9 +5,23 @@ import '../core/app_colors.dart';
 import '../core/app_constants.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/long_screenshot_scroll_capture.dart';
 
-class ThemeSettingsPage extends StatelessWidget {
+class ThemeSettingsPage extends StatefulWidget {
   const ThemeSettingsPage({super.key});
+
+  @override
+  State<ThemeSettingsPage> createState() => _ThemeSettingsPageState();
+}
+
+class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,88 +34,92 @@ class ThemeSettingsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(provider.t('theme_color'))),
       body: SafeArea(
-        child: ListView(
-          padding: AppSpacing.pagePadding,
-          children: [
-            AppSectionTitle(
-              title: provider.t('theme_color'),
-              subtitle: provider.t('theme_color_subtitle'),
-            ),
-            AppSurface(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Column(
-                  children: [
-                    for (
-                      int index = 0;
-                      index < AppThemePalette.values.length;
-                      index++
-                    ) ...[
-                      _ThemePaletteTile(
-                        palette: AppThemePalette.values[index],
-                        selected:
-                            provider.themePaletteId ==
+        child: LongScreenshotScrollCapture(
+          controller: _scrollController,
+          child: ListView(
+            controller: _scrollController,
+            padding: AppSpacing.pagePadding,
+            children: [
+              AppSectionTitle(
+                title: provider.t('theme_color'),
+                subtitle: provider.t('theme_color_subtitle'),
+              ),
+              AppSurface(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    children: [
+                      for (
+                        int index = 0;
+                        index < AppThemePalette.values.length;
+                        index++
+                      ) ...[
+                        _ThemePaletteTile(
+                          palette: AppThemePalette.values[index],
+                          selected:
+                              provider.themePaletteId ==
+                              AppThemePalette.values[index].id,
+                          label: provider.t(
+                            AppThemePalette.values[index].nameKey,
+                          ),
+                          onTap: () => provider.changeThemePalette(
                             AppThemePalette.values[index].id,
-                        label: provider.t(
-                          AppThemePalette.values[index].nameKey,
+                          ),
                         ),
-                        onTap: () => provider.changeThemePalette(
-                          AppThemePalette.values[index].id,
-                        ),
-                      ),
-                      if (index != AppThemePalette.values.length - 1)
-                        const Divider(height: 1),
+                        if (index != AppThemePalette.values.length - 1)
+                          const Divider(height: 1),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            AppSectionTitle(
-              title: provider.t('theme_custom'),
-              subtitle: provider.t('theme_custom_subtitle'),
-            ),
-            AppSurface(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _ThemePaletteTile(
-                      palette: customPalette,
-                      selected:
-                          provider.themePaletteId == AppThemePalette.customId,
-                      label: provider.t('theme_custom'),
-                      onTap: () => provider.changeCustomThemeColors(
-                        primaryValue: provider.customThemePrimaryValue,
-                        accentValue: provider.customThemeAccentValue,
+              const SizedBox(height: AppSpacing.xl),
+              AppSectionTitle(
+                title: provider.t('theme_custom'),
+                subtitle: provider.t('theme_custom_subtitle'),
+              ),
+              AppSurface(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ThemePaletteTile(
+                        palette: customPalette,
+                        selected:
+                            provider.themePaletteId == AppThemePalette.customId,
+                        label: provider.t('theme_custom'),
+                        onTap: () => provider.changeCustomThemeColors(
+                          primaryValue: provider.customThemePrimaryValue,
+                          accentValue: provider.customThemeAccentValue,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    _ColorPickerTitle(provider.t('primary_color')),
-                    const SizedBox(height: AppSpacing.md),
-                    _ThemeColorGrid(
-                      selectedValue: provider.customThemePrimaryValue,
-                      onSelected: (value) => provider.changeCustomThemeColors(
-                        primaryValue: value,
-                        accentValue: provider.customThemeAccentValue,
+                      const SizedBox(height: AppSpacing.xl),
+                      _ColorPickerTitle(provider.t('primary_color')),
+                      const SizedBox(height: AppSpacing.md),
+                      _ThemeColorGrid(
+                        selectedValue: provider.customThemePrimaryValue,
+                        onSelected: (value) => provider.changeCustomThemeColors(
+                          primaryValue: value,
+                          accentValue: provider.customThemeAccentValue,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    _ColorPickerTitle(provider.t('accent_color')),
-                    const SizedBox(height: AppSpacing.md),
-                    _ThemeColorGrid(
-                      selectedValue: provider.customThemeAccentValue,
-                      onSelected: (value) => provider.changeCustomThemeColors(
-                        primaryValue: provider.customThemePrimaryValue,
-                        accentValue: value,
+                      const SizedBox(height: AppSpacing.xl),
+                      _ColorPickerTitle(provider.t('accent_color')),
+                      const SizedBox(height: AppSpacing.md),
+                      _ThemeColorGrid(
+                        selectedValue: provider.customThemeAccentValue,
+                        onSelected: (value) => provider.changeCustomThemeColors(
+                          primaryValue: provider.customThemePrimaryValue,
+                          accentValue: value,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

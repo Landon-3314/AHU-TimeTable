@@ -122,34 +122,39 @@ class _MainScaffoldState extends State<MainScaffold> {
   }
 
   Future<void> _checkForAppUpdate() async {
-    if (_hasCheckedForAppUpdate) {
+    try {
+      if (_hasCheckedForAppUpdate) {
+        return;
+      }
+      _hasCheckedForAppUpdate = true;
+
+      const platform = AppUpdatePlatform();
+      if (!platform.isSupported) {
+        return;
+      }
+
+      await platform.cleanupDownloadedApks();
+      final service = UpdateCheckService.githubManifest(platform: platform);
+      final update = await service.checkForUpdate();
+      if (!mounted || update == null) {
+        return;
+      }
+
+      final action = await showUpdatePrompt(context: context, update: update);
+      if (!mounted || action == null || action == UpdatePromptAction.later) {
+        return;
+      }
+
+      if (action == UpdatePromptAction.ignore) {
+        await service.ignoreUpdate(update);
+        return;
+      }
+
+      await _downloadAndInstallUpdate(update);
+    } catch (error) {
+      debugPrint('[AppUpdate] startup check skipped: $error');
       return;
     }
-    _hasCheckedForAppUpdate = true;
-
-    const platform = AppUpdatePlatform();
-    if (!platform.isSupported) {
-      return;
-    }
-
-    await platform.cleanupDownloadedApks();
-    final service = UpdateCheckService.githubManifest(platform: platform);
-    final update = await service.checkForUpdate();
-    if (!mounted || update == null) {
-      return;
-    }
-
-    final action = await showUpdatePrompt(context: context, update: update);
-    if (!mounted || action == null || action == UpdatePromptAction.later) {
-      return;
-    }
-
-    if (action == UpdatePromptAction.ignore) {
-      await service.ignoreUpdate(update);
-      return;
-    }
-
-    await _downloadAndInstallUpdate(update);
   }
 
   Future<void> _downloadAndInstallUpdate(AvailableUpdate update) async {

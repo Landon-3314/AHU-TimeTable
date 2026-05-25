@@ -8,6 +8,7 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/timetable_view_data_service.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/long_screenshot_scroll_capture.dart';
 
 class RescheduleCoursePage extends StatefulWidget {
   const RescheduleCoursePage({
@@ -24,12 +25,20 @@ class RescheduleCoursePage extends StatefulWidget {
 }
 
 class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
+  final ScrollController _scrollController = ScrollController();
+
   int? _targetWeek;
   int? _targetWeekday;
   int? _targetStartPeriod;
   bool _isSaving = false;
 
   int get _periodSpan => widget.course.endPeriod - widget.course.startPeriod;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -58,102 +67,106 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
     return Scaffold(
       appBar: AppBar(title: Text(settingsProvider.t('reschedule_course'))),
       body: SafeArea(
-        child: ListView(
-          padding: AppSpacing.pagePadding,
-          children: [
-            AppSurface(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.course.name,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
+        child: LongScreenshotScrollCapture(
+          controller: _scrollController,
+          child: ListView(
+            controller: _scrollController,
+            padding: AppSpacing.pagePadding,
+            children: [
+              AppSurface(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.course.name,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _SummaryRow(
-                    label: settingsProvider.t('original_schedule'),
-                    value:
-                        '${_weekLabel(settingsProvider, widget.sourceWeek)} / '
-                        '${_weekdayLabel(settingsProvider, widget.course.weekday)} / '
-                        '${_periodRangeLabel(settingsProvider, widget.course.startPeriod, widget.course.endPeriod)}',
-                  ),
-                  if (widget.course.location.trim().isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: AppSpacing.lg),
                     _SummaryRow(
-                      label: settingsProvider.t('location'),
-                      value: widget.course.location,
+                      label: settingsProvider.t('original_schedule'),
+                      value:
+                          '${_weekLabel(settingsProvider, widget.sourceWeek)} / '
+                          '${_weekdayLabel(settingsProvider, widget.course.weekday)} / '
+                          '${_periodRangeLabel(settingsProvider, widget.course.startPeriod, widget.course.endPeriod)}',
                     ),
+                    if (widget.course.location.trim().isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      _SummaryRow(
+                        label: settingsProvider.t('location'),
+                        value: widget.course.location,
+                      ),
+                    ],
+                    if (widget.course.teacher.trim().isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      _SummaryRow(
+                        label: settingsProvider.t('teacher'),
+                        value: widget.course.teacher,
+                      ),
+                    ],
                   ],
-                  if (widget.course.teacher.trim().isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _SummaryRow(
-                      label: settingsProvider.t('teacher'),
-                      value: widget.course.teacher,
-                    ),
-                  ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-            AppPickerField(
-              label: settingsProvider.t('target_week'),
-              valueLabel: _weekLabel(settingsProvider, effectiveTargetWeek),
-              onTap: () => _pickTargetWeek(
-                settingsProvider,
-                selectedValue: effectiveTargetWeek,
+              const SizedBox(height: AppSpacing.xxl),
+              AppPickerField(
+                label: settingsProvider.t('target_week'),
+                valueLabel: _weekLabel(settingsProvider, effectiveTargetWeek),
+                onTap: () => _pickTargetWeek(
+                  settingsProvider,
+                  selectedValue: effectiveTargetWeek,
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            AppPickerField(
-              label: settingsProvider.t('target_weekday'),
-              valueLabel: _weekdayLabel(
-                settingsProvider,
-                effectiveTargetWeekday,
+              const SizedBox(height: AppSpacing.xl),
+              AppPickerField(
+                label: settingsProvider.t('target_weekday'),
+                valueLabel: _weekdayLabel(
+                  settingsProvider,
+                  effectiveTargetWeekday,
+                ),
+                onTap: () => _pickTargetWeekday(
+                  settingsProvider,
+                  selectedValue: effectiveTargetWeekday,
+                ),
               ),
-              onTap: () => _pickTargetWeekday(
-                settingsProvider,
-                selectedValue: effectiveTargetWeekday,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            AppPickerField(
-              label: settingsProvider.t('target_start_period'),
-              enabled: canFitPeriodRange,
-              valueLabel: canFitPeriodRange
-                  ? _periodLabel(settingsProvider, effectiveTargetStartPeriod)
-                  : settingsProvider.t('invalid_reschedule_period_range'),
-              onTap: () => _pickTargetStartPeriod(
-                settingsProvider,
-                selectedValue: effectiveTargetStartPeriod,
-                maxStartPeriod: maxStartPeriod,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            InputDecorator(
-              decoration: InputDecoration(
-                labelText: settingsProvider.t('target_end_period'),
-              ),
-              child: Text(
-                canFitPeriodRange
-                    ? _periodLabel(settingsProvider, effectiveTargetEndPeriod)
+              const SizedBox(height: AppSpacing.xl),
+              AppPickerField(
+                label: settingsProvider.t('target_start_period'),
+                enabled: canFitPeriodRange,
+                valueLabel: canFitPeriodRange
+                    ? _periodLabel(settingsProvider, effectiveTargetStartPeriod)
                     : settingsProvider.t('invalid_reschedule_period_range'),
-                style: Theme.of(context).textTheme.titleMedium,
+                onTap: () => _pickTargetStartPeriod(
+                  settingsProvider,
+                  selectedValue: effectiveTargetStartPeriod,
+                  maxStartPeriod: maxStartPeriod,
+                ),
               ),
-            ),
-            if (!canFitPeriodRange) ...[
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                settingsProvider.t('invalid_reschedule_period_range'),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppColors.danger),
+              const SizedBox(height: AppSpacing.xl),
+              InputDecorator(
+                decoration: InputDecoration(
+                  labelText: settingsProvider.t('target_end_period'),
+                ),
+                child: Text(
+                  canFitPeriodRange
+                      ? _periodLabel(settingsProvider, effectiveTargetEndPeriod)
+                      : settingsProvider.t('invalid_reschedule_period_range'),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
+              if (!canFitPeriodRange) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  settingsProvider.t('invalid_reschedule_period_range'),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppColors.danger),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.formBottomSafeArea),
             ],
-            const SizedBox(height: AppSpacing.formBottomSafeArea),
-          ],
+          ),
         ),
       ),
       bottomNavigationBar: SafeArea(

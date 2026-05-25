@@ -186,7 +186,12 @@ class _RegisteredScrollable {
       return null;
     }
 
-    final renderObject = boundaryKey.currentContext?.findRenderObject();
+    final context = boundaryKey.currentContext;
+    if (context == null) {
+      return null;
+    }
+
+    final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox ||
         !renderObject.attached ||
         !renderObject.hasSize) {
@@ -209,6 +214,7 @@ class _RegisteredScrollable {
       'top': rect.top,
       'width': rect.width,
       'height': rect.height,
+      'devicePixelRatio': View.of(context).devicePixelRatio,
       'pixels': position.pixels,
       'maxScrollExtent': position.maxScrollExtent,
       'viewportDimension': position.viewportDimension,

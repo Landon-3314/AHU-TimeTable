@@ -47,17 +47,20 @@ import kotlin.math.roundToInt
 private const val REQUEST_POST_NOTIFICATIONS = 5021
 private const val NATIVE_ALARM_CHANNEL = "com.timetable/native_alarm"
 private const val SCROLL_CAPTURE_CHANNEL = "app.scroll_capture"
+private const val SCROLL_CAPTURE_DIAG_TAG = "ScrollCaptureDiag"
 private const val APP_UPDATER_CHANNEL = "app.updater"
 private const val NOTIFICATION_DIAG_TAG = "NotificationDiag"
 private const val REMINDER_CHANNEL_ID = "timetable_reminders"
 private const val UPDATER_PREFS = "app_updater"
 private const val LAST_DOWNLOADED_APK_PATH = "lastDownloadedApkPath"
+private const val ENABLE_SCROLL_CAPTURE_OVERLAY_DIAGNOSTICS = false
 
 class MainActivity : FlutterActivity() {
     private var notificationPermissionResult: MethodChannel.Result? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var scrollCaptureChannel: MethodChannel? = null
     private var didInstallScrollCaptureCallback = false
+    private var activeScrollCaptureCallback: ScrollCaptureCallback? = null
     private var overlayRecyclerView: RecyclerView? = null
     private var overlayAdapter: OverlayPlaceholderAdapter? = null
     private var overlayActiveScrollableId: String? = null
@@ -206,30 +209,48 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             APP_UPDATER_CHANNEL,
         ).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "getVersionCode" -> result.success(currentVersionCode())
-                "getSupportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
-                "getDownloadDirectory" -> result.success(downloadDirectory().absolutePath)
-                "installApk" -> installApk(call.argument<String>("path"), result)
-                "cleanupDownloadedApks" -> {
-                    cleanupDownloadedApk()
-                    result.success(null)
+            try {
+                when (call.method) {
+                    "getVersionCode" -> result.success(currentVersionCode())
+                    "getSupportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
+                    "getDownloadDirectory" -> result.success(downloadDirectory().absolutePath)
+                    "installApk" -> installApk(call.argument<String>("path"), result)
+                    "cleanupDownloadedApks" -> {
+                        cleanupDownloadedApk()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
                 }
-                else -> result.notImplemented()
+            } catch (error: Throwable) {
+                Log.w(
+                    "AppUpdater",
+                    "Updater method ${call.method} failed: ${error.message}",
+                    error,
+                )
+                when (call.method) {
+                    "getVersionCode" -> result.success(0)
+                    "getSupportedAbis" -> result.success(emptyList<String>())
+                    "getDownloadDirectory" -> result.success(null)
+                    "installApk" -> result.success(false)
+                    "cleanupDownloadedApks" -> result.success(null)
+                    else -> result.notImplemented()
+                }
             }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        installScrollCaptureCallbackIfNeeded()
-        setupScrollOverlayIfNeeded()
-        refreshOverlayScrollable()
+        mainHandler.post { installScrollCaptureCallbackIfNeeded() }
+        if (ENABLE_SCROLL_CAPTURE_OVERLAY_DIAGNOSTICS) {
+            setupScrollOverlayIfNeeded()
+            refreshOverlayScrollable()
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
+        if (hasFocus && ENABLE_SCROLL_CAPTURE_OVERLAY_DIAGNOSTICS) {
             refreshOverlayScrollable()
         }
     }
@@ -246,6 +267,17 @@ class MainActivity : FlutterActivity() {
     override fun onPause() {
         setOverlayVisible(false)
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            activeScrollCaptureCallback?.let { callback ->
+                clearScrollCaptureCallbackSafely(findFlutterView(window.decorView))
+                unregisterScrollCaptureCallbackSafely(callback)
+            }
+        }
+        activeScrollCaptureCallback = null
+        super.onDestroy()
     }
 
     private fun parseAlarmItem(entry: Map<*, *>): NativeAlarmScheduler.AlarmItem? {
@@ -514,14 +546,84 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun installScrollCaptureCallbackIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || didInstallScrollCaptureCallback) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            scrollCaptureLog("skip install sdk=${Build.VERSION.SDK_INT}")
+            return
+        }
+        if (didInstallScrollCaptureCallback) {
             return
         }
 
-        val flutterView = findFlutterView(window.decorView) ?: return
-        flutterView.scrollCaptureHint = View.SCROLL_CAPTURE_HINT_INCLUDE
-        flutterView.setScrollCaptureCallback(FlutterScrollCaptureCallback(flutterView))
-        didInstallScrollCaptureCallback = true
+        val decorView = window.decorView
+        if (!decorView.isAttachedToWindow) {
+            scrollCaptureLog("install deferred decor not attached")
+            decorView.addOnAttachStateChangeListener(
+                object : View.OnAttachStateChangeListener {
+                    override fun onViewAttachedToWindow(view: View) {
+                        view.removeOnAttachStateChangeListener(this)
+                        mainHandler.post { installScrollCaptureCallbackIfNeeded() }
+                    }
+
+                    override fun onViewDetachedFromWindow(view: View) {
+                        view.removeOnAttachStateChangeListener(this)
+                    }
+                },
+            )
+            return
+        }
+
+        val flutterView =
+            findFlutterView(decorView)
+                ?: run {
+                    scrollCaptureLog("install skipped missing FlutterView")
+                    return
+                }
+        try {
+            val callback = FlutterScrollCaptureCallback(flutterView)
+            flutterView.scrollCaptureHint = View.SCROLL_CAPTURE_HINT_INCLUDE
+            flutterView.setScrollCaptureCallback(callback)
+            window.registerScrollCaptureCallback(callback)
+            activeScrollCaptureCallback = callback
+            didInstallScrollCaptureCallback = true
+            scrollCaptureLog(
+                "installed view=${flutterView.width}x${flutterView.height} " +
+                    "density=${resources.displayMetrics.density}",
+            )
+        } catch (error: Throwable) {
+            clearScrollCaptureCallbackSafely(flutterView)
+            activeScrollCaptureCallback = null
+            didInstallScrollCaptureCallback = false
+            Log.w(
+                SCROLL_CAPTURE_DIAG_TAG,
+                "Failed to install scroll capture callback: ${error.message}",
+                error,
+            )
+        }
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
+    private fun clearScrollCaptureCallbackSafely(flutterView: FlutterView?) {
+        if (flutterView == null) {
+            return
+        }
+        try {
+            flutterView.setScrollCaptureCallback(null)
+        } catch (error: Throwable) {
+            scrollCaptureLog(
+                "clear callback failed ${error.javaClass.simpleName}: ${error.message}",
+            )
+        }
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
+    private fun unregisterScrollCaptureCallbackSafely(callback: ScrollCaptureCallback) {
+        try {
+            window.unregisterScrollCaptureCallback(callback)
+        } catch (error: Throwable) {
+            scrollCaptureLog(
+                "unregister failed ${error.javaClass.simpleName}: ${error.message}",
+            )
+        }
     }
 
     private fun invokeFlutterMethod(
@@ -571,6 +673,10 @@ class MainActivity : FlutterActivity() {
             }
         }
         return null
+    }
+
+    private fun scrollCaptureLog(message: String) {
+        Log.d(SCROLL_CAPTURE_DIAG_TAG, "${System.currentTimeMillis()} $message")
     }
 
     private fun findTextureView(view: View): TextureView? {
@@ -749,20 +855,24 @@ class MainActivity : FlutterActivity() {
         val pixels = (map["pixels"] as? Number)?.toFloat() ?: return null
         val maxScrollExtent = (map["maxScrollExtent"] as? Number)?.toFloat() ?: return null
         val viewportDimension = (map["viewportDimension"] as? Number)?.toFloat() ?: return null
+        val devicePixelRatio =
+            ((map["devicePixelRatio"] as? Number)?.toFloat() ?: resources.displayMetrics.density)
+                .coerceAtLeast(1f)
         if (width <= 0f || height <= 0f || viewportDimension <= 0f) {
             return null
         }
         return ScrollableTarget(
             id = id,
             bounds = Rect(
-                left.roundToInt(),
-                top.roundToInt(),
-                (left + width).roundToInt(),
-                (top + height).roundToInt(),
+                logicalToPhysical(left, devicePixelRatio),
+                logicalToPhysical(top, devicePixelRatio),
+                logicalToPhysical(left + width, devicePixelRatio),
+                logicalToPhysical(top + height, devicePixelRatio),
             ),
             pixels = pixels,
             maxScrollExtent = maxScrollExtent,
             viewportDimension = viewportDimension,
+            devicePixelRatio = devicePixelRatio,
         )
     }
 
@@ -783,10 +893,10 @@ class MainActivity : FlutterActivity() {
                 continue
             }
 
-            val visibleHeight = min(
-                visibleBounds.height().toFloat(),
-                candidate.viewportDimension,
-            ).roundToInt()
+            val viewportDimensionPx =
+                candidate.viewportDimension * candidate.devicePixelRatio
+            val visibleHeight = min(visibleBounds.height().toFloat(), viewportDimensionPx)
+                .roundToInt()
             if (visibleHeight <= 0) {
                 continue
             }
@@ -807,6 +917,10 @@ class MainActivity : FlutterActivity() {
         }
 
         return bestTarget
+    }
+
+    private fun logicalToPhysical(value: Float, devicePixelRatio: Float): Int {
+        return (value * devicePixelRatio).roundToInt()
     }
 
     private fun parseScrollResult(raw: Any?): ScrollMetricsSnapshot? {
@@ -831,6 +945,7 @@ class MainActivity : FlutterActivity() {
         val pixels: Float,
         val maxScrollExtent: Float,
         val viewportDimension: Float,
+        val devicePixelRatio: Float,
     )
 
     private data class ScrollMetricsSnapshot(
@@ -845,6 +960,7 @@ class MainActivity : FlutterActivity() {
         val startPixels: Float,
         var maxScrollExtent: Float,
         var viewportDimension: Float,
+        val devicePixelRatio: Float,
     )
 
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
@@ -857,14 +973,17 @@ class MainActivity : FlutterActivity() {
             cancellationSignal: CancellationSignal,
             onReady: Consumer<Rect>,
         ) {
+            scrollCaptureLog("search start")
             invokeFlutterMethod(
                 method = "describeScrollables",
                 onSuccess = { raw ->
                     if (cancellationSignal.isCanceled) {
+                        scrollCaptureLog("search canceled before target selection")
                         onReady.accept(Rect())
                         return@invokeFlutterMethod
                     }
 
+                    val count = (raw as? List<*>)?.size ?: -1
                     val target = chooseBestScrollable(raw, flutterView)
                     activeCaptureState =
                         target?.let {
@@ -874,12 +993,24 @@ class MainActivity : FlutterActivity() {
                                 startPixels = it.pixels,
                                 maxScrollExtent = it.maxScrollExtent,
                                 viewportDimension = it.viewportDimension,
+                                devicePixelRatio = it.devicePixelRatio,
                             )
                         }
+                    if (target == null) {
+                        scrollCaptureLog("search empty rawCount=$count")
+                    } else {
+                        scrollCaptureLog(
+                            "search target id=${target.id} rawCount=$count " +
+                                "bounds=${target.bounds} pixels=${target.pixels} " +
+                                "max=${target.maxScrollExtent} viewport=${target.viewportDimension} " +
+                                "dpr=${target.devicePixelRatio}",
+                        )
+                    }
                     onReady.accept(target?.bounds ?: Rect())
                 },
                 onFailure = {
                     activeCaptureState = null
+                    scrollCaptureLog("search failed channel")
                     onReady.accept(Rect())
                 },
             )
@@ -892,6 +1023,7 @@ class MainActivity : FlutterActivity() {
         ) {
             val state = activeCaptureState
             if (state == null || cancellationSignal.isCanceled) {
+                scrollCaptureLog("start without active state canceled=${cancellationSignal.isCanceled}")
                 onReady.run()
                 return
             }
@@ -899,8 +1031,14 @@ class MainActivity : FlutterActivity() {
             invokeFlutterMethod(
                 method = "prepareCapture",
                 arguments = mapOf("id" to state.id),
-                onSuccess = { onReady.run() },
-                onFailure = { onReady.run() },
+                onSuccess = {
+                    scrollCaptureLog("start prepared id=${state.id}")
+                    onReady.run()
+                },
+                onFailure = {
+                    scrollCaptureLog("start prepare failed id=${state.id}")
+                    onReady.run()
+                },
             )
         }
 
@@ -912,23 +1050,34 @@ class MainActivity : FlutterActivity() {
         ) {
             val state = activeCaptureState
             if (state == null || captureArea.isEmpty || cancellationSignal.isCanceled) {
+                scrollCaptureLog(
+                    "image request skipped state=${state != null} area=$captureArea " +
+                        "canceled=${cancellationSignal.isCanceled}",
+                )
                 onComplete.accept(Rect())
                 return
             }
 
             val targetPixels =
-                (state.startPixels + captureArea.top).coerceIn(0f, state.maxScrollExtent)
+                (state.startPixels + captureArea.top / state.devicePixelRatio)
+                    .coerceIn(0f, state.maxScrollExtent)
+            scrollCaptureLog(
+                "image request id=${state.id} area=$captureArea target=$targetPixels " +
+                    "start=${state.startPixels} dpr=${state.devicePixelRatio}",
+            )
             invokeFlutterMethod(
                 method = "scrollTo",
                 arguments = mapOf("id" to state.id, "offset" to targetPixels),
                 onSuccess = { raw ->
                     if (cancellationSignal.isCanceled) {
+                        scrollCaptureLog("image request canceled after scroll")
                         onComplete.accept(Rect())
                         return@invokeFlutterMethod
                     }
 
                     val scrollMetrics = parseScrollResult(raw)
                     if (scrollMetrics == null) {
+                        scrollCaptureLog("image request invalid scroll result raw=$raw")
                         onComplete.accept(Rect())
                         return@invokeFlutterMethod
                     }
@@ -941,9 +1090,11 @@ class MainActivity : FlutterActivity() {
                         state = state,
                         currentPixels = scrollMetrics.pixels,
                     )
+                    scrollCaptureLog("image request complete captured=${captured ?: Rect()}")
                     onComplete.accept(captured ?: Rect())
                 },
                 onFailure = {
+                    scrollCaptureLog("image request scrollTo failed")
                     onComplete.accept(Rect())
                 },
             )
@@ -953,6 +1104,7 @@ class MainActivity : FlutterActivity() {
             val state = activeCaptureState
             activeCaptureState = null
             if (state == null) {
+                scrollCaptureLog("end without active state")
                 onReady.run()
                 return
             }
@@ -960,8 +1112,14 @@ class MainActivity : FlutterActivity() {
             invokeFlutterMethod(
                 method = "restoreCapture",
                 arguments = mapOf("id" to state.id),
-                onSuccess = { onReady.run() },
-                onFailure = { onReady.run() },
+                onSuccess = {
+                    scrollCaptureLog("end restored id=${state.id}")
+                    onReady.run()
+                },
+                onFailure = {
+                    scrollCaptureLog("end restore failed id=${state.id}")
+                    onReady.run()
+                },
             )
         }
 
@@ -971,17 +1129,31 @@ class MainActivity : FlutterActivity() {
             state: ActiveCaptureState,
             currentPixels: Float,
         ): Rect? {
-            val textureView = findTextureView(flutterView) ?: return null
-            val bitmap = textureView.bitmap ?: return null
+            val textureView =
+                findTextureView(flutterView)
+                    ?: run {
+                        scrollCaptureLog("capture failed missing TextureView")
+                        return null
+                    }
+            val bitmap =
+                textureView.bitmap
+                    ?: run {
+                        scrollCaptureLog("capture failed null TextureView bitmap")
+                        return null
+                    }
 
             return try {
-                val scrollDelta = currentPixels - state.startPixels
+                val scrollDelta = (currentPixels - state.startPixels) * state.devicePixelRatio
                 val visibleLocalTop = max(0f, captureArea.top - scrollDelta)
                 val visibleLocalBottom = min(
                     state.bounds.height().toFloat(),
                     captureArea.bottom - scrollDelta,
                 )
                 if (visibleLocalBottom <= visibleLocalTop) {
+                    scrollCaptureLog(
+                        "capture failed invisible area=$captureArea scrollDelta=$scrollDelta " +
+                            "bounds=${state.bounds}",
+                    )
                     return null
                 }
 
@@ -1002,6 +1174,10 @@ class MainActivity : FlutterActivity() {
                 )
                 sourceRect.intersect(0, 0, bitmap.width, bitmap.height)
                 if (sourceRect.isEmpty) {
+                    scrollCaptureLog(
+                        "capture failed empty source area=$captureArea source=$sourceRect " +
+                            "bitmap=${bitmap.width}x${bitmap.height}",
+                    )
                     return null
                 }
 
@@ -1012,7 +1188,8 @@ class MainActivity : FlutterActivity() {
                     session.surface.unlockCanvasAndPost(canvas)
                 }
                 availableRect
-            } catch (_: Throwable) {
+            } catch (error: Throwable) {
+                scrollCaptureLog("capture failed ${error.javaClass.simpleName}: ${error.message}")
                 null
             } finally {
                 bitmap.recycle()

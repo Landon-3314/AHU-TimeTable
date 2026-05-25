@@ -20,6 +20,8 @@ class AppUpdatePlatform {
       return result ?? 0;
     } on MissingPluginException {
       return 0;
+    } catch (_) {
+      return 0;
     }
   }
 
@@ -32,6 +34,8 @@ class AppUpdatePlatform {
         return result;
       }
     } on MissingPluginException {
+      return const [];
+    } catch (_) {
       return const [];
     }
     return const [];
@@ -46,6 +50,8 @@ class AppUpdatePlatform {
       return Directory(path);
     } on MissingPluginException {
       return null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -58,6 +64,8 @@ class AppUpdatePlatform {
       return result ?? false;
     } on MissingPluginException {
       return false;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -65,6 +73,8 @@ class AppUpdatePlatform {
     try {
       await _channel.invokeMethod<void>('cleanupDownloadedApks');
     } on MissingPluginException {
+      return;
+    } catch (_) {
       return;
     }
   }
