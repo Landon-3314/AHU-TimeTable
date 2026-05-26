@@ -73,38 +73,41 @@ void main() {
     expect(service.checkForUpdate(), completion(isA<AvailableUpdate>()));
   });
 
-  test('skips update when version is current, ignored, or ABI is unsupported', () async {
-    final manifest = UpdateManifest.fromJson(
-      jsonDecode(manifestJson) as Map<String, Object?>,
-    );
+  test(
+    'skips update when version is current, ignored, or ABI is unsupported',
+    () async {
+      final manifest = UpdateManifest.fromJson(
+        jsonDecode(manifestJson) as Map<String, Object?>,
+      );
 
-    final currentVersionService = UpdateCheckService(
-      manifestLoader: () async => manifest,
-      currentVersionCodeLoader: () async => 2,
-      supportedAbisLoader: () async => const ['arm64-v8a'],
-      ignoredVersionCodeLoader: () async => null,
-      ignoredVersionCodeWriter: (_) async {},
-    );
-    expect(await currentVersionService.checkForUpdate(), isNull);
+      final currentVersionService = UpdateCheckService(
+        manifestLoader: () async => manifest,
+        currentVersionCodeLoader: () async => 2,
+        supportedAbisLoader: () async => const ['arm64-v8a'],
+        ignoredVersionCodeLoader: () async => null,
+        ignoredVersionCodeWriter: (_) async {},
+      );
+      expect(await currentVersionService.checkForUpdate(), isNull);
 
-    final ignoredService = UpdateCheckService(
-      manifestLoader: () async => manifest,
-      currentVersionCodeLoader: () async => 1,
-      supportedAbisLoader: () async => const ['arm64-v8a'],
-      ignoredVersionCodeLoader: () async => 2,
-      ignoredVersionCodeWriter: (_) async {},
-    );
-    expect(await ignoredService.checkForUpdate(), isNull);
+      final ignoredService = UpdateCheckService(
+        manifestLoader: () async => manifest,
+        currentVersionCodeLoader: () async => 1,
+        supportedAbisLoader: () async => const ['arm64-v8a'],
+        ignoredVersionCodeLoader: () async => 2,
+        ignoredVersionCodeWriter: (_) async {},
+      );
+      expect(await ignoredService.checkForUpdate(), isNull);
 
-    final unsupportedAbiService = UpdateCheckService(
-      manifestLoader: () async => manifest,
-      currentVersionCodeLoader: () async => 1,
-      supportedAbisLoader: () async => const ['x86_64'],
-      ignoredVersionCodeLoader: () async => null,
-      ignoredVersionCodeWriter: (_) async {},
-    );
-    expect(await unsupportedAbiService.checkForUpdate(), isNull);
-  });
+      final unsupportedAbiService = UpdateCheckService(
+        manifestLoader: () async => manifest,
+        currentVersionCodeLoader: () async => 1,
+        supportedAbisLoader: () async => const ['x86_64'],
+        ignoredVersionCodeLoader: () async => null,
+        ignoredVersionCodeWriter: (_) async {},
+      );
+      expect(await unsupportedAbiService.checkForUpdate(), isNull);
+    },
+  );
 
   test('writes ignored version code for the selected update', () async {
     int? ignoredVersionCode;
@@ -127,4 +130,20 @@ void main() {
     expect(ignoredVersionCode, 2);
     expect(await service.checkForUpdate(), isNull);
   });
+
+  test(
+    'checkForUpdate swallows errors but checkForUpdateOrThrow reports them',
+    () async {
+      final service = UpdateCheckService(
+        manifestLoader: () async => throw const FormatException('bad manifest'),
+        currentVersionCodeLoader: () async => 1,
+        supportedAbisLoader: () async => const ['arm64-v8a'],
+        ignoredVersionCodeLoader: () async => null,
+        ignoredVersionCodeWriter: (_) async {},
+      );
+
+      expect(await service.checkForUpdate(), isNull);
+      expect(service.checkForUpdateOrThrow(), throwsA(isA<FormatException>()));
+    },
+  );
 }

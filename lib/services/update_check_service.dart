@@ -48,8 +48,7 @@ class UpdateCheckService {
   static final Uri defaultManifestUri = Uri.parse(
     'https://raw.githubusercontent.com/Landon-3314/AHU-TimeTable/main/update.json',
   );
-  static const String _ignoredVersionCodeKey =
-      'updates.ignoredVersionCode.v1';
+  static const String _ignoredVersionCodeKey = 'updates.ignoredVersionCode.v1';
 
   final UpdateManifestLoader _manifestLoader;
   final Future<int> Function() _currentVersionCodeLoader;
@@ -59,27 +58,35 @@ class UpdateCheckService {
 
   Future<AvailableUpdate?> checkForUpdate() async {
     try {
-      final currentVersionCode = await _currentVersionCodeLoader();
-      final ignoredVersionCode = await _ignoredVersionCodeLoader();
-      final supportedAbis = await _supportedAbisLoader();
-      if (supportedAbis.isEmpty) {
-        return null;
-      }
-
-      final manifest = await _manifestLoader();
-      if (manifest.versionCode <= currentVersionCode ||
-          manifest.versionCode == ignoredVersionCode) {
-        return null;
-      }
-
-      final asset = manifest.selectAssetForAbis(supportedAbis);
-      if (asset == null) {
-        return null;
-      }
-      return AvailableUpdate(manifest: manifest, asset: asset);
+      return await checkForUpdateOrThrow();
     } catch (_) {
       return null;
     }
+  }
+
+  Future<AvailableUpdate?> checkForUpdateOrThrow({
+    bool respectIgnoredVersion = true,
+  }) async {
+    final currentVersionCode = await _currentVersionCodeLoader();
+    final ignoredVersionCode = respectIgnoredVersion
+        ? await _ignoredVersionCodeLoader()
+        : null;
+    final supportedAbis = await _supportedAbisLoader();
+    if (supportedAbis.isEmpty) {
+      return null;
+    }
+
+    final manifest = await _manifestLoader();
+    if (manifest.versionCode <= currentVersionCode ||
+        manifest.versionCode == ignoredVersionCode) {
+      return null;
+    }
+
+    final asset = manifest.selectAssetForAbis(supportedAbis);
+    if (asset == null) {
+      return null;
+    }
+    return AvailableUpdate(manifest: manifest, asset: asset);
   }
 
   Future<void> ignoreUpdate(AvailableUpdate update) {
@@ -96,9 +103,7 @@ class UpdateCheckService {
         throw HttpException('Update manifest request failed', uri: uri);
       }
       final body = await utf8.decodeStream(response);
-      return UpdateManifest.fromJson(
-        jsonDecode(body) as Map<String, Object?>,
-      );
+      return UpdateManifest.fromJson(jsonDecode(body) as Map<String, Object?>);
     } finally {
       client.close(force: true);
     }

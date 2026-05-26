@@ -22,6 +22,42 @@ class AppStrings {
     'basic_settings': {'zh': '基础设置', 'en': 'Basic Settings'},
     'notifications': {'zh': '提醒设置', 'en': 'Notifications'},
     'data_storage': {'zh': '高级与数据管理', 'en': 'Data & Storage'},
+    'check_update': {'zh': '检查更新', 'en': 'Check for Updates'},
+    'check_update_subtitle': {
+      'zh': '手动检测新版本',
+      'en': 'Manually check for a new version',
+    },
+    'checking_update': {'zh': '正在检测更新...', 'en': 'Checking for updates...'},
+    'already_latest': {
+      'zh': '当前已是最新版本',
+      'en': 'You are already on the latest version.',
+    },
+    'update_check_failed': {
+      'zh': '更新检查失败，请稍后重试',
+      'en': 'Update check failed. Please try again later.',
+    },
+    'update_not_supported': {
+      'zh': '当前平台不支持应用内更新',
+      'en': 'In-app updates are not supported on this platform.',
+    },
+    'update_download_failed': {
+      'zh': '更新下载失败，请稍后重试',
+      'en': 'Update download failed. Please try again later.',
+    },
+    'update_install_opened': {
+      'zh': '已打开系统安装器，请确认安装',
+      'en': 'System installer opened. Please confirm installation.',
+    },
+    'update_install_failed': {
+      'zh': '无法打开安装器，请允许安装未知应用后重试',
+      'en':
+          'Unable to open the installer. Allow installing unknown apps and try again.',
+    },
+    'update_now': {'zh': '立即更新', 'en': 'Update Now'},
+    'new_version_title': {
+      'zh': '发现新版本 {version}',
+      'en': 'New version {version} available',
+    },
     'language': {'zh': '语言 / Language', 'en': 'Language / 语言'},
     'semester_start_date': {'zh': '第一周开始日期', 'en': 'First Week Start Date'},
     'semester_total_weeks': {'zh': '学期总周数', 'en': 'Total Semester Weeks'},

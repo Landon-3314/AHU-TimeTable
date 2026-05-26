@@ -2,48 +2,62 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../core/app_constants.dart';
 import '../services/update_download_service.dart';
 import '../services/update_check_service.dart';
 
-enum UpdatePromptAction { update, later, ignore }
+enum UpdatePromptAction { update, cancel }
 
 Future<UpdatePromptAction?> showUpdatePrompt({
   required BuildContext context,
   required AvailableUpdate update,
+  String? title,
+  String cancelLabel = '取消',
+  String updateLabel = '立即更新',
+  String fallbackReleaseNotes = '本次更新包含稳定性改进。',
 }) {
   final releaseNotes = update.manifest.releaseNotes.isEmpty
-      ? '本次更新包含稳定性改进。'
+      ? fallbackReleaseNotes
       : update.manifest.releaseNotes;
   return showDialog<UpdatePromptAction>(
     context: context,
     barrierDismissible: false,
     builder: (context) {
       return AlertDialog(
-        title: Text('发现新版本 ${update.manifest.versionName}'),
+        title: Text(title ?? '发现新版本 ${update.manifest.versionName}'),
         content: SingleChildScrollView(
           child: Text(
             releaseNotes,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.xxl,
+          0,
+          AppSpacing.xxl,
+          AppSpacing.xxl,
+        ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(UpdatePromptAction.ignore);
-            },
-            child: const Text('忽略本次'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(UpdatePromptAction.later);
-            },
-            child: const Text('稍后更新'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop(UpdatePromptAction.update);
-            },
-            child: const Text('立即更新'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(UpdatePromptAction.cancel);
+                  },
+                  child: Text(cancelLabel),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(UpdatePromptAction.update);
+                  },
+                  child: Text(updateLabel),
+                ),
+              ),
+            ],
           ),
         ],
       );

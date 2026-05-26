@@ -23,12 +23,13 @@ void main() {
     asset: UpdateAsset(
       abi: 'arm64-v8a',
       url: Uri.parse('https://example.com/app.apk'),
-      sha256: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      sha256:
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       size: 2048,
     ),
   );
 
-  testWidgets('update prompt returns update, later, and ignore actions', (
+  testWidgets('update prompt returns cancel and update actions', (
     tester,
   ) async {
     await tester.pumpWidget(MaterialApp(home: _PromptHost(update: testUpdate)));
@@ -37,16 +38,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('发现新版本 0.3.4'), findsOneWidget);
     expect(find.textContaining('修复提醒'), findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
+    expect(find.text('立即更新'), findsOneWidget);
+    expect(find.text('稍后更新'), findsNothing);
+    expect(find.text('忽略本次'), findsNothing);
 
-    await tester.tap(find.text('稍后更新'));
+    await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
-    expect(find.text('later'), findsOneWidget);
-
-    await tester.tap(find.text('显示'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('忽略本次'));
-    await tester.pumpAndSettle();
-    expect(find.text('ignore'), findsOneWidget);
+    expect(find.text('cancel'), findsOneWidget);
 
     await tester.tap(find.text('显示'));
     await tester.pumpAndSettle();

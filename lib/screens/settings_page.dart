@@ -5,14 +5,27 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../core/app_constants.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/app_update_platform.dart';
+import '../services/update_check_service.dart';
+import '../services/update_download_service.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/update_prompt.dart';
 import 'reminder_settings_page.dart';
 import 'semester_time_settings_page.dart';
 import 'theme_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({
+    super.key,
+    this.updatePlatform = const AppUpdatePlatform(),
+    this.updateCheckService,
+    this.updateDownloadService = const UpdateDownloadService(),
+  });
+
+  final AppUpdatePlatform updatePlatform;
+  final UpdateCheckService? updateCheckService;
+  final UpdateDownloadService updateDownloadService;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -20,6 +33,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final ScrollController _scrollController = ScrollController();
+  bool _isCheckingUpdate = false;
 
   @override
   void dispose() {
@@ -115,30 +129,155 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildDataSection(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
     return AppSurface(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            OutlinedButton.icon(
-              icon: const Icon(Icons.cookie_outlined),
-              label: Text(provider.t('clear_browser_cache')),
-              onPressed: () => _confirmAndClearCookies(context),
+      child: Column(
+        children: [
+          AppActionTile(
+            icon: Icons.system_update_alt_outlined,
+            title: provider.t('check_update'),
+            subtitle: provider.t('check_update_subtitle'),
+            enabled: !_isCheckingUpdate,
+            trailing: _isCheckingUpdate
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : null,
+            onTap: _handleCheckUpdate,
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.cookie_outlined),
+                  label: Text(provider.t('clear_browser_cache')),
+                  onPressed: () => _confirmAndClearCookies(context),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    foregroundColor: Theme.of(context).colorScheme.onError,
+                  ),
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  label: Text(provider.t('clear_all_local_data')),
+                  onPressed: () => _confirmAndClearAllData(context),
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-                foregroundColor: Theme.of(context).colorScheme.onError,
-              ),
-              icon: const Icon(Icons.delete_forever_outlined),
-              label: Text(provider.t('clear_all_local_data')),
-              onPressed: () => _confirmAndClearAllData(context),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _handleCheckUpdate() async {
+    if (_isCheckingUpdate) {
+      return;
+    }
+
+    final provider = context.read<SettingsProvider>();
+    final platform = widget.updatePlatform;
+    if (!platform.isSupported) {
+      _showSnackBar(provider.t('update_not_supported'));
+      return;
+    }
+
+    setState(() {
+      _isCheckingUpdate = true;
+    });
+    _showSnackBar(provider.t('checking_update'));
+
+    try {
+      await platform.cleanupDownloadedApks();
+      final service =
+          widget.updateCheckService ??
+          UpdateCheckService.githubManifest(platform: platform);
+      final update = await service.checkForUpdateOrThrow(
+        respectIgnoredVersion: false,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      if (update == null) {
+        _showSnackBar(provider.t('already_latest'));
+        return;
+      }
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      final action = await showUpdatePrompt(
+        context: context,
+        update: update,
+        title: provider
+            .t('new_version_title')
+            .replaceAll('{version}', update.manifest.versionName),
+        cancelLabel: provider.t('cancel'),
+        updateLabel: provider.t('update_now'),
+      );
+      if (!mounted || action != UpdatePromptAction.update) {
+        return;
+      }
+
+      await _downloadAndInstallUpdate(update, provider);
+    } catch (error) {
+      debugPrint('[AppUpdate] manual check failed: $error');
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar(provider.t('update_check_failed'));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingUpdate = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _downloadAndInstallUpdate(
+    AvailableUpdate update,
+    SettingsProvider provider,
+  ) async {
+    final result = await showDialog<UpdateDownloadResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) {
+        return UpdateDownloadTaskDialog(
+          update: update,
+          downloadService: widget.updateDownloadService,
+        );
+      },
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+
+    if (result.error != null || result.file == null) {
+      _showSnackBar(provider.t('update_download_failed'));
+      return;
+    }
+
+    final installStarted = await widget.updateDownloadService.install(
+      result.file!,
+    );
+    if (!mounted) {
+      return;
+    }
+    _showSnackBar(
+      installStarted
+          ? provider.t('update_install_opened')
+          : provider.t('update_install_failed'),
+    );
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _confirmAndClearCookies(BuildContext context) async {
