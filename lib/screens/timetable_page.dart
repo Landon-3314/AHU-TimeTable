@@ -150,9 +150,9 @@ class _TimetablePageState extends State<TimetablePage> {
                     settingsProvider,
                     importResult,
                   );
-                  messenger.showSnackBar(
-                    SnackBar(content: Text(summaryMessage)),
-                  );
+                  messenger
+                    ..removeCurrentSnackBar()
+                    ..showSnackBar(SnackBar(content: Text(summaryMessage)));
                 },
                 icon: const Icon(Icons.cloud_download_outlined),
                 tooltip: settingsProvider.t('import_from_system'),

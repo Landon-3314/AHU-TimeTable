@@ -21,7 +21,8 @@ class AppStrings {
     'accent_color': {'zh': '辅助色', 'en': 'Accent Color'},
     'basic_settings': {'zh': '基础设置', 'en': 'Basic Settings'},
     'notifications': {'zh': '提醒设置', 'en': 'Notifications'},
-    'data_storage': {'zh': '高级与数据管理', 'en': 'Data & Storage'},
+    'app_update': {'zh': '应用更新', 'en': 'App Update'},
+    'data_storage': {'zh': '数据管理', 'en': 'Data Management'},
     'check_update': {'zh': '检查更新', 'en': 'Check for Updates'},
     'check_update_subtitle': {
       'zh': '手动检测新版本',
@@ -43,6 +44,10 @@ class AppStrings {
     'update_download_failed': {
       'zh': '更新下载失败，请稍后重试',
       'en': 'Update download failed. Please try again later.',
+    },
+    'update_backup_failed': {
+      'zh': '本地数据备份失败，已取消更新',
+      'en': 'Local data backup failed. Update canceled.',
     },
     'update_install_opened': {
       'zh': '已打开系统安装器，请确认安装',

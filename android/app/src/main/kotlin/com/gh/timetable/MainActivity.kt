@@ -11,7 +11,6 @@ import android.graphics.RectF
 import android.net.Uri
 import android.os.Build
 import android.os.CancellationSignal
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -49,6 +48,7 @@ private const val NATIVE_ALARM_CHANNEL = "com.timetable/native_alarm"
 private const val SCROLL_CAPTURE_CHANNEL = "app.scroll_capture"
 private const val SCROLL_CAPTURE_DIAG_TAG = "ScrollCaptureDiag"
 private const val APP_UPDATER_CHANNEL = "app.updater"
+private const val APP_STORAGE_CHANNEL = "app.storage"
 private const val NOTIFICATION_DIAG_TAG = "NotificationDiag"
 private const val REMINDER_CHANNEL_ID = "timetable_reminders"
 private const val UPDATER_PREFS = "app_updater"
@@ -235,6 +235,16 @@ class MainActivity : FlutterActivity() {
                     "cleanupDownloadedApks" -> result.success(null)
                     else -> result.notImplemented()
                 }
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            APP_STORAGE_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getExternalFilesDir" -> result.success(getExternalFilesDir(null)?.absolutePath)
+                else -> result.notImplemented()
             }
         }
     }
@@ -474,7 +484,12 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun downloadDirectory(): File {
-        return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        return File(requireExternalFilesDir(), "updates")
+    }
+
+    private fun requireExternalFilesDir(): File {
+        return getExternalFilesDir(null)
+            ?: throw IllegalStateException("External files directory is unavailable")
     }
 
     private fun installApk(path: String?, result: MethodChannel.Result) {

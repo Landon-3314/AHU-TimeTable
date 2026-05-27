@@ -5,12 +5,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/course.dart';
 import '../models/event.dart';
 import '../models/semester.dart';
+import 'external_data_backup_store.dart';
 
 class StorageService {
-  StorageService({required SharedPreferences sharedPreferences})
-    : _sharedPreferences = sharedPreferences;
+  StorageService({
+    required SharedPreferences sharedPreferences,
+    ExternalDataBackupStore? externalDataBackupStore,
+    ExternalDataRecoveryStatus lastRecoveryStatus =
+        ExternalDataRecoveryStatus.unavailable,
+  }) : _sharedPreferences = sharedPreferences,
+       _externalDataBackupStore = externalDataBackupStore,
+       _lastRecoveryStatus = lastRecoveryStatus;
 
   final SharedPreferences _sharedPreferences;
+  final ExternalDataBackupStore? _externalDataBackupStore;
+  final ExternalDataRecoveryStatus _lastRecoveryStatus;
 
   static const String _coursesKey = 'courses.items';
   static const String _eventsKey = 'events.items';
@@ -61,14 +70,36 @@ class StorageService {
   static const String _legacyBackgroundServiceEnabledKey =
       'settings.backgroundServiceEnabled';
 
-  static Future<StorageService> create() async {
+  static Future<StorageService> create({
+    ExternalDataBackupStore? externalDataBackupStore,
+  }) async {
     final sharedPreferences = await SharedPreferences.getInstance();
-    final service = StorageService(sharedPreferences: sharedPreferences);
+    final backupStore =
+        externalDataBackupStore ?? const ExternalDataBackupStore();
+    final recoveryStatus = _hasRecoverableInternalData(sharedPreferences)
+        ? ExternalDataRecoveryStatus.skippedInternalDataPresent
+        : await backupStore.restoreToSharedPreferences(sharedPreferences);
+    final service = StorageService(
+      sharedPreferences: sharedPreferences,
+      externalDataBackupStore: backupStore,
+      lastRecoveryStatus: recoveryStatus,
+    );
     await service.ensureSemesterMigration();
+    await service.syncExternalBackup();
     return service;
   }
 
   Future<void> reload() => _sharedPreferences.reload();
+
+  ExternalDataRecoveryStatus get lastRecoveryStatus => _lastRecoveryStatus;
+
+  Future<bool> syncExternalBackup() async {
+    final backupStore = _externalDataBackupStore;
+    if (backupStore == null) {
+      return false;
+    }
+    return backupStore.writeFromSharedPreferences(_sharedPreferences);
+  }
 
   String? get currentSemesterId =>
       _sharedPreferences.getString(_currentSemesterIdKey);
@@ -112,7 +143,7 @@ class StorageService {
   }
 
   Future<void> setCurrentSemesterId(String semesterId) {
-    return _sharedPreferences.setString(_currentSemesterIdKey, semesterId);
+    return _setString(_currentSemesterIdKey, semesterId);
   }
 
   Future<void> initializeExistingSemester(
@@ -165,7 +196,7 @@ class StorageService {
     }
 
     if (remainingSemesters.isEmpty) {
-      await _sharedPreferences.remove(_currentSemesterIdKey);
+      await _remove(_currentSemesterIdKey);
       return null;
     }
 
@@ -176,7 +207,7 @@ class StorageService {
       }
     }
 
-    await _sharedPreferences.remove(_currentSemesterIdKey);
+    await _remove(_currentSemesterIdKey);
     return null;
   }
 
@@ -193,10 +224,7 @@ class StorageService {
     if (existingSemesters.isNotEmpty) {
       final currentId = currentSemesterId ?? existingSemesters.first.id;
       await setCurrentSemesterId(currentId);
-      await _sharedPreferences.setInt(
-        _semesterMigrationVersionKey,
-        _semesterMigrationVersion,
-      );
+      await _setInt(_semesterMigrationVersionKey, _semesterMigrationVersion);
       return;
     }
 
@@ -211,10 +239,7 @@ class StorageService {
     await _saveSemesters([firstSemester]);
     await setCurrentSemesterId(firstSemester.id);
     await _migrateLegacyTimetableData(firstSemester.id, legacyUser: legacyUser);
-    await _sharedPreferences.setInt(
-      _semesterMigrationVersionKey,
-      _semesterMigrationVersion,
-    );
+    await _setInt(_semesterMigrationVersionKey, _semesterMigrationVersion);
   }
 
   List<Course> loadCourses() {
@@ -254,19 +279,22 @@ class StorageService {
   }
 
   Future<void> clearCourses() {
-    return _sharedPreferences.remove(
+    return _remove(
       _semesterScopedKey(_coursesKey, semesterId: currentSemesterId),
     );
   }
 
   Future<void> clearAllTimetableData() async {
     final semesterId = currentSemesterId;
-    await _sharedPreferences.remove(
+    await _remove(
       _semesterScopedKey(_coursesKey, semesterId: semesterId),
+      sync: false,
     );
-    await _sharedPreferences.remove(
+    await _remove(
       _semesterScopedKey(_eventsKey, semesterId: semesterId),
+      sync: false,
     );
+    await syncExternalBackup();
   }
 
   double readPixelsPerMinute({required double fallback}) {
@@ -277,10 +305,7 @@ class StorageService {
   }
 
   Future<void> writePixelsPerMinute(double value) {
-    return _sharedPreferences.setDouble(
-      _currentSemesterKey(_pixelsPerMinuteKey),
-      value,
-    );
+    return _setDouble(_currentSemesterKey(_pixelsPerMinuteKey), value);
   }
 
   int readClassDuration({required int fallback}) {
@@ -289,10 +314,7 @@ class StorageService {
   }
 
   Future<void> writeClassDuration(int value) {
-    return _sharedPreferences.setInt(
-      _currentSemesterKey(_classDurationKey),
-      value,
-    );
+    return _setInt(_currentSemesterKey(_classDurationKey), value);
   }
 
   int readShortBreak({required int fallback}) {
@@ -301,10 +323,7 @@ class StorageService {
   }
 
   Future<void> writeShortBreak(int value) {
-    return _sharedPreferences.setInt(
-      _currentSemesterKey(_shortBreakKey),
-      value,
-    );
+    return _setInt(_currentSemesterKey(_shortBreakKey), value);
   }
 
   int readBigBreak({required int fallback}) {
@@ -313,7 +332,7 @@ class StorageService {
   }
 
   Future<void> writeBigBreak(int value) {
-    return _sharedPreferences.setInt(_currentSemesterKey(_bigBreakKey), value);
+    return _setInt(_currentSemesterKey(_bigBreakKey), value);
   }
 
   int readBigBreakAfterPeriod({required int fallback}) {
@@ -324,10 +343,7 @@ class StorageService {
   }
 
   Future<void> writeBigBreakAfterPeriod(int value) {
-    return _sharedPreferences.setInt(
-      _currentSemesterKey(_bigBreakAfterPeriodKey),
-      value,
-    );
+    return _setInt(_currentSemesterKey(_bigBreakAfterPeriodKey), value);
   }
 
   String readMorningStartTime({required String fallback}) {
@@ -338,10 +354,7 @@ class StorageService {
   }
 
   Future<void> writeMorningStartTime(String value) {
-    return _sharedPreferences.setString(
-      _currentSemesterKey(_morningStartTimeKey),
-      value,
-    );
+    return _setString(_currentSemesterKey(_morningStartTimeKey), value);
   }
 
   int readMorningClasses({required int fallback}) {
@@ -350,10 +363,7 @@ class StorageService {
   }
 
   Future<void> writeMorningClasses(int value) {
-    return _sharedPreferences.setInt(
-      _currentSemesterKey(_morningClassesKey),
-      value,
-    );
+    return _setInt(_currentSemesterKey(_morningClassesKey), value);
   }
 
   List<String>? readMorningPeriodStartTimes() {
@@ -363,7 +373,7 @@ class StorageService {
   }
 
   Future<void> writeMorningPeriodStartTimes(List<String> values) {
-    return _sharedPreferences.setStringList(
+    return _setStringList(
       _currentSemesterKey(_morningPeriodStartTimesKey),
       values,
     );
@@ -377,10 +387,7 @@ class StorageService {
   }
 
   Future<void> writeAfternoonStartTime(String value) {
-    return _sharedPreferences.setString(
-      _currentSemesterKey(_afternoonStartTimeKey),
-      value,
-    );
+    return _setString(_currentSemesterKey(_afternoonStartTimeKey), value);
   }
 
   int readAfternoonClasses({required int fallback}) {
@@ -391,10 +398,7 @@ class StorageService {
   }
 
   Future<void> writeAfternoonClasses(int value) {
-    return _sharedPreferences.setInt(
-      _currentSemesterKey(_afternoonClassesKey),
-      value,
-    );
+    return _setInt(_currentSemesterKey(_afternoonClassesKey), value);
   }
 
   List<String>? readAfternoonPeriodStartTimes() {
@@ -404,7 +408,7 @@ class StorageService {
   }
 
   Future<void> writeAfternoonPeriodStartTimes(List<String> values) {
-    return _sharedPreferences.setStringList(
+    return _setStringList(
       _currentSemesterKey(_afternoonPeriodStartTimesKey),
       values,
     );
@@ -418,10 +422,7 @@ class StorageService {
   }
 
   Future<void> writeEveningStartTime(String value) {
-    return _sharedPreferences.setString(
-      _currentSemesterKey(_eveningStartTimeKey),
-      value,
-    );
+    return _setString(_currentSemesterKey(_eveningStartTimeKey), value);
   }
 
   int readEveningClasses({required int fallback}) {
@@ -430,10 +431,7 @@ class StorageService {
   }
 
   Future<void> writeEveningClasses(int value) {
-    return _sharedPreferences.setInt(
-      _currentSemesterKey(_eveningClassesKey),
-      value,
-    );
+    return _setInt(_currentSemesterKey(_eveningClassesKey), value);
   }
 
   List<String>? readEveningPeriodStartTimes() {
@@ -443,7 +441,7 @@ class StorageService {
   }
 
   Future<void> writeEveningPeriodStartTimes(List<String> values) {
-    return _sharedPreferences.setStringList(
+    return _setStringList(
       _currentSemesterKey(_eveningPeriodStartTimesKey),
       values,
     );
@@ -466,14 +464,14 @@ class StorageService {
   }
 
   Future<void> writeSemesterStartDate(DateTime value) {
-    return _sharedPreferences.setString(
+    return _setString(
       _currentSemesterKey(_semesterStartDateKey),
       value.toIso8601String(),
     );
   }
 
   Future<void> writeSemesterStartDateFor(String semesterId, DateTime value) {
-    return _sharedPreferences.setString(
+    return _setString(
       _semesterScopedKey(_semesterStartDateKey, semesterId: semesterId),
       value.toIso8601String(),
     );
@@ -485,7 +483,7 @@ class StorageService {
   }
 
   Future<void> writeSemesterStartDatePromptShown(bool value) {
-    return _sharedPreferences.setBool(_semesterStartDatePromptShownKey, value);
+    return _setBool(_semesterStartDatePromptShownKey, value);
   }
 
   bool readTimetableToolbarGuideConfirmed({required bool fallback}) {
@@ -494,10 +492,7 @@ class StorageService {
   }
 
   Future<void> writeTimetableToolbarGuideConfirmed(bool value) {
-    return _sharedPreferences.setBool(
-      _timetableToolbarGuideConfirmedKey,
-      value,
-    );
+    return _setBool(_timetableToolbarGuideConfirmedKey, value);
   }
 
   bool readImportWebViewGuideConfirmed({required bool fallback}) {
@@ -506,7 +501,7 @@ class StorageService {
   }
 
   Future<void> writeImportWebViewGuideConfirmed(bool value) {
-    return _sharedPreferences.setBool(_importWebViewGuideConfirmedKey, value);
+    return _setBool(_importWebViewGuideConfirmedKey, value);
   }
 
   int readTotalWeeks({required int fallback}) {
@@ -515,10 +510,7 @@ class StorageService {
   }
 
   Future<void> writeTotalWeeks(int value) {
-    return _sharedPreferences.setInt(
-      _currentSemesterKey(_totalWeeksKey),
-      value,
-    );
+    return _setInt(_currentSemesterKey(_totalWeeksKey), value);
   }
 
   int readReminderAdvanceMinutes({required int fallback}) {
@@ -526,7 +518,7 @@ class StorageService {
   }
 
   Future<void> writeReminderAdvanceMinutes(int value) {
-    return _sharedPreferences.setInt(_reminderAdvanceMinutesKey, value);
+    return _setInt(_reminderAdvanceMinutesKey, value);
   }
 
   int readEventReminderAdvanceMinutes({required int fallback}) {
@@ -535,7 +527,7 @@ class StorageService {
   }
 
   Future<void> writeEventReminderAdvanceMinutes(int value) {
-    return _sharedPreferences.setInt(_eventReminderAdvanceMinutesKey, value);
+    return _setInt(_eventReminderAdvanceMinutesKey, value);
   }
 
   String readLanguageCode({required String fallback}) {
@@ -543,7 +535,7 @@ class StorageService {
   }
 
   Future<void> writeLanguageCode(String value) {
-    return _sharedPreferences.setString(_languageCodeKey, value);
+    return _setString(_languageCodeKey, value);
   }
 
   String readThemePaletteId({required String fallback}) {
@@ -551,7 +543,7 @@ class StorageService {
   }
 
   Future<void> writeThemePaletteId(String value) {
-    return _sharedPreferences.setString(_themePaletteIdKey, value);
+    return _setString(_themePaletteIdKey, value);
   }
 
   int readCustomThemePrimaryValue({required int fallback}) {
@@ -559,7 +551,7 @@ class StorageService {
   }
 
   Future<void> writeCustomThemePrimaryValue(int value) {
-    return _sharedPreferences.setInt(_customThemePrimaryValueKey, value);
+    return _setInt(_customThemePrimaryValueKey, value);
   }
 
   int readCustomThemeAccentValue({required int fallback}) {
@@ -567,7 +559,7 @@ class StorageService {
   }
 
   Future<void> writeCustomThemeAccentValue(int value) {
-    return _sharedPreferences.setInt(_customThemeAccentValueKey, value);
+    return _setInt(_customThemeAccentValueKey, value);
   }
 
   bool readAutoMuteEnabled({required bool fallback}) {
@@ -575,7 +567,7 @@ class StorageService {
   }
 
   Future<void> writeAutoMuteEnabled(bool value) {
-    return _sharedPreferences.setBool(_autoMuteEnabledKey, value);
+    return _setBool(_autoMuteEnabledKey, value);
   }
 
   bool readCourseReminderPersistentDisplayEnabled({required bool fallback}) {
@@ -587,11 +579,13 @@ class StorageService {
   }
 
   Future<void> writeCourseReminderPersistentDisplayEnabled(bool value) async {
-    await _sharedPreferences.setBool(
+    await _setBool(
       _courseReminderPersistentDisplayEnabledKey,
       value,
+      sync: false,
     );
-    await _sharedPreferences.setBool(_legacyBackgroundServiceEnabledKey, value);
+    await _setBool(_legacyBackgroundServiceEnabledKey, value, sync: false);
+    await syncExternalBackup();
   }
 
   String _currentSemesterKey(String key) {
@@ -678,11 +672,13 @@ class StorageService {
     await _copyLegacySetting(_totalWeeksKey);
 
     if (legacyUser && !_sharedPreferences.containsKey(_semesterStartDateKey)) {
-      await _sharedPreferences.setString(
+      await _setString(
         _semesterScopedKey(_semesterStartDateKey, semesterId: semesterId),
         _defaultSemesterStartDate().toIso8601String(),
+        sync: false,
       );
     }
+    await syncExternalBackup();
   }
 
   Future<void> _copyLegacySetting(String key) async {
@@ -693,15 +689,15 @@ class StorageService {
     final scopedKey = _currentSemesterKey(key);
     final value = _sharedPreferences.get(key);
     if (value is int) {
-      await _sharedPreferences.setInt(scopedKey, value);
+      await _setInt(scopedKey, value, sync: false);
     } else if (value is double) {
-      await _sharedPreferences.setDouble(scopedKey, value);
+      await _setDouble(scopedKey, value, sync: false);
     } else if (value is bool) {
-      await _sharedPreferences.setBool(scopedKey, value);
+      await _setBool(scopedKey, value, sync: false);
     } else if (value is String) {
-      await _sharedPreferences.setString(scopedKey, value);
+      await _setString(scopedKey, value, sync: false);
     } else if (value is List<String>) {
-      await _sharedPreferences.setStringList(scopedKey, value);
+      await _setStringList(scopedKey, value, sync: false);
     }
   }
 
@@ -712,8 +708,9 @@ class StorageService {
         .where((key) => key.startsWith(prefix))
         .toList();
     for (final key in keysToRemove) {
-      await _sharedPreferences.remove(key);
+      await _remove(key, sync: false);
     }
+    await syncExternalBackup();
   }
 
   String _defaultSemesterName(int number) {
@@ -758,8 +755,68 @@ class StorageService {
   Future<void> _encodeList({
     required String key,
     required Iterable<Map<String, dynamic>> items,
-  }) {
+  }) async {
     final rawItems = items.map(jsonEncode).toList();
-    return _sharedPreferences.setStringList(key, rawItems);
+    await _setStringList(key, rawItems);
+  }
+
+  Future<void> _setString(String key, String value, {bool sync = true}) async {
+    await _sharedPreferences.setString(key, value);
+    if (sync) {
+      await syncExternalBackup();
+    }
+  }
+
+  Future<void> _setStringList(
+    String key,
+    List<String> value, {
+    bool sync = true,
+  }) async {
+    await _sharedPreferences.setStringList(key, value);
+    if (sync) {
+      await syncExternalBackup();
+    }
+  }
+
+  Future<void> _setInt(String key, int value, {bool sync = true}) async {
+    await _sharedPreferences.setInt(key, value);
+    if (sync) {
+      await syncExternalBackup();
+    }
+  }
+
+  Future<void> _setDouble(String key, double value, {bool sync = true}) async {
+    await _sharedPreferences.setDouble(key, value);
+    if (sync) {
+      await syncExternalBackup();
+    }
+  }
+
+  Future<void> _setBool(String key, bool value, {bool sync = true}) async {
+    await _sharedPreferences.setBool(key, value);
+    if (sync) {
+      await syncExternalBackup();
+    }
+  }
+
+  Future<void> _remove(String key, {bool sync = true}) async {
+    await _sharedPreferences.remove(key);
+    if (sync) {
+      await syncExternalBackup();
+    }
+  }
+
+  static bool _hasRecoverableInternalData(SharedPreferences preferences) {
+    return preferences.containsKey(_semestersKey) ||
+        preferences.containsKey(_currentSemesterIdKey) ||
+        preferences.containsKey(_coursesKey) ||
+        preferences.containsKey(_eventsKey) ||
+        preferences.getKeys().any(
+          (key) =>
+              key.startsWith('semesters.') &&
+              (key.endsWith('.courses.items') ||
+                  key.endsWith('.events.items') ||
+                  key.endsWith('.settings.semesterStartDate')),
+        );
   }
 }

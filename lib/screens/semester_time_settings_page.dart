@@ -424,9 +424,10 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text('已创建并切换到${semester.name}')));
+      SnackBar(content: Text('已创建并切换到${semester.name}')),
+    );
   }
 
   Future<void> _switchSemester(
@@ -475,9 +476,7 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
     }
 
     final semesterName = provider.currentSemester?.name ?? '当前学期';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已切换到$semesterName')));
+    showAppSnackBar(context, SnackBar(content: Text('已切换到$semesterName')));
   }
 
   Future<void> _renameSemester(

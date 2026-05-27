@@ -491,9 +491,7 @@ class _CourseFormState extends State<_CourseForm>
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, SnackBar(content: Text(message)));
   }
 
   int _boundedPeriod(int value, int max) {
@@ -757,9 +755,7 @@ class _EventFormState extends State<_EventForm> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, SnackBar(content: Text(message)));
   }
 
   String _formatDate(DateTime value) {

@@ -5,8 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/update_manifest.dart';
 import 'app_update_platform.dart';
+import 'update_http_client.dart';
+import 'update_mirror_urls.dart';
 
 typedef UpdateManifestLoader = Future<UpdateManifest> Function();
+typedef UpdateManifestUriLoader = Future<UpdateManifest> Function(Uri uri);
 typedef IntLoader = Future<int?> Function();
 typedef IntWriter = Future<void> Function(int value);
 typedef AbiLoader = Future<List<String>> Function();
@@ -34,10 +37,24 @@ class UpdateCheckService {
   factory UpdateCheckService.githubManifest({
     AppUpdatePlatform platform = const AppUpdatePlatform(),
     Uri? manifestUri,
+    List<Uri>? manifestUris,
+    UpdateManifestUriLoader? manifestUriLoader,
+    List<String> githubMirrorPrefixes =
+        UpdateMirrorUrls.defaultGithubMirrorPrefixes,
   }) {
-    final effectiveManifestUri = manifestUri ?? defaultManifestUri;
+    final effectiveManifestUris =
+        manifestUris ??
+        (manifestUri == null
+            ? defaultManifestUris
+            : UpdateMirrorUrls.withGithubMirrors(
+                manifestUri,
+                githubMirrorPrefixes: githubMirrorPrefixes,
+              ));
     return UpdateCheckService(
-      manifestLoader: () => _loadManifestFromUri(effectiveManifestUri),
+      manifestLoader: () => loadManifestFromUris(
+        effectiveManifestUris,
+        loader: manifestUriLoader ?? _loadManifestFromUri,
+      ),
       currentVersionCodeLoader: platform.currentVersionCode,
       supportedAbisLoader: platform.supportedAbis,
       ignoredVersionCodeLoader: _loadIgnoredVersionCode,
@@ -48,6 +65,13 @@ class UpdateCheckService {
   static final Uri defaultManifestUri = Uri.parse(
     'https://raw.githubusercontent.com/Landon-3314/AHU-TimeTable/main/update.json',
   );
+  static final List<Uri> defaultManifestUris = UpdateMirrorUrls.dedupe([
+    defaultManifestUri,
+    Uri.parse(
+      'https://cdn.jsdelivr.net/gh/Landon-3314/AHU-TimeTable@main/update.json',
+    ),
+    ...UpdateMirrorUrls.withGithubMirrors(defaultManifestUri).skip(1),
+  ]);
   static const String _ignoredVersionCodeKey = 'updates.ignoredVersionCode.v1';
 
   final UpdateManifestLoader _manifestLoader;
@@ -93,19 +117,41 @@ class UpdateCheckService {
     return _ignoredVersionCodeWriter(update.manifest.versionCode);
   }
 
+  static Future<UpdateManifest> loadManifestFromUris(
+    List<Uri> uris, {
+    UpdateManifestUriLoader? loader,
+  }) async {
+    if (uris.isEmpty) {
+      throw ArgumentError.value(uris, 'uris', 'Must not be empty');
+    }
+    final effectiveLoader = loader ?? _loadManifestFromUri;
+    Object? lastError;
+    StackTrace? lastStackTrace;
+    for (final uri in uris) {
+      try {
+        return await effectiveLoader(uri);
+      } catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+      }
+    }
+    Error.throwWithStackTrace(lastError!, lastStackTrace!);
+  }
+
   static Future<UpdateManifest> _loadManifestFromUri(Uri uri) async {
-    final client = HttpClient();
+    final client = createDefaultUpdateHttpClient();
     try {
-      final request = await client.getUrl(uri);
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      final response = await request.close();
+      final response = await client.get(
+        uri,
+        headers: const {HttpHeaders.acceptHeader: 'application/json'},
+      );
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException('Update manifest request failed', uri: uri);
       }
-      final body = await utf8.decodeStream(response);
+      final body = await utf8.decodeStream(response.bytes);
       return UpdateManifest.fromJson(jsonDecode(body) as Map<String, Object?>);
     } finally {
-      client.close(force: true);
+      client.close();
     }
   }
 

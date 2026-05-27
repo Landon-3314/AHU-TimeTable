@@ -308,9 +308,7 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, SnackBar(content: Text(message)));
   }
 
   int? _boundedStartPeriod(int value, int maxStartPeriod) {

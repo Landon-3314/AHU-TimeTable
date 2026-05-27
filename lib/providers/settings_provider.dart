@@ -293,6 +293,10 @@ class SettingsProvider extends ChangeNotifier {
     _reminderScheduler = callback;
   }
 
+  Future<bool> syncExternalBackup() {
+    return _storageService.syncExternalBackup();
+  }
+
   Future<Semester> createSemesterWithInitialData({
     required DateTime startDate,
     String? customName,

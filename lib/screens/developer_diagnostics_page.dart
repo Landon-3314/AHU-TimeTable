@@ -12,6 +12,7 @@ import '../services/local_notification_service.dart';
 import '../services/native_alarm_service.dart';
 import '../services/permission_service.dart';
 import '../services/schedule_plan.dart';
+import '../widgets/common/app_ui.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 
 class DeveloperDiagnosticsPage extends StatefulWidget {
@@ -198,9 +199,10 @@ class _DeveloperDiagnosticsPageState extends State<DeveloperDiagnosticsPage> {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已调用 sound_mode 静音')));
+      const SnackBar(content: Text('已调用 sound_mode 静音')),
+    );
   }
 
   Future<void> _simulateUnmute(BuildContext context) async {
@@ -230,9 +232,10 @@ class _DeveloperDiagnosticsPageState extends State<DeveloperDiagnosticsPage> {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已调用 sound_mode 恢复响铃')));
+      const SnackBar(content: Text('已调用 sound_mode 恢复响铃')),
+    );
   }
 
   Future<void> _runTimedMuteTest(
@@ -466,7 +469,8 @@ class _DeveloperDiagnosticsPageState extends State<DeveloperDiagnosticsPage> {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
+    showAppSnackBar(
+      context,
       SnackBar(
         content: const Text('缺少勿扰/静音权限，系统会拒绝自动静音'),
         action: SnackBarAction(
@@ -491,9 +495,7 @@ class _DeveloperDiagnosticsPageState extends State<DeveloperDiagnosticsPage> {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, SnackBar(content: Text(message)));
   }
 }
 

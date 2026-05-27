@@ -778,9 +778,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, SnackBar(content: Text(message)));
   }
 }
 

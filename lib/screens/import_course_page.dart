@@ -13,6 +13,7 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/schedule_html_extractor.dart';
 import '../services/schedule_parser_service.dart';
+import '../widgets/common/app_ui.dart';
 import '../widgets/common/guided_tour_overlay.dart';
 
 enum _ImportAction { timetable, exam }
@@ -313,7 +314,8 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    showAppSnackBar(
+      context,
       SnackBar(
         backgroundColor: AppColors.danger,
         content: Text('Blocked non-academic navigation: $url'),
@@ -423,9 +425,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       _activeAction = null;
     });
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, SnackBar(content: Text(message)));
   }
 
   void _finishImportWithMessage(String message) {
@@ -437,7 +437,8 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       _activeAction = null;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    showAppSnackBar(
+      context,
       SnackBar(backgroundColor: AppColors.danger, content: Text(message)),
     );
   }

@@ -68,6 +68,9 @@ class _SettingsPageState extends State<SettingsPage> {
             AppSectionTitle(title: provider.t('basic_settings')),
             _buildTimetableParamsSection(context),
             const SizedBox(height: AppSpacing.xl),
+            AppSectionTitle(title: provider.t('app_update')),
+            _buildUpdateSection(context),
+            const SizedBox(height: AppSpacing.xl),
             AppSectionTitle(title: provider.t('data_storage')),
             _buildDataSection(context),
           ],
@@ -126,50 +129,51 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _buildUpdateSection(BuildContext context) {
+    final provider = context.watch<SettingsProvider>();
+    return AppSurface(
+      child: AppActionTile(
+        icon: Icons.system_update_alt_outlined,
+        title: provider.t('check_update'),
+        subtitle: provider.t('check_update_subtitle'),
+        enabled: !_isCheckingUpdate,
+        trailing: _isCheckingUpdate
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : null,
+        onTap: _handleCheckUpdate,
+      ),
+    );
+  }
+
   Widget _buildDataSection(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
     return AppSurface(
-      child: Column(
-        children: [
-          AppActionTile(
-            icon: Icons.system_update_alt_outlined,
-            title: provider.t('check_update'),
-            subtitle: provider.t('check_update_subtitle'),
-            enabled: !_isCheckingUpdate,
-            trailing: _isCheckingUpdate
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : null,
-            onTap: _handleCheckUpdate,
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.cookie_outlined),
-                  label: Text(provider.t('clear_browser_cache')),
-                  onPressed: () => _confirmAndClearCookies(context),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                    foregroundColor: Theme.of(context).colorScheme.onError,
-                  ),
-                  icon: const Icon(Icons.delete_forever_outlined),
-                  label: Text(provider.t('clear_all_local_data')),
-                  onPressed: () => _confirmAndClearAllData(context),
-                ),
-              ],
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.cookie_outlined),
+              label: Text(provider.t('clear_browser_cache')),
+              onPressed: () => _confirmAndClearCookies(context),
             ),
-          ),
-        ],
+            const SizedBox(height: AppSpacing.md),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: Text(provider.t('clear_all_local_data')),
+              onPressed: () => _confirmAndClearAllData(context),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -208,7 +212,7 @@ class _SettingsPageState extends State<SettingsPage> {
         return;
       }
 
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).removeCurrentSnackBar();
       final action = await showUpdatePrompt(
         context: context,
         update: update,
@@ -219,6 +223,15 @@ class _SettingsPageState extends State<SettingsPage> {
         updateLabel: provider.t('update_now'),
       );
       if (!mounted || action != UpdatePromptAction.update) {
+        return;
+      }
+
+      final backupReady = await provider.syncExternalBackup();
+      if (!mounted) {
+        return;
+      }
+      if (!backupReady) {
+        _showSnackBar(provider.t('update_backup_failed'));
         return;
       }
 
@@ -275,9 +288,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, SnackBar(content: Text(message)));
   }
 
   Future<void> _confirmAndClearCookies(BuildContext context) async {
@@ -298,7 +309,8 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
+    showAppSnackBar(
+      context,
       SnackBar(
         content: Text(cleared ? provider.t('cache_cleared') : '无 Cookies 可删除'),
       ),
@@ -324,7 +336,8 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
+    showAppSnackBar(
+      context,
       SnackBar(content: Text(provider.t('all_local_data_cleared'))),
     );
   }

@@ -14,6 +14,7 @@ class UpdateManifest {
     if (versionName is! String ||
         versionName.trim().isEmpty ||
         versionCode is! int ||
+        versionCode <= 0 ||
         rawAssets is! List) {
       throw const FormatException('Invalid update manifest');
     }
@@ -57,19 +58,26 @@ class UpdateAsset {
     required this.url,
     required this.sha256,
     required this.size,
+    this.mirrorUrls = const [],
   });
 
   factory UpdateAsset.fromJson(Map<String, Object?> json) {
     final abi = json['abi'];
     final url = json['url'];
+    final rawMirrorUrls = json['mirrorUrls'];
     final sha256 = json['sha256'];
     final size = json['size'];
+    final parsedUrl = url is String ? Uri.tryParse(url) : null;
+    final mirrorUrls = _parseMirrorUrls(rawMirrorUrls);
     if (abi is! String ||
         abi.trim().isEmpty ||
         url is! String ||
-        Uri.tryParse(url)?.hasAbsolutePath != true ||
+        parsedUrl == null ||
+        parsedUrl.scheme != 'https' ||
+        parsedUrl.host.isEmpty ||
+        mirrorUrls == null ||
         sha256 is! String ||
-        sha256.trim().isEmpty ||
+        !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(sha256.trim()) ||
         size is! int ||
         size <= 0) {
       throw const FormatException('Invalid update asset');
@@ -77,9 +85,10 @@ class UpdateAsset {
 
     return UpdateAsset(
       abi: abi.trim(),
-      url: Uri.parse(url),
+      url: parsedUrl,
       sha256: sha256.trim().toLowerCase(),
       size: size,
+      mirrorUrls: mirrorUrls,
     );
   }
 
@@ -87,4 +96,26 @@ class UpdateAsset {
   final Uri url;
   final String sha256;
   final int size;
+  final List<Uri> mirrorUrls;
+
+  static List<Uri>? _parseMirrorUrls(Object? value) {
+    if (value == null) {
+      return const [];
+    }
+    if (value is! List) {
+      return null;
+    }
+    final mirrors = <Uri>[];
+    for (final entry in value) {
+      if (entry is! String) {
+        return null;
+      }
+      final uri = Uri.tryParse(entry);
+      if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+        return null;
+      }
+      mirrors.add(uri);
+    }
+    return List.unmodifiable(mirrors);
+  }
 }

@@ -264,6 +264,12 @@ Future<bool> showAppConfirmDialog(
   return result == true;
 }
 
+void showAppSnackBar(BuildContext context, SnackBar snackBar) {
+  ScaffoldMessenger.of(context)
+    ..removeCurrentSnackBar()
+    ..showSnackBar(snackBar);
+}
+
 class LoadingButtonLabel extends StatelessWidget {
   const LoadingButtonLabel({
     super.key,

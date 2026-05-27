@@ -81,6 +81,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.1"
+  cronet_http:
+    dependency: "direct main"
+    description:
+      name: cronet_http
+      sha256: "8e77bc6f203e0bc9126e6a9092508a3435dbcb04da3b53ed1a358909385c5e0e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.8.0"
   crypto:
     dependency: "direct main"
     description:
@@ -201,7 +209,7 @@ packages:
     source: hosted
     version: "0.15.6"
   http:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"
@@ -216,6 +224,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
+  http_profile:
+    dependency: transitive
+    description:
+      name: http_profile
+      sha256: "7e679e355b09aaee2ab5010915c932cce3f2d1c11c3b2dc177891687014ffa78"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0"
   image:
     dependency: transitive
     description:
@@ -232,6 +248,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.20.2"
+  jni:
+    dependency: transitive
+    description:
+      name: jni
+      sha256: "8706a77e94c76fe9ec9315e18949cc9479cc03af97085ca9c1077b61323ea12d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.15.2"
   json_annotation:
     dependency: transitive
     description:
@@ -304,6 +328,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
+  package_config:
+    dependency: transitive
+    description:
+      name: package_config
+      sha256: f096c55ebb7deb7e384101542bfba8c52696c1b56fca2eb62827989ef2353bbc
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
   path:
     dependency: transitive
     description:
