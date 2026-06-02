@@ -92,6 +92,10 @@ class SchedulePlan {
 class SchedulePlanBuilder {
   const SchedulePlanBuilder._();
 
+  static int semesterCoverageDays(int totalWeeks) {
+    return totalWeeks.clamp(1, 52).toInt() * DateTime.daysPerWeek;
+  }
+
   static SchedulePlan build({
     required List<Course> courses,
     required List<Event> events,
@@ -102,6 +106,8 @@ class SchedulePlanBuilder {
     required int eventReminderAdvanceMinutes,
     required bool autoMuteEnabled,
     required bool canAutoMute,
+    bool retainAutoMuteWindows = false,
+    bool nativeMuteFallbackEnabled = false,
     DateTime? now,
     int horizonDays = 14,
     int? maxNotificationCount,
@@ -113,6 +119,7 @@ class SchedulePlanBuilder {
     final todayCourses = <TodayCourseSnapshot>[];
     final courseStatusWindows = <CourseStatusWindow>[];
     final shouldFallbackToManualMute = autoMuteEnabled && !canAutoMute;
+    final shouldRetainAutoMuteWindows = canAutoMute || retainAutoMuteWindows;
 
     for (var dayOffset = 0; dayOffset < horizonDays; dayOffset += 1) {
       final day = today.add(Duration(days: dayOffset));
@@ -201,7 +208,7 @@ class SchedulePlanBuilder {
           }
         }
 
-        if (canAutoMute) {
+        if (shouldRetainAutoMuteWindows) {
           muteWindows.add(
             AutoMuteWindow(
               id: _stableId('mute-window', occurrence.key),
@@ -213,6 +220,7 @@ class SchedulePlanBuilder {
             ),
           );
         } else if (shouldFallbackToManualMute &&
+            !nativeMuteFallbackEnabled &&
             occurrence.startAt.isAfter(current)) {
           notifications.add(
             ManagedNotification(

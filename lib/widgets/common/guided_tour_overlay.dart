@@ -28,15 +28,20 @@ Future<void> showGuidedTourOverlay({
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: false,
-    barrierLabel: 'Guided tour',
+    barrierLabel: '功能引导',
     barrierColor: Colors.transparent,
     pageBuilder: (context, _, _) {
-      return GuidedTourOverlay(
-        steps: steps,
-        nextLabel: nextLabel,
-        doneLabel: doneLabel,
-        stepLabelBuilder: stepLabelBuilder,
-        onCompleted: () => Navigator.of(context).pop(),
+      return Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: '功能引导',
+        child: GuidedTourOverlay(
+          steps: steps,
+          nextLabel: nextLabel,
+          doneLabel: doneLabel,
+          stepLabelBuilder: stepLabelBuilder,
+          onCompleted: () => Navigator.of(context).pop(),
+        ),
       );
     },
   );
@@ -100,45 +105,49 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay> {
 
     return PopScope(
       canPop: false,
-      child: Material(
-        color: Colors.transparent,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _GuidedTourScrimPainter(targetRect: targetRect),
+      child: BlockSemantics(
+        child: Material(
+          color: Colors.transparent,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _GuidedTourScrimPainter(targetRect: targetRect),
+                ),
               ),
-            ),
-            Positioned.fromRect(
-              rect: targetRect,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 2,
+              Positioned.fromRect(
+                rect: targetRect,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              left: cardLeft,
-              top: cardTop,
-              width: cardWidth,
-              child: _GuidedTourCard(
-                title: step.title,
-                body: step.body,
-                stepLabel: widget.stepLabelBuilder(
-                  _stepIndex + 1,
-                  widget.steps.length,
+              Positioned(
+                left: cardLeft,
+                top: cardTop,
+                width: cardWidth,
+                child: _GuidedTourCard(
+                  title: step.title,
+                  body: step.body,
+                  stepLabel: widget.stepLabelBuilder(
+                    _stepIndex + 1,
+                    widget.steps.length,
+                  ),
+                  actionLabel: _isLastStep
+                      ? widget.doneLabel
+                      : widget.nextLabel,
+                  onPressed: _advance,
                 ),
-                actionLabel: _isLastStep ? widget.doneLabel : widget.nextLabel,
-                onPressed: _advance,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -242,26 +251,37 @@ class _GuidedTourCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              stepLabel,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w700,
+            Semantics(
+              container: true,
+              label: '$stepLabel，$title，$body',
+              child: ExcludeSemantics(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      stepLabel,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      body,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(height: 1.45),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              body,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(height: 1.45),
             ),
             const SizedBox(height: 18),
             Align(

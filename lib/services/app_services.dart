@@ -42,14 +42,17 @@ class AppServices {
     }
 
     final permissionService = PermissionService();
+    final isAndroid =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final hasExactAlarmPermission = await NativeAlarmService.instance
         .hasExactAlarmPermission();
     final hasDndPermission = await permissionService.hasDndPermission();
     final canAutoMute =
-        !kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android &&
+        isAndroid &&
         settings.autoMuteEnabled &&
+        hasExactAlarmPermission &&
         hasDndPermission;
+    final retainAutoMuteWindows = isAndroid && settings.autoMuteEnabled;
     final maxNotificationCount =
         defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.macOS
@@ -77,6 +80,11 @@ class AppServices {
       eventReminderAdvanceMinutes: settings.eventReminderAdvanceMinutes,
       autoMuteEnabled: settings.autoMuteEnabled,
       canAutoMute: canAutoMute,
+      retainAutoMuteWindows: retainAutoMuteWindows,
+      nativeMuteFallbackEnabled: retainAutoMuteWindows,
+      horizonDays: isAndroid
+          ? SchedulePlanBuilder.semesterCoverageDays(settings.totalWeeks)
+          : 14,
       maxNotificationCount: maxNotificationCount,
     );
     _log(
@@ -86,10 +94,10 @@ class AppServices {
       'courseStatusWindows=${plan.courseStatusWindows.length}',
     );
 
-    final isAndroid =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     if (isAndroid) {
-      await NativeAlarmService.instance.reconcileMuteState();
+      await NativeAlarmService.instance.reconcileMuteState(
+        restoreActiveAppMute: !settings.autoMuteEnabled,
+      );
       await LocalNotificationService.instance
           .cancelAndroidPluginSchedulesForNativeMigration();
       _log(

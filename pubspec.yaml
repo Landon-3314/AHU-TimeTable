@@ -1,13 +1,15 @@
 name: timetable
 description: "一款简洁实用的大学课表应用。"
 publish_to: 'none'
-version: 0.3.5+2
+version: 0.3.6+3
 
 environment:
   sdk: ^3.11.3
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   provider: ^6.1.5
   shared_preferences: ^2.5.3

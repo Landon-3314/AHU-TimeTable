@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../core/app_colors.dart';
 import '../../core/app_constants.dart';
+import '../../core/app_theme_tokens.dart';
 
 class AppWheelPickerOption<T> {
   const AppWheelPickerOption({
@@ -112,14 +112,23 @@ Future<T?> _showWheelPickerSheet<T>(
     useSafeArea: true,
     showDragHandle: true,
     builder: (sheetContext) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xxl,
-          0,
-          AppSpacing.xxl,
-          AppSpacing.xxl,
+      final mediaQuery = MediaQuery.of(sheetContext);
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight:
+              mediaQuery.size.height -
+              mediaQuery.padding.top -
+              mediaQuery.padding.bottom,
         ),
-        child: child,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xxl,
+            0,
+            AppSpacing.xxl,
+            AppSpacing.xxl,
+          ),
+          child: child,
+        ),
       );
     },
   );
@@ -350,6 +359,7 @@ class _ValueWheelSheetState<T> extends State<_ValueWheelSheet<T>> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return _WheelSheetScaffold(
       title: widget.title,
       onCancel: () => Navigator.of(context).pop(),
@@ -383,7 +393,7 @@ class _ValueWheelSheetState<T> extends State<_ValueWheelSheet<T>> {
                       _selectedOption.subtitle!,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: tokens.textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -450,6 +460,7 @@ class _WheelColumnLabels extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return SizedBox(
       height: 32,
       child: Row(
@@ -460,7 +471,7 @@ class _WheelColumnLabels extends StatelessWidget {
                 child: Text(
                   label,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppColors.textPrimary,
+                    color: tokens.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -645,6 +656,7 @@ class _WheelPickerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     final distance = _wheelDistance(index, selectedIndex, itemCount);
     final opacity = switch (distance) {
       0 => 1.0,
@@ -657,7 +669,7 @@ class _WheelPickerItem extends StatelessWidget {
         duration: AppDurations.fast,
         curve: Curves.easeOut,
         style: TextStyle(
-          color: AppColors.textPrimary.withValues(alpha: opacity),
+          color: tokens.textPrimary.withValues(alpha: opacity),
           fontSize: fontSize,
           fontWeight: distance == 0 ? FontWeight.w800 : FontWeight.w700,
           height: 1,

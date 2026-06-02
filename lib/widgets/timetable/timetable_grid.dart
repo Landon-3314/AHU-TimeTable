@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/app_colors.dart';
 import '../../core/app_constants.dart';
+import '../../core/app_theme_tokens.dart';
 import '../../models/course.dart';
 import '../../models/event.dart';
 import '../../models/timetable_view_data.dart';
@@ -19,6 +19,7 @@ class DayAgendaView extends StatefulWidget {
     required this.coursePeriodTextBuilder,
     required this.eventMarkerLabel,
     required this.locationPendingLabel,
+    this.emptyAction,
   });
 
   final TimetableDayPageData pageData;
@@ -27,6 +28,7 @@ class DayAgendaView extends StatefulWidget {
   final String Function(Course course) coursePeriodTextBuilder;
   final String eventMarkerLabel;
   final String locationPendingLabel;
+  final Widget? emptyAction;
 
   @override
   State<DayAgendaView> createState() => _DayAgendaViewState();
@@ -47,6 +49,7 @@ class _DayAgendaViewState extends State<DayAgendaView> {
         ? EmptyScheduleState(
             title: widget.pageData.emptyTitle,
             subtitle: widget.pageData.emptySubtitle,
+            action: widget.emptyAction,
           )
         : LongScreenshotScrollCapture(
             controller: _scrollController,
@@ -218,6 +221,7 @@ class _DayWeekHeaderState extends State<DayWeekHeader> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tokens = appThemeTokensOf(context);
     return SizedBox(
       height: AppSpacing.chipHeight + AppSpacing.sm,
       child: SingleChildScrollView(
@@ -239,11 +243,11 @@ class _DayWeekHeaderState extends State<DayWeekHeader> {
                 child: ChoiceChip(
                   showCheckmark: false,
                   selectedColor: colorScheme.primaryContainer,
-                  backgroundColor: AppColors.surface,
+                  backgroundColor: tokens.surface,
                   side: BorderSide(
                     color: widget.selectedWeekday == chip.weekday
                         ? colorScheme.primary
-                        : AppColors.divider,
+                        : tokens.divider,
                   ),
                   label: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -253,14 +257,14 @@ class _DayWeekHeaderState extends State<DayWeekHeader> {
                         style: TextStyle(
                           color: widget.selectedWeekday == chip.weekday
                               ? colorScheme.primary
-                              : AppColors.textPrimary,
+                              : tokens.textPrimary,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       Text(
                         chip.dateLabel,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: tokens.textSecondary,
                         ),
                       ),
                     ],
@@ -283,12 +287,14 @@ class TimetableGrid extends StatefulWidget {
     required this.onCourseTap,
     required this.onEventTap,
     required this.coursePeriodTextBuilder,
+    this.emptyAction,
   });
 
   final TimetableWeekPageData pageData;
   final ValueChanged<Course> onCourseTap;
   final ValueChanged<Event> onEventTap;
   final String Function(Course course) coursePeriodTextBuilder;
+  final Widget? emptyAction;
 
   @override
   State<TimetableGrid> createState() => _TimetableGridState();
@@ -305,6 +311,14 @@ class _TimetableGridState extends State<TimetableGrid> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.pageData.isEmpty) {
+      return EmptyScheduleState(
+        title: widget.pageData.title,
+        subtitle: widget.pageData.subtitle,
+        action: widget.emptyAction,
+      );
+    }
+
     return LongScreenshotScrollCapture(
       controller: _scrollController,
       child: ListView(
@@ -341,6 +355,7 @@ class _WeekdaySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return AppSurface(
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
@@ -358,9 +373,9 @@ class _WeekdaySection extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: AppSpacing.xs),
               child: Text(
                 section.emptyText,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
             ),
           for (final item in section.items)
@@ -389,10 +404,12 @@ class EmptyScheduleState extends StatelessWidget {
     super.key,
     required this.title,
     required this.subtitle,
+    this.action,
   });
 
   final String title;
   final String subtitle;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -400,6 +417,7 @@ class EmptyScheduleState extends StatelessWidget {
       icon: Icons.event_busy_outlined,
       title: title,
       subtitle: subtitle,
+      action: action,
     );
   }
 }

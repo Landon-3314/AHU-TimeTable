@@ -23,4 +23,3 @@ class ClassAutoMuteSwitch extends StatelessWidget {
     );
   }
 }
-

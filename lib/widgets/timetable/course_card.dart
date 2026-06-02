@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/app_colors.dart';
 import '../../core/app_constants.dart';
+import '../../core/app_theme_tokens.dart';
 import '../../models/course.dart';
 import '../common/app_ui.dart';
 
@@ -69,6 +69,7 @@ class _CourseText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -77,7 +78,7 @@ class _CourseText extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: AppColors.textPrimary,
+            color: tokens.textPrimary,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -88,7 +89,7 @@ class _CourseText extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: Theme.of(
             context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+          ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
         ),
       ],
     );

@@ -10,10 +10,7 @@ class UpdateMirrorUrls {
     List<Uri> extraMirrors = const [],
     List<String> githubMirrorPrefixes = defaultGithubMirrorPrefixes,
   }) {
-    final candidates = <Uri>[
-      primary,
-      ...extraMirrors,
-    ];
+    final candidates = <Uri>[primary, ...extraMirrors];
     if (_isGithubHosted(primary)) {
       for (final prefix in githubMirrorPrefixes) {
         final mirrorUri = Uri.tryParse('$prefix$primary');

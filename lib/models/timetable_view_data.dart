@@ -63,6 +63,8 @@ class TimetableWeekPageData {
   final String title;
   final String subtitle;
   final List<TimetableWeekSectionData> sections;
+
+  bool get isEmpty => sections.every((section) => section.isEmpty);
 }
 
 class TimetableWeekSectionData {

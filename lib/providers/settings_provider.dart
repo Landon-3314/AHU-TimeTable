@@ -126,7 +126,7 @@ class SettingsProvider extends ChangeNotifier {
            .readEventReminderAdvanceMinutes(
              fallback: _defaultEventReminderAdvanceMinutes,
            ),
-       _languageCode = storageService.readLanguageCode(fallback: 'zh'),
+       _appThemeMode = storageService.readAppThemeMode(),
        _themePaletteId = storageService.readThemePaletteId(
          fallback: AppThemePalette.defaultPalette.id,
        ),
@@ -185,7 +185,7 @@ class SettingsProvider extends ChangeNotifier {
   int _totalWeeks;
   int _reminderAdvanceMinutes;
   int _eventReminderAdvanceMinutes;
-  String _languageCode;
+  AppThemeMode _appThemeMode;
   String _themePaletteId;
   int _customThemePrimaryValue;
   int _customThemeAccentValue;
@@ -196,6 +196,7 @@ class SettingsProvider extends ChangeNotifier {
   List<Semester> _semesters;
   String? _currentSemesterId;
   Future<void> Function()? _reminderScheduler;
+  Future<void> Function()? _semesterChangeHandler;
 
   double get pixelsPerMinute => _pixelsPerMinute;
   int get classDuration => _classDuration;
@@ -220,7 +221,13 @@ class SettingsProvider extends ChangeNotifier {
   int get totalWeeks => _totalWeeks;
   int get reminderAdvanceMinutes => _reminderAdvanceMinutes;
   int get eventReminderAdvanceMinutes => _eventReminderAdvanceMinutes;
-  String get languageCode => _languageCode;
+  String get languageCode => 'zh';
+  AppThemeMode get appThemeMode => _appThemeMode;
+  ThemeMode get materialThemeMode => switch (_appThemeMode) {
+    AppThemeMode.system => ThemeMode.system,
+    AppThemeMode.light => ThemeMode.light,
+    AppThemeMode.dark => ThemeMode.dark,
+  };
   String get themePaletteId => _themePaletteId;
   int get customThemePrimaryValue => _customThemePrimaryValue;
   int get customThemeAccentValue => _customThemeAccentValue;
@@ -271,7 +278,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get courseReminderEnabled =>
       _reminderAdvanceMinutes > 0 || _courseReminderPersistentDisplayEnabled;
   List<TimeSlot> get timeSlots => generateTimeSlots();
-  String t(String key) => AppStrings.get(key, _languageCode);
+  String t(String key) => AppStrings.get(key, 'zh');
 
   int get currentRealWeek => _scheduleCalculator.computeCurrentWeek(
     semesterStartDate: _semesterStartDate,
@@ -293,8 +300,16 @@ class SettingsProvider extends ChangeNotifier {
     _reminderScheduler = callback;
   }
 
+  void bindSemesterChangeHandler(Future<void> Function() callback) {
+    _semesterChangeHandler = callback;
+  }
+
   Future<bool> syncExternalBackup() {
     return _storageService.syncExternalBackup();
+  }
+
+  Future<int> consumePendingCorruptRowNoticeCount() {
+    return _storageService.consumePendingCorruptRowNoticeCount();
   }
 
   Future<Semester> createSemesterWithInitialData({
@@ -308,6 +323,7 @@ class SettingsProvider extends ChangeNotifier {
     );
     _reloadSemesterState();
     notifyListeners();
+    await _handleSemesterChange();
     return semester;
   }
 
@@ -320,9 +336,10 @@ class SettingsProvider extends ChangeNotifier {
       return false;
     }
 
-    await _storageService.setCurrentSemesterId(semesterId);
+    await _storageService.switchSemester(semesterId);
     _reloadSemesterState();
     notifyListeners();
+    await _handleSemesterChange();
     return true;
   }
 
@@ -335,18 +352,30 @@ class SettingsProvider extends ChangeNotifier {
       semesterId,
       startDate: aligned,
     );
-    _semesters = _storageService.loadSemesters();
+    if (semesterId == _currentSemesterId) {
+      _reloadSemesterState();
+    } else {
+      _semesters = _storageService.loadSemesters();
+    }
     notifyListeners();
+    if (semesterId == _currentSemesterId) {
+      await _handleSemesterChange();
+    }
   }
 
   Future<void> initializeExistingSemesterAndSwitch(
     String semesterId, {
     required DateTime startDate,
   }) async {
-    await initializeExistingSemester(semesterId, startDate: startDate);
-    await _storageService.setCurrentSemesterId(semesterId);
+    final aligned = _scheduleCalculator.alignToMonday(startDate);
+    await _storageService.initializeExistingSemester(
+      semesterId,
+      startDate: aligned,
+    );
+    await _storageService.switchSemester(semesterId);
     _reloadSemesterState();
     notifyListeners();
+    await _handleSemesterChange();
   }
 
   Future<void> renameSemester(String semesterId, String newName) async {
@@ -359,17 +388,18 @@ class SettingsProvider extends ChangeNotifier {
     final nextSemesterId = await _storageService.deleteSemester(semesterId);
     _reloadSemesterState();
     notifyListeners();
+    await _handleSemesterChange();
     return nextSemesterId;
   }
 
-  Future<void> changeLanguage(String code) async {
-    if (code == _languageCode) {
+  Future<void> changeAppThemeMode(AppThemeMode mode) async {
+    if (mode == _appThemeMode) {
       return;
     }
 
-    _languageCode = code;
+    _appThemeMode = mode;
     notifyListeners();
-    await _storageService.writeLanguageCode(code);
+    await _storageService.writeAppThemeMode(mode);
   }
 
   Future<void> changeThemePalette(String id) async {
@@ -574,34 +604,39 @@ class SettingsProvider extends ChangeNotifier {
 
     _semesterStartDate = aligned;
     notifyListeners();
-    await _storageService.writeSemesterStartDate(aligned);
     if (!isCurrentSemesterInitialized) {
       final semesterId = _currentSemesterId;
       if (semesterId != null) {
-        await _storageService.markSemesterInitialized(semesterId);
+        await _storageService.initializeExistingSemester(
+          semesterId,
+          startDate: aligned,
+        );
       }
-      _semesters = _storageService.loadSemesters();
+      _reloadSemesterState();
       notifyListeners();
+      await _handleSemesterChange();
+      return;
     }
+    await _storageService.writeSemesterStartDate(aligned);
     await _refreshReminders();
   }
 
   Future<void> completeInitialSemesterStartDate(DateTime value) async {
     final aligned = _scheduleCalculator.alignToMonday(value);
-    final dateChanged = !_isSameDate(aligned, _semesterStartDate);
-
     _semesterStartDate = aligned;
 
-    await _storageService.writeSemesterStartDate(aligned);
     final semesterId = _currentSemesterId;
     if (semesterId != null) {
-      await _storageService.markSemesterInitialized(semesterId);
+      await _storageService.initializeExistingSemester(
+        semesterId,
+        startDate: aligned,
+      );
+    } else {
+      await _storageService.writeSemesterStartDate(aligned);
     }
-    _semesters = _storageService.loadSemesters();
+    _reloadSemesterState();
     notifyListeners();
-    if (dateChanged) {
-      await _refreshReminders();
-    }
+    await _handleSemesterChange();
   }
 
   Future<void> updateTotalWeeks(int value) async {
@@ -788,6 +823,16 @@ class SettingsProvider extends ChangeNotifier {
     }
 
     await scheduler();
+  }
+
+  Future<void> _handleSemesterChange() async {
+    final handler = _semesterChangeHandler;
+    if (handler == null) {
+      await _refreshReminders();
+      return;
+    }
+
+    await handler();
   }
 
   int _classCountFor(ClassDayPeriod period) {

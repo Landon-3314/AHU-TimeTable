@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/course.dart';
 import '../models/event.dart';
 
+import '../services/course_conflict_policy.dart';
 import '../services/storage_service.dart';
 
 class CourseGroup {
@@ -18,6 +19,10 @@ class CourseGroup {
 }
 
 class CourseProvider extends ChangeNotifier {
+  static const String academicTimetableImportSource = 'academic.timetable';
+  static const String academicExamImportSource = 'academic.exam';
+  static const CourseConflictPolicy _conflictPolicy = CourseConflictPolicy();
+
   CourseProvider({required StorageService storageService})
     : _storageService = storageService,
       _courses = storageService.loadCourses(),
@@ -70,6 +75,52 @@ class CourseProvider extends ChangeNotifier {
     return result;
   }
 
+  List<CourseConflict> findCourseConflicts(
+    Iterable<Course> candidates, {
+    String? ignoredCourseId,
+  }) {
+    return _conflictPolicy.findConflicts(
+      candidates: candidates,
+      existingCourses: _courses,
+      ignoredCourseId: ignoredCourseId,
+    );
+  }
+
+  List<CourseConflict> findImportedCourseConflicts(Iterable<Course> courses) {
+    return _conflictPolicy.findConflicts(
+      candidates: courses,
+      existingCourses: _courses.where(
+        (course) => course.importSource != academicTimetableImportSource,
+      ),
+    );
+  }
+
+  List<CourseConflict> findRescheduleCourseConflicts({
+    required Course originalCourse,
+    required int sourceWeek,
+    required int targetWeek,
+    required int targetWeekday,
+    required int targetStartPeriod,
+  }) {
+    final index = _courses.indexWhere(
+      (course) => course.id == originalCourse.id,
+    );
+    if (index == -1) {
+      return const <CourseConflict>[];
+    }
+    final candidate = _buildRescheduledCourseOccurrence(
+      storedCourse: _courses[index],
+      sourceWeek: sourceWeek,
+      targetWeek: targetWeek,
+      targetWeekday: targetWeekday,
+      targetStartPeriod: targetStartPeriod,
+    );
+    if (candidate == null) {
+      return const <CourseConflict>[];
+    }
+    return findCourseConflicts([candidate], ignoredCourseId: originalCourse.id);
+  }
+
   int _compareCourseRecords(Course left, Course right) {
     final weekdayOrder = left.weekday.compareTo(right.weekday);
     if (weekdayOrder != 0) {
@@ -117,23 +168,28 @@ class CourseProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> addCourse(Course course) async {
+  Future<bool> addCourse(Course course, {bool allowConflicts = false}) async {
     final semesterCourse = course.copyWith(
       semesterId: _storageService.currentSemesterId,
     );
     if (_containsDuplicate(semesterCourse)) {
       return false;
     }
+    if (!allowConflicts && findCourseConflicts([semesterCourse]).isNotEmpty) {
+      return false;
+    }
 
     _courses.add(semesterCourse);
     notifyListeners();
     await _persistCourses();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
     return true;
   }
 
-  Future<int> addCourses(List<Course> courses) async {
+  Future<int> addCourses(
+    List<Course> courses, {
+    bool allowConflicts = false,
+  }) async {
     if (courses.isEmpty) {
       return 0;
     }
@@ -152,25 +208,29 @@ class CourseProvider extends ChangeNotifier {
     if (acceptedCourses.isEmpty) {
       return 0;
     }
+    if (!allowConflicts && findCourseConflicts(acceptedCourses).isNotEmpty) {
+      return 0;
+    }
 
     _courses.addAll(acceptedCourses);
     notifyListeners();
     await _persistCourses();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
     return acceptedCourses.length;
   }
 
-  Future<int> mergeImportedCourses(List<Course> courses) async {
-    if (courses.isEmpty) {
-      return 0;
-    }
-
+  Future<int> mergeImportedCourses(
+    List<Course> courses, {
+    bool allowConflicts = false,
+  }) async {
+    final importBatchId = _createImportBatchId(academicTimetableImportSource);
     final uniqueImported = <String, Course>{};
     for (final course in courses) {
       final sanitizedCourse = course.copyWith(
         clearRescheduleSource: true,
         semesterId: _storageService.currentSemesterId,
+        importSource: academicTimetableImportSource,
+        importBatchId: importBatchId,
       );
       uniqueImported.putIfAbsent(
         _exactCourseKey(sanitizedCourse),
@@ -178,47 +238,65 @@ class CourseProvider extends ChangeNotifier {
       );
     }
 
-    final existingExactKeys = _courses.map(_exactCourseKey).toSet();
-    final changedImportedCourses = uniqueImported.values
-        .where((course) => !existingExactKeys.contains(_exactCourseKey(course)))
-        .toList();
-
-    if (changedImportedCourses.isEmpty) {
+    final previousImportedKeys = _courses
+        .where((course) => course.importSource == academicTimetableImportSource)
+        .map(_exactCourseKey)
+        .toSet();
+    final nextImportedKeys = uniqueImported.keys.toSet();
+    if (_haveSameKeys(previousImportedKeys, nextImportedKeys)) {
       return 0;
     }
 
     final remainingCourses = _courses
-        .where(
-          (existingCourse) => !changedImportedCourses.any(
-            (importedCourse) =>
-                _shouldReplaceWithImported(existingCourse, importedCourse),
-          ),
-        )
+        .where((course) => course.importSource != academicTimetableImportSource)
         .toList();
+    if (!allowConflicts &&
+        _conflictPolicy
+            .findConflicts(
+              candidates: uniqueImported.values,
+              existingCourses: remainingCourses,
+            )
+            .isNotEmpty) {
+      return 0;
+    }
 
     _courses
       ..clear()
       ..addAll(remainingCourses)
-      ..addAll(changedImportedCourses);
+      ..addAll(uniqueImported.values);
 
     notifyListeners();
     await _persistCourses();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
-    return changedImportedCourses.length;
+    return uniqueImported.length;
   }
 
-  Future<void> removeCourse(Course course) async {
-    _courses.removeWhere((item) => item.id == course.id);
+  Future<Course?> removeCourse(Course course) async {
+    final index = _courses.indexWhere((item) => item.id == course.id);
+    if (index == -1) {
+      return null;
+    }
+    final removed = _courses.removeAt(index);
     notifyListeners();
     await _persistCourses();
-    await _syncBackgroundRuntimeIfEnabled();
+    await _refreshReminders();
+    return removed;
+  }
+
+  Future<void> restoreCourse(Course course) async {
+    if (_courses.any((item) => item.id == course.id)) {
+      return;
+    }
+    _courses.add(course);
+    notifyListeners();
+    await _persistCourses();
     await _refreshReminders();
   }
 
   Future<bool> updateCourse({
     required Course originalCourse,
     required Course updatedCourse,
+    bool allowConflicts = false,
   }) async {
     final index = _courses.indexWhere(
       (course) => course.id == originalCourse.id,
@@ -227,16 +305,25 @@ class CourseProvider extends ChangeNotifier {
       return false;
     }
 
-    if (_containsDuplicate(updatedCourse, ignoredCourseId: originalCourse.id)) {
+    final semesterCourse = updatedCourse.copyWith(
+      semesterId: _storageService.currentSemesterId,
+    );
+    if (_containsDuplicate(
+      semesterCourse,
+      ignoredCourseId: originalCourse.id,
+    )) {
+      return false;
+    }
+    if (!allowConflicts &&
+        findCourseConflicts([
+          semesterCourse,
+        ], ignoredCourseId: originalCourse.id).isNotEmpty) {
       return false;
     }
 
-    _courses[index] = updatedCourse.copyWith(
-      semesterId: _storageService.currentSemesterId,
-    );
+    _courses[index] = semesterCourse;
     notifyListeners();
     await _persistCourses();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
     return true;
   }
@@ -247,6 +334,7 @@ class CourseProvider extends ChangeNotifier {
     required int targetWeek,
     required int targetWeekday,
     required int targetStartPeriod,
+    bool allowConflicts = false,
   }) async {
     final index = _courses.indexWhere(
       (course) => course.id == originalCourse.id,
@@ -256,16 +344,14 @@ class CourseProvider extends ChangeNotifier {
     }
 
     final storedCourse = _courses[index];
-    if (!storedCourse.weeks.contains(sourceWeek)) {
-      return false;
-    }
-
-    final targetSpan = storedCourse.endPeriod - storedCourse.startPeriod;
-    final targetEndPeriod = targetStartPeriod + targetSpan;
-    if (targetStartPeriod < 1 ||
-        targetWeekday < 1 ||
-        targetWeekday > 7 ||
-        targetEndPeriod < targetStartPeriod) {
+    final rescheduledCourse = _buildRescheduledCourseOccurrence(
+      storedCourse: storedCourse,
+      sourceWeek: sourceWeek,
+      targetWeek: targetWeek,
+      targetWeekday: targetWeekday,
+      targetStartPeriod: targetStartPeriod,
+    );
+    if (rescheduledCourse == null) {
       return false;
     }
 
@@ -274,21 +360,18 @@ class CourseProvider extends ChangeNotifier {
     final remainingCourse = remainingWeeks.isEmpty
         ? null
         : storedCourse.copyWith(weeks: remainingWeeks);
-    final rescheduledCourse = storedCourse.copyWith(
-      id: Course.createId(),
-      weekday: targetWeekday,
-      weeks: <int>[targetWeek],
-      startPeriod: targetStartPeriod,
-      endPeriod: targetEndPeriod,
-      rescheduledFromSessionKey: storedCourse.sessionKey,
-      rescheduledFromWeek: sourceWeek,
-    );
 
     if (_containsDuplicate(
       rescheduledCourse,
       ignoredCourseId: originalCourse.id,
       pendingCourses: [?remainingCourse],
     )) {
+      return false;
+    }
+    if (!allowConflicts &&
+        findCourseConflicts([
+          rescheduledCourse,
+        ], ignoredCourseId: originalCourse.id).isNotEmpty) {
       return false;
     }
 
@@ -302,7 +385,6 @@ class CourseProvider extends ChangeNotifier {
 
     notifyListeners();
     await _persistCourses();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
     return true;
   }
@@ -311,7 +393,6 @@ class CourseProvider extends ChangeNotifier {
     _courses.clear();
     notifyListeners();
     await _storageService.clearCourses();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -320,7 +401,6 @@ class CourseProvider extends ChangeNotifier {
     _events.clear();
     notifyListeners();
     await _storageService.clearAllTimetableData();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -328,19 +408,19 @@ class CourseProvider extends ChangeNotifier {
     _events.add(event.copyWith(semesterId: _storageService.currentSemesterId));
     notifyListeners();
     await _persistEvents();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
   Future<int> mergeImportedEvents(List<Event> events) async {
-    if (events.isEmpty) {
-      return 0;
-    }
-
+    final importBatchId = _createImportBatchId(academicExamImportSource);
+    final importedAt = DateTime.now();
     final uniqueImported = <String, Event>{};
     for (final event in events) {
       final sanitizedEvent = event.copyWith(
         semesterId: _storageService.currentSemesterId,
+        importSource: academicExamImportSource,
+        importBatchId: importBatchId,
+        importedAt: importedAt,
       );
       uniqueImported.putIfAbsent(
         _exactEventKey(sanitizedEvent),
@@ -348,28 +428,47 @@ class CourseProvider extends ChangeNotifier {
       );
     }
 
-    final existingKeys = _events.map(_exactEventKey).toSet();
-    final newEvents = uniqueImported.values
-        .where((event) => !existingKeys.contains(_exactEventKey(event)))
-        .toList();
-
-    if (newEvents.isEmpty) {
+    final previousImportedKeys = _events
+        .where((event) => event.importSource == academicExamImportSource)
+        .map(_exactEventKey)
+        .toSet();
+    final nextImportedKeys = uniqueImported.keys.toSet();
+    if (_haveSameKeys(previousImportedKeys, nextImportedKeys)) {
       return 0;
     }
 
-    _events.addAll(newEvents);
+    final remainingEvents = _events
+        .where((event) => event.importSource != academicExamImportSource)
+        .toList();
+    _events
+      ..clear()
+      ..addAll(remainingEvents)
+      ..addAll(uniqueImported.values);
     notifyListeners();
     await _persistEvents();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
-    return newEvents.length;
+    return uniqueImported.length;
   }
 
-  Future<void> deleteEvent(String eventId) async {
-    _events.removeWhere((event) => event.id == eventId);
+  Future<Event?> deleteEvent(String eventId) async {
+    final index = _events.indexWhere((event) => event.id == eventId);
+    if (index == -1) {
+      return null;
+    }
+    final removed = _events.removeAt(index);
     notifyListeners();
     await _persistEvents();
-    await _syncBackgroundRuntimeIfEnabled();
+    await _refreshReminders();
+    return removed;
+  }
+
+  Future<void> restoreEvent(Event event) async {
+    if (_events.any((item) => item.id == event.id)) {
+      return;
+    }
+    _events.add(event);
+    notifyListeners();
+    await _persistEvents();
     await _refreshReminders();
   }
 
@@ -384,7 +483,6 @@ class CourseProvider extends ChangeNotifier {
     );
     notifyListeners();
     await _persistEvents();
-    await _syncBackgroundRuntimeIfEnabled();
     await _refreshReminders();
   }
 
@@ -405,8 +503,35 @@ class CourseProvider extends ChangeNotifier {
     await scheduler();
   }
 
-  Future<void> _syncBackgroundRuntimeIfEnabled() async {
-    // Background service is now replaced by SystemScheduleManager
+  Course? _buildRescheduledCourseOccurrence({
+    required Course storedCourse,
+    required int sourceWeek,
+    required int targetWeek,
+    required int targetWeekday,
+    required int targetStartPeriod,
+  }) {
+    if (!storedCourse.weeks.contains(sourceWeek)) {
+      return null;
+    }
+
+    final targetSpan = storedCourse.endPeriod - storedCourse.startPeriod;
+    final targetEndPeriod = targetStartPeriod + targetSpan;
+    if (targetStartPeriod < 1 ||
+        targetWeekday < 1 ||
+        targetWeekday > 7 ||
+        targetEndPeriod < targetStartPeriod) {
+      return null;
+    }
+
+    return storedCourse.copyWith(
+      id: Course.createId(),
+      weekday: targetWeekday,
+      weeks: <int>[targetWeek],
+      startPeriod: targetStartPeriod,
+      endPeriod: targetEndPeriod,
+      rescheduledFromSessionKey: storedCourse.sessionKey,
+      rescheduledFromWeek: sourceWeek,
+    );
   }
 
   bool _containsDuplicate(
@@ -487,61 +612,11 @@ class CourseProvider extends ChangeNotifier {
     ].join('|');
   }
 
-  bool _shouldReplaceWithImported(
-    Course existingCourse,
-    Course importedCourse,
-  ) {
-    if (_exactCourseKey(existingCourse) == _exactCourseKey(importedCourse)) {
-      return false;
-    }
-
-    if (_matchesImportedSession(existingCourse, importedCourse)) {
-      return true;
-    }
-
-    if (_matchesRescheduledImportSource(existingCourse, importedCourse)) {
-      return true;
-    }
-
-    return _isLikelyRescheduledOccurrence(existingCourse, importedCourse);
+  bool _haveSameKeys(Set<String> left, Set<String> right) {
+    return left.length == right.length && left.containsAll(right);
   }
 
-  bool _matchesImportedSession(Course existingCourse, Course importedCourse) {
-    return existingCourse.sessionKey == importedCourse.sessionKey &&
-        _hasOverlappingWeeks(existingCourse.weeks, importedCourse.weeks);
-  }
-
-  bool _matchesRescheduledImportSource(
-    Course existingCourse,
-    Course importedCourse,
-  ) {
-    return existingCourse.rescheduledFromSessionKey ==
-            importedCourse.sessionKey &&
-        existingCourse.rescheduledFromWeek != null &&
-        importedCourse.weeks.contains(existingCourse.rescheduledFromWeek);
-  }
-
-  bool _isLikelyRescheduledOccurrence(
-    Course existingCourse,
-    Course importedCourse,
-  ) {
-    if (existingCourse.rescheduledFromSessionKey != null ||
-        existingCourse.weeks.length != 1 ||
-        !_hasSameCourseIdentity(existingCourse, importedCourse) ||
-        existingCourse.sessionKey == importedCourse.sessionKey) {
-      return false;
-    }
-
-    final overlappingWeek = existingCourse.weeks.first;
-    if (!importedCourse.weeks.contains(overlappingWeek)) {
-      return false;
-    }
-
-    return _courses.any(
-      (course) =>
-          course.id != existingCourse.id &&
-          course.sessionKey == importedCourse.sessionKey &&
-          _hasOverlappingWeeks(course.weeks, importedCourse.weeks),
-    );
+  String _createImportBatchId(String source) {
+    return '$source-${DateTime.now().microsecondsSinceEpoch}';
   }
 }

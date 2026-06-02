@@ -11,7 +11,7 @@ class BootRescheduleReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         val action = intent.action.orEmpty()
-        if (action !in ALLOWED_ACTIONS) {
+        if (!isAllowedAction(action)) {
             Log.w(TAG, "Ignoring unexpected reschedule action=$action")
             return
         }
@@ -31,7 +31,14 @@ class BootRescheduleReceiver : BroadcastReceiver() {
             Intent.ACTION_LOCKED_BOOT_COMPLETED,
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_DATE_CHANGED,
             "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED",
         )
+
+        internal fun isAllowedAction(action: String): Boolean {
+            return action in ALLOWED_ACTIONS
+        }
     }
 }

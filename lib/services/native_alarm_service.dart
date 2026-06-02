@@ -3,6 +3,36 @@ import 'package:flutter/services.dart';
 
 import 'schedule_plan.dart';
 
+class NativeMuteTestResult {
+  const NativeMuteTestResult({required this.success, this.reason});
+
+  const NativeMuteTestResult.failure(String reason)
+    : this(success: false, reason: reason);
+
+  final bool success;
+  final String? reason;
+
+  factory NativeMuteTestResult.fromPlatform(Object? value) {
+    if (value is! Map) {
+      return const NativeMuteTestResult.failure('invalid_native_response');
+    }
+    final success = value['success'];
+    final reason = value['reason'];
+    if (success is! bool || (reason != null && reason is! String)) {
+      return const NativeMuteTestResult.failure('invalid_native_response');
+    }
+    return NativeMuteTestResult(success: success, reason: reason as String?);
+  }
+
+  String get failureMessage {
+    return switch (reason) {
+      'silent_alarm_schedule_failed' => '静音闹钟写入失败，请查看控制台 MuteDiag 日志',
+      'restore_alarm_schedule_failed' => '恢复闹钟写入失败，请查看控制台 MuteDiag 日志',
+      _ => '诊断静音闹钟写入失败，请查看控制台 MuteDiag 日志',
+    };
+  }
+}
+
 class NativeAlarmService {
   NativeAlarmService._();
 
@@ -137,25 +167,28 @@ class NativeAlarmService {
     }
   }
 
-  Future<void> runOneMinuteMuteTest() async {
+  Future<NativeMuteTestResult> runOneMinuteMuteTest() async {
     if (!_supportsAndroidAlarmControls) {
-      return;
+      return const NativeMuteTestResult.failure('unsupported_platform');
     }
 
     try {
-      await _channel.invokeMethod<void>('runOneMinuteMuteTest');
+      return NativeMuteTestResult.fromPlatform(
+        await _channel.invokeMethod<Object?>('runOneMinuteMuteTest'),
+      );
     } catch (e) {
       debugPrint('[NativeAlarm] runOneMinuteMuteTest failed: $e');
+      return const NativeMuteTestResult.failure('platform_exception');
     }
   }
 
-  Future<bool> runTimedMuteTest({
+  Future<NativeMuteTestResult> runTimedMuteTest({
     required int muteAfterSeconds,
     required int restoreAfterSeconds,
   }) async {
     if (!_supportsAndroidAlarmControls) {
       _log('runTimedMuteTest skipped: non-Android');
-      return false;
+      return const NativeMuteTestResult.failure('unsupported_platform');
     }
 
     try {
@@ -163,16 +196,21 @@ class NativeAlarmService {
         'runTimedMuteTest start muteAfterSeconds=$muteAfterSeconds '
         'restoreAfterSeconds=$restoreAfterSeconds',
       );
-      await _channel.invokeMethod<void>('runTimedMuteTest', {
-        'muteAfterSeconds': muteAfterSeconds,
-        'restoreAfterSeconds': restoreAfterSeconds,
-      });
-      _log('runTimedMuteTest success');
-      return true;
+      final result = NativeMuteTestResult.fromPlatform(
+        await _channel.invokeMethod<Object?>('runTimedMuteTest', {
+          'muteAfterSeconds': muteAfterSeconds,
+          'restoreAfterSeconds': restoreAfterSeconds,
+        }),
+      );
+      _log(
+        'runTimedMuteTest result success=${result.success} '
+        'reason=${result.reason}',
+      );
+      return result;
     } catch (e) {
       debugPrint('[NativeAlarm] runTimedMuteTest failed: $e');
       _log('runTimedMuteTest failed error=$e');
-      return false;
+      return const NativeMuteTestResult.failure('platform_exception');
     }
   }
 

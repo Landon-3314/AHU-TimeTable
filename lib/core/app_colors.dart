@@ -202,4 +202,23 @@ class AppColors {
     0xFF84CC16,
     0xFF475569,
   ];
+
+  static String colorName(int value) {
+    return switch (value) {
+      0xFF0D9488 => '青绿',
+      0xFF2563EB => '蓝色',
+      0xFFF97316 => '橙色',
+      0xFFDB2777 => '粉色',
+      0xFF7C3AED => '紫色',
+      0xFF16A34A => '绿色',
+      0xFF0891B2 => '青色',
+      0xFFDC2626 => '红色',
+      0xFFCA8A04 => '金色',
+      0xFF4F46E5 => '靛蓝',
+      0xFFF59E0B => '琥珀',
+      0xFF84CC16 => '青柠',
+      0xFF475569 => '灰蓝',
+      _ => '自定义',
+    };
+  }
 }

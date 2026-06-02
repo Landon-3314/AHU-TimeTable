@@ -125,4 +125,62 @@ void main() {
 
     expect(parser.parseExams(examHtml), isEmpty);
   });
+
+  test('reports and skips unknown weeks and invalid periods', () {
+    const timetableHtml = r'''
+<table class="courseTable">
+  <tr>
+    <td class="dayPartUnit">上午</td>
+    <td>
+      <div class="tdHtml">
+        <span class="course-name">正常课程</span>
+        (1-4(单)周) (1-2节) 磬苑校区 A101 王老师
+        <span class="course-name">未知周次</span>
+        (待定周) (3-4节) 磬苑校区 A102 李老师
+        <span class="course-name">非法节次</span>
+        (1-4周) (5-2节) 磬苑校区 A103 周老师
+      </div>
+    </td>
+  </tr>
+</table>
+''';
+
+    final result = parser.parseTimetableReport(timetableHtml);
+
+    expect(result.items, hasLength(1));
+    expect(result.items.single.name, '正常课程');
+    expect(result.items.single.weeks, [1, 3]);
+    expect(result.skippedCount, 2);
+    expect(result.skippedReasons.join('\n'), contains('未知周次'));
+    expect(result.skippedReasons.join('\n'), contains('无法识别周次'));
+    expect(result.skippedReasons.join('\n'), contains('非法节次'));
+    expect(result.skippedReasons.join('\n'), contains('节次范围无效'));
+  });
+
+  test('rejects timetable when every course record is invalid', () {
+    const timetableHtml = r'''
+<table class="courseTable">
+  <tr>
+    <td class="dayPartUnit">上午</td>
+    <td>
+      <div class="tdHtml">
+        <span class="course-name">非法课程</span>
+        (1-4周) (0-2节) 磬苑校区 A101 王老师
+      </div>
+    </td>
+  </tr>
+</table>
+''';
+
+    expect(
+      () => parser.parseTimetableReport(timetableHtml),
+      throwsA(
+        isA<ScheduleParseException>().having(
+          (error) => error.message,
+          'message',
+          contains('节次范围无效'),
+        ),
+      ),
+    );
+  });
 }

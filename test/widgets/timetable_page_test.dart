@@ -9,9 +9,12 @@ import 'package:timetable/providers/course_provider.dart';
 import 'package:timetable/providers/settings_provider.dart';
 import 'package:timetable/providers/timetable_view_provider.dart';
 import 'package:timetable/screens/add_course_page.dart';
+import 'package:timetable/screens/exam_overview_page.dart';
 import 'package:timetable/screens/timetable_page.dart';
 import 'package:timetable/services/storage_service.dart';
 import 'package:timetable/widgets/common/app_ui.dart';
+import 'package:timetable/widgets/timetable/course_overview_panel.dart';
+import 'package:timetable/widgets/timetable/timetable_detail_sheets.dart';
 
 void main() {
   testWidgets(
@@ -81,12 +84,22 @@ void main() {
       await tester.tap(find.text('总览'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Grouped Course'), findsOneWidget);
+      final overviewCourse = find.descendant(
+        of: find.byType(CourseOverviewPanel),
+        matching: find.text('Grouped Course'),
+      );
+      expect(overviewCourse, findsOneWidget);
       expect(find.text('4个时段'), findsOneWidget);
       expect(find.byType(AppSurface), findsWidgets);
-      expect(find.textContaining('Room A'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(CourseOverviewPanel),
+          matching: find.textContaining('Room A'),
+        ),
+        findsNothing,
+      );
 
-      await tester.tap(find.text('Grouped Course'));
+      await tester.tap(overviewCourse);
       await tester.pumpAndSettle();
 
       expect(find.text('周一 第1-2节 第1-2周 Room A'), findsNothing);
@@ -100,7 +113,13 @@ void main() {
       expect(find.text('周次'), findsNWidgets(4));
       expect(find.text('Dr. Chen'), findsNWidgets(2));
       expect(find.text('Room A'), findsOneWidget);
-      expect(find.text('第 1-2 节'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(DetailRow),
+          matching: find.text('第 1-2 节'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('周一'), findsAtLeastNWidgets(1));
       expect(find.text('1, 2'), findsOneWidget);
       expect(find.text('Room D'), findsOneWidget);
@@ -130,10 +149,116 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(AddCoursePage), findsNothing);
-      expect(find.text('Grouped Course'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(CourseOverviewPanel),
+          matching: find.text('Grouped Course'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('4个时段'), findsOneWidget);
     },
   );
+
+  testWidgets('empty timetable exposes add and import actions', (tester) async {
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+
+    expect(find.widgetWithText(FilledButton, '添加课程'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '导入教务课表'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '添加课程'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AddCoursePage), findsOneWidget);
+  });
+
+  testWidgets('empty week view exposes add and import actions', (tester) async {
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.tap(find.text('周视图'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(FilledButton, '添加课程'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '导入教务课表'), findsOneWidget);
+  });
+
+  testWidgets('empty overview exposes add and import actions', (tester) async {
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.tap(find.text('总览'));
+    await tester.pumpAndSettle();
+
+    final overviewPanel = find.byType(CourseOverviewPanel);
+    expect(
+      find.descendant(
+        of: overviewPanel,
+        matching: find.widgetWithText(FilledButton, '添加课程'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: overviewPanel,
+        matching: find.widgetWithText(OutlinedButton, '导入教务课表'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('toolbar exam action opens academic exam overview', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+
+    expect(find.byTooltip('教务考试'), findsOneWidget);
+    await tester.tap(find.byTooltip('教务考试'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ExamOverviewPage), findsOneWidget);
+  });
+
+  testWidgets('narrow toolbar groups secondary actions into a menu', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 720));
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('更多操作'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+
+    final menuItems = find.byWidgetPredicate(
+      (widget) => widget is PopupMenuItem,
+    );
+    expect(
+      find.descendant(of: menuItems, matching: find.text('总览')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: menuItems, matching: find.text('教务考试')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: menuItems, matching: find.text('导入教务课表')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: menuItems, matching: find.text('添加课程')),
+      findsOneWidget,
+    );
+  });
 }
 
 Widget _buildPage(_ProviderBundle bundle) {
@@ -149,6 +274,12 @@ Widget _buildPage(_ProviderBundle bundle) {
       theme: AppTheme.light(),
       home: const TimetablePage(),
       onGenerateRoute: (settings) {
+        if (settings.name == AppRoutes.exams) {
+          return MaterialPageRoute<void>(
+            builder: (_) => const ExamOverviewPage(),
+            settings: settings,
+          );
+        }
         if (settings.name != AppRoutes.addCourse) {
           return null;
         }

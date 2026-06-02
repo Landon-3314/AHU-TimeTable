@@ -281,4 +281,55 @@ void main() {
       expect(settings.courseReminderPersistentDisplayEnabled, isFalse);
     },
   );
+
+  test(
+    'semester changes notify the bound coordinator once per operation',
+    () async {
+      final settings = await _buildSettingsProvider();
+      final originalSemesterId = settings.currentSemesterId!;
+      var semesterChangeCount = 0;
+      settings.bindSemesterChangeHandler(() async {
+        semesterChangeCount += 1;
+      });
+
+      await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
+      final created = await settings.createSemesterWithInitialData(
+        startDate: DateTime(2026, 9, 7),
+      );
+      expect(await settings.switchSemester(originalSemesterId), isTrue);
+      await settings.deleteSemester(created.id);
+
+      expect(semesterChangeCount, 4);
+    },
+  );
+
+  test('app theme mode persists and maps to material theme mode', () async {
+    final settings = await _buildSettingsProvider();
+
+    expect(settings.appThemeMode, AppThemeMode.system);
+    expect(settings.materialThemeMode, ThemeMode.system);
+
+    await settings.changeAppThemeMode(AppThemeMode.dark);
+
+    expect(settings.appThemeMode, AppThemeMode.dark);
+    expect(settings.materialThemeMode, ThemeMode.dark);
+
+    final restored = await _buildSettingsProvider(
+      initialValues: const {'settings.appThemeMode': 'dark'},
+    );
+    expect(restored.appThemeMode, AppThemeMode.dark);
+    expect(restored.materialThemeMode, ThemeMode.dark);
+  });
+
+  test(
+    'runtime language stays Chinese when a legacy preference is English',
+    () async {
+      final settings = await _buildSettingsProvider(
+        initialValues: const {'settings.languageCode': 'en'},
+      );
+
+      expect(settings.languageCode, 'zh');
+      expect(settings.t('settings'), '设置');
+    },
+  );
 }

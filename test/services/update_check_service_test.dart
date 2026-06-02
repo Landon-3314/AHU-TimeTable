@@ -191,27 +191,32 @@ void main() {
     },
   );
 
-  test('loads update manifest from fallback URI when the primary fails', () async {
-    final requestedUris = <Uri>[];
-    final primaryUri = Uri.parse('https://raw.githubusercontent.com/app/update.json');
-    final fallbackUri = Uri.parse(
-      'https://cdn.jsdelivr.net/gh/app/repo@main/update.json',
-    );
+  test(
+    'loads update manifest from fallback URI when the primary fails',
+    () async {
+      final requestedUris = <Uri>[];
+      final primaryUri = Uri.parse(
+        'https://raw.githubusercontent.com/app/update.json',
+      );
+      final fallbackUri = Uri.parse(
+        'https://cdn.jsdelivr.net/gh/app/repo@main/update.json',
+      );
 
-    final manifest = await UpdateCheckService.loadManifestFromUris(
-      [primaryUri, fallbackUri],
-      loader: (uri) async {
-        requestedUris.add(uri);
-        if (uri == primaryUri) {
-          throw const SocketException('blocked');
-        }
-        return UpdateManifest.fromJson(
-          jsonDecode(manifestJson) as Map<String, Object?>,
-        );
-      },
-    );
+      final manifest = await UpdateCheckService.loadManifestFromUris(
+        [primaryUri, fallbackUri],
+        loader: (uri) async {
+          requestedUris.add(uri);
+          if (uri == primaryUri) {
+            throw const SocketException('blocked');
+          }
+          return UpdateManifest.fromJson(
+            jsonDecode(manifestJson) as Map<String, Object?>,
+          );
+        },
+      );
 
-    expect(manifest.versionCode, 2);
-    expect(requestedUris, [primaryUri, fallbackUri]);
-  });
+      expect(manifest.versionCode, 2);
+      expect(requestedUris, [primaryUri, fallbackUri]);
+    },
+  );
 }

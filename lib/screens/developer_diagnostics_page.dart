@@ -257,16 +257,19 @@ class _DeveloperDiagnosticsPageState extends State<DeveloperDiagnosticsPage> {
     final hasExactAlarmPermission = await NativeAlarmService.instance
         .hasExactAlarmPermission();
     _muteLog('runTimedMuteTest exactAlarmPermission=$hasExactAlarmPermission');
-    final scheduled = await NativeAlarmService.instance.runTimedMuteTest(
+    final result = await NativeAlarmService.instance.runTimedMuteTest(
       muteAfterSeconds: muteAfterSeconds,
       restoreAfterSeconds: restoreAfterSeconds,
     );
-    _muteLog('runTimedMuteTest native schedule result=$scheduled');
+    _muteLog(
+      'runTimedMuteTest native schedule success=${result.success} '
+      'reason=${result.reason}',
+    );
     if (!context.mounted) {
       return;
     }
-    if (!scheduled) {
-      _showSnackBar(context, '诊断静音闹钟写入失败，请查看控制台 MuteDiag 日志');
+    if (!result.success) {
+      _showSnackBar(context, result.failureMessage);
       return;
     }
     _showSnackBar(

@@ -22,7 +22,6 @@ class TimetableViewDataService {
     required List<Course> courses,
     required List<Event> events,
     required int totalWeeks,
-    required String languageCode,
     required String Function(String key) translate,
     required DateTime Function(int week, int weekday) getDateFor,
     required List<TimeSlot> timeSlots,
@@ -67,7 +66,7 @@ class TimetableViewDataService {
     weekOptions.add(
       TimetableWeekOption(
         value: holidayWeekIndex,
-        label: languageCode == 'en' ? 'Holiday' : '假期中',
+        label: '假期中',
         isHoliday: true,
       ),
     );
@@ -80,7 +79,6 @@ class TimetableViewDataService {
       holidayPage: _buildHolidayPage(
         events: events,
         totalWeeks: totalWeeks,
-        languageCode: languageCode,
         getDateFor: getDateFor,
       ),
     );
@@ -248,7 +246,6 @@ class TimetableViewDataService {
   TimetableHolidayPageData _buildHolidayPage({
     required List<Event> events,
     required int totalWeeks,
-    required String languageCode,
     required DateTime Function(int week, int weekday) getDateFor,
   }) {
     final semesterStart = getDateFor(1, 1);
@@ -272,12 +269,10 @@ class TimetableViewDataService {
           ..sort((left, right) => left.dateTime.compareTo(right.dateTime));
 
     return TimetableHolidayPageData(
-      title: languageCode == 'en' ? 'Holiday' : '假期中',
-      subtitle: languageCode == 'en'
-          ? 'Events outside semester weeks'
-          : '展示所有非教学周日程',
-      emptyTitle: languageCode == 'en' ? 'Holiday' : '假期中',
-      emptySubtitle: languageCode == 'en' ? 'No holiday events.' : '假期暂无日程',
+      title: '假期中',
+      subtitle: '展示所有非教学周日程',
+      emptyTitle: '假期中',
+      emptySubtitle: '假期暂无日程',
       events: holidayEvents,
     );
   }

@@ -108,6 +108,7 @@ class AlarmReceiver : BroadcastReceiver() {
         NativeStateStore.recordOriginalRingerMode(context, index, currentMode)
         audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
         NativeStateStore.setMutedByApp(context, index, true)
+        NativeStateStore.recordAppliedRingerMode(context, index, audioManager.ringerMode)
         NativeStateStore.recordRingerMode(context, audioManager.ringerMode)
         muteLog("applySilent success index=$index mode=${audioManager.ringerMode}")
         Log.d(TAG, "App auto-muted device for index=$index")
@@ -136,9 +137,15 @@ class AlarmReceiver : BroadcastReceiver() {
 
         if (wasMutedByApp) {
             val currentMode = audioManager.ringerMode
+            val appAppliedMode =
+                NativeStateStore.appliedRingerMode(context, index)
+                    ?: AudioManager.RINGER_MODE_SILENT
             if (
-                currentMode == AudioManager.RINGER_MODE_SILENT ||
-                currentMode == AudioManager.RINGER_MODE_VIBRATE
+                NativeMuteStatePolicy.shouldRestoreOwnedMute(
+                    mutedByApp = true,
+                    currentRingerMode = currentMode,
+                    appAppliedRingerMode = appAppliedMode,
+                )
             ) {
                 if (hasActiveAppMute(context, index, now)) {
                     muteLog("applyRestore skipped: another app mute window is active index=$index")

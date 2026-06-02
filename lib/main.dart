@@ -1,15 +1,14 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
-import 'core/app_routes.dart';
 import 'core/app_theme.dart';
 import 'providers/course_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/timetable_view_provider.dart';
 import 'services/app_services.dart';
 import 'services/long_screenshot_service.dart';
+import 'widgets/timetable_app.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +38,14 @@ Future<_AppInitBundle> _initAppSafely() async {
 
     settingsProvider.bindReminderScheduler(refreshReminders);
     courseProvider.bindReminderScheduler(refreshReminders);
+    settingsProvider.bindSemesterChangeHandler(() async {
+      await courseProvider.reloadForCurrentSemester(refreshReminders: false);
+      timetableViewProvider.setCurrentWeekAndWeekday(
+        week: settingsProvider.currentRealWeek,
+        weekday: settingsProvider.currentRealWeekday,
+      );
+      await refreshReminders();
+    });
 
     timetableViewProvider.initializeRealDate(
       week: settingsProvider.currentRealWeek,
@@ -56,14 +63,6 @@ Future<_AppInitBundle> _initAppSafely() async {
     debugPrint('[Main] 初始化异常: $e');
     rethrow;
   }
-}
-
-class AppScrollBehavior extends MaterialScrollBehavior {
-  const AppScrollBehavior();
-
-  @override
-  Set<PointerDeviceKind> get dragDevices =>
-      Set<PointerDeviceKind>.from(PointerDeviceKind.values);
 }
 
 class _MainApp extends StatefulWidget {
@@ -100,6 +99,10 @@ class _MainAppState extends State<_MainApp> {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: ThemeMode.system,
+            supportedLocales: const [Locale('zh')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
             home: const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             ),
@@ -110,6 +113,10 @@ class _MainAppState extends State<_MainApp> {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: ThemeMode.system,
+            supportedLocales: const [Locale('zh')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
             home: _AppInitErrorPage(
               error: snapshot.error,
               onRetry: _retryInitialization,
@@ -131,14 +138,7 @@ class _MainAppState extends State<_MainApp> {
           ],
           child: Consumer<SettingsProvider>(
             builder: (context, settingsProvider, _) {
-              return MaterialApp(
-                debugShowCheckedModeBanner: false,
-                locale: Locale(settingsProvider.languageCode),
-                scrollBehavior: const AppScrollBehavior(),
-                theme: AppTheme.light(palette: settingsProvider.themePalette),
-                initialRoute: AppRoutes.home,
-                onGenerateRoute: AppRoutes.onGenerateRoute,
-              );
+              return TimetableApp(settingsProvider: settingsProvider);
             },
           ),
         );
@@ -155,7 +155,7 @@ class _AppInitErrorPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final errorMessage = error?.toString() ?? 'Unknown initialization error';
+    final errorMessage = error?.toString() ?? '未知初始化错误';
     return Scaffold(
       body: SafeArea(
         child: Center(

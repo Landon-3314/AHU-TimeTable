@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -100,4 +101,180 @@ void main() {
       expect(quarantined, hasLength(1));
     }
   });
+
+  test(
+    'serializes concurrent snapshot writes and keeps the latest state',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'serialized-backup-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final operations = _DelayedFirstFinalRenameOperations();
+      final store = ExternalDataBackupStore(
+        externalFilesDirectory: directory,
+        fileOperations: operations,
+      );
+
+      SharedPreferences.setMockInitialValues({
+        'settings.languageCode': 'first',
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final firstWrite = store.writeFromSharedPreferences(preferences);
+      await operations.firstFinalRenameStarted.future;
+
+      await preferences.setString('settings.languageCode', 'second');
+      final secondWrite = store.writeFromSharedPreferences(preferences);
+      operations.releaseFirstFinalRename.complete();
+
+      expect(await firstWrite, isTrue);
+      expect(await secondWrite, isTrue);
+      expect(
+        (await store.readPreferences())!['settings.languageCode'],
+        'second',
+      );
+    },
+  );
+
+  test(
+    'recovers from a valid temporary snapshot when main snapshot is absent',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('temp-recovery-');
+      addTearDown(() => directory.delete(recursive: true));
+      final store = ExternalDataBackupStore(externalFilesDirectory: directory);
+      await _writeLanguageSnapshot(store, 'zh');
+      final mainFile = await store.debugBackupFile();
+      await mainFile.rename('${mainFile.path}.tmp-interrupted');
+
+      expect((await store.readPreferences())!['settings.languageCode'], 'zh');
+    },
+  );
+
+  test(
+    'recovers from a valid previous snapshot when main snapshot is invalid',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'previous-recovery-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final store = ExternalDataBackupStore(externalFilesDirectory: directory);
+      await _writeLanguageSnapshot(store, 'zh');
+      final mainFile = await store.debugBackupFile();
+      await mainFile.rename('${mainFile.path}.previous-interrupted');
+      await mainFile.writeAsString('{broken json');
+
+      expect((await store.readPreferences())!['settings.languageCode'], 'zh');
+    },
+  );
+
+  test('rename failure preserves a valid recoverable snapshot', () async {
+    final directory = await Directory.systemTemp.createTemp('rename-failure-');
+    addTearDown(() => directory.delete(recursive: true));
+    final store = ExternalDataBackupStore(externalFilesDirectory: directory);
+    await _writeLanguageSnapshot(store, 'zh');
+    final failingStore = ExternalDataBackupStore(
+      externalFilesDirectory: directory,
+      fileOperations: const _FailingFinalRenameOperations(),
+    );
+
+    expect(await _writeLanguageSnapshot(failingStore, 'en'), isFalse);
+    expect((await store.readPreferences())!['settings.languageCode'], 'zh');
+  });
+
+  test(
+    'successful snapshot commit removes obsolete temporary snapshots',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('temp-cleanup-');
+      addTearDown(() => directory.delete(recursive: true));
+      final store = ExternalDataBackupStore(externalFilesDirectory: directory);
+      await _writeLanguageSnapshot(store, 'zh');
+      final mainFile = await store.debugBackupFile();
+      await mainFile.rename('${mainFile.path}.tmp-interrupted');
+
+      expect(await _writeLanguageSnapshot(store, 'en'), isTrue);
+      final temporaryFiles = await mainFile.parent
+          .list()
+          .where((entity) => entity is File)
+          .cast<File>()
+          .where((file) => file.path.startsWith('${mainFile.path}.tmp-'))
+          .toList();
+      expect(temporaryFiles, isEmpty);
+    },
+  );
+}
+
+Future<bool> _writeLanguageSnapshot(
+  ExternalDataBackupStore store,
+  String languageCode,
+) async {
+  SharedPreferences.setMockInitialValues({
+    'settings.languageCode': languageCode,
+  });
+  final preferences = await SharedPreferences.getInstance();
+  return store.writeFromSharedPreferences(preferences);
+}
+
+class _DelayedFirstFinalRenameOperations
+    implements ExternalDataBackupFileOperations {
+  final ExternalDataBackupFileOperations _delegate =
+      const IoExternalDataBackupFileOperations();
+  final Completer<void> firstFinalRenameStarted = Completer<void>();
+  final Completer<void> releaseFirstFinalRename = Completer<void>();
+  bool _didDelayFinalRename = false;
+
+  @override
+  Future<void> delete(File file) => _delegate.delete(file);
+
+  @override
+  Future<bool> exists(File file) => _delegate.exists(file);
+
+  @override
+  Future<String> readString(File file) => _delegate.readString(file);
+
+  @override
+  Future<void> rename(File file, String newPath) async {
+    if (!_didDelayFinalRename &&
+        file.path.contains('.tmp-') &&
+        newPath.endsWith('timetable-data.v1.json')) {
+      _didDelayFinalRename = true;
+      firstFinalRenameStarted.complete();
+      await releaseFirstFinalRename.future;
+    }
+    await _delegate.rename(file, newPath);
+  }
+
+  @override
+  Future<void> writeString(File file, String contents) {
+    return _delegate.writeString(file, contents);
+  }
+}
+
+class _FailingFinalRenameOperations
+    implements ExternalDataBackupFileOperations {
+  const _FailingFinalRenameOperations();
+
+  static const ExternalDataBackupFileOperations _delegate =
+      IoExternalDataBackupFileOperations();
+
+  @override
+  Future<void> delete(File file) => _delegate.delete(file);
+
+  @override
+  Future<bool> exists(File file) => _delegate.exists(file);
+
+  @override
+  Future<String> readString(File file) => _delegate.readString(file);
+
+  @override
+  Future<void> rename(File file, String newPath) {
+    if (file.path.contains('.tmp-') &&
+        newPath.endsWith('timetable-data.v1.json')) {
+      throw const FileSystemException('Injected final rename failure');
+    }
+    return _delegate.rename(file, newPath);
+  }
+
+  @override
+  Future<void> writeString(File file, String contents) {
+    return _delegate.writeString(file, contents);
+  }
 }

@@ -9,6 +9,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../core/app_colors.dart';
+import '../models/course.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/schedule_html_extractor.dart';
@@ -21,10 +22,39 @@ enum _ImportAction { timetable, exam }
 enum AcademicImportKind { timetable, exam }
 
 class AcademicImportResult {
-  const AcademicImportResult({required this.kind, required this.importedCount});
+  const AcademicImportResult({
+    required this.kind,
+    required this.importedCount,
+    this.skippedReasons = const <String>[],
+  });
 
   final AcademicImportKind kind;
   final int importedCount;
+  final List<String> skippedReasons;
+
+  int get skippedCount => skippedReasons.length;
+}
+
+Future<int?> importTimetableCoursesWithConflictConfirmation({
+  required BuildContext context,
+  required CourseProvider courseProvider,
+  required List<Course> courses,
+}) async {
+  final conflicts = courseProvider.findImportedCourseConflicts(courses);
+  var allowConflicts = false;
+  if (conflicts.isNotEmpty) {
+    allowConflicts = await showCourseConflictConfirmDialog(
+      context,
+      conflicts: conflicts,
+    );
+    if (!context.mounted || !allowConflicts) {
+      return null;
+    }
+  }
+  return courseProvider.mergeImportedCourses(
+    courses,
+    allowConflicts: allowConflicts,
+  );
 }
 
 class ImportCoursePage extends StatefulWidget {
@@ -260,7 +290,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       );
       await _handleTimetableHtml(rawHtml);
     } catch (error) {
-      _finishImportWithMessage('Timetable extraction failed: $error');
+      _finishImportWithMessage('课表提取失败：$error');
     }
   }
 
@@ -279,7 +309,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       );
       await _handleExamHtml(rawHtml);
     } catch (error) {
-      _finishImportWithMessage('Exam extraction failed: $error');
+      _finishImportWithMessage('考试提取失败：$error');
     }
   }
 
@@ -294,9 +324,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     final currentUrl = await _controller.currentUrl();
     final uri = currentUrl == null ? null : Uri.tryParse(currentUrl);
     if (uri == null || !_isAllowedAcademicUri(uri)) {
-      throw ScheduleParseException(
-        'Current page is outside the allowed academic domains. Please return to the AHU academic page before importing.',
-      );
+      throw ScheduleParseException('当前页面不属于允许导入的教务系统域名，请返回安徽大学教务页面后重试。');
     }
   }
 
@@ -318,7 +346,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       context,
       SnackBar(
         backgroundColor: AppColors.danger,
-        content: Text('Blocked non-academic navigation: $url'),
+        content: Text('已阻止跳转到非教务系统页面：$url'),
       ),
     );
   }
@@ -335,24 +363,28 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         );
       }
 
-      final importedCourses = _parserService.parse(rawMessage);
-      final importedCount = await context
-          .read<CourseProvider>()
-          .mergeImportedCourses(importedCourses);
+      final parseReport = _parserService.parseTimetableReport(rawMessage);
+      final importedCount =
+          await importTimetableCoursesWithConflictConfirmation(
+            context: context,
+            courseProvider: context.read<CourseProvider>(),
+            courses: parseReport.items,
+          );
 
-      if (!mounted) {
+      if (!mounted || importedCount == null) {
         return;
       }
       Navigator.of(context).pop(
         AcademicImportResult(
           kind: AcademicImportKind.timetable,
           importedCount: importedCount,
+          skippedReasons: parseReport.skippedReasons,
         ),
       );
     } on ScheduleParseException catch (error) {
-      _finishImportWithMessage('Import failed: ${error.message}');
+      _finishImportWithMessage('课表导入失败：${error.message}');
     } catch (error) {
-      _finishImportWithMessage('Import failed: $error');
+      _finishImportWithMessage('课表导入失败：$error');
     } finally {
       if (mounted) {
         setState(() {
@@ -375,25 +407,23 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       }
 
       final importedEvents = _parserService.parseExams(rawMessage);
-      if (importedEvents.isEmpty) {
-        _finishImportWithNeutralMessage(
-          context.read<SettingsProvider>().t('exam_import_empty'),
-        );
+      final settingsProvider = context.read<SettingsProvider>();
+      final courseProvider = context.read<CourseProvider>();
+      final emptyMessage = settingsProvider.t('exam_import_empty');
+      final duplicatedMessage = settingsProvider.t('exam_import_duplicated');
+      final importedCount = await courseProvider.mergeImportedEvents(
+        importedEvents,
+      );
+      if (!mounted) {
         return;
       }
-
-      final importedCount = await context
-          .read<CourseProvider>()
-          .mergeImportedEvents(importedEvents);
-
-      if (!mounted) {
+      if (importedEvents.isEmpty) {
+        _finishImportWithNeutralMessage(emptyMessage);
         return;
       }
 
       if (importedCount == 0) {
-        _finishImportWithNeutralMessage(
-          context.read<SettingsProvider>().t('exam_import_duplicated'),
-        );
+        _finishImportWithNeutralMessage(duplicatedMessage);
         return;
       }
 
@@ -404,9 +434,9 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         ),
       );
     } on ScheduleParseException catch (error) {
-      _finishImportWithMessage('Exam import failed: ${error.message}');
+      _finishImportWithMessage('考试导入失败：${error.message}');
     } catch (error) {
-      _finishImportWithMessage('Exam import failed: $error');
+      _finishImportWithMessage('考试导入失败：$error');
     } finally {
       if (mounted) {
         setState(() {

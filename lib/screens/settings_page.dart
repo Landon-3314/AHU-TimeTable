@@ -6,6 +6,7 @@ import '../core/app_constants.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_update_platform.dart';
+import '../services/storage_service.dart';
 import '../services/update_check_service.dart';
 import '../services/update_download_service.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
@@ -82,15 +83,43 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildAppearanceSection(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
     return AppSurface(
-      child: AppActionTile(
-        icon: Icons.palette_outlined,
-        title: provider.t('theme_color'),
-        subtitle: provider.t(provider.themePalette.nameKey),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const ThemeSettingsPage()),
-          );
-        },
+      child: Column(
+        children: [
+          AppActionTile(
+            icon: Icons.palette_outlined,
+            title: provider.t('theme_color'),
+            subtitle: provider.t(provider.themePalette.nameKey),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ThemeSettingsPage(),
+                ),
+              );
+            },
+          ),
+          const Divider(height: 1),
+          AppActionTile(
+            icon: Icons.brightness_6_outlined,
+            title: '显示模式',
+            subtitle: _appThemeModeLabel(provider.appThemeMode),
+            onTap: () async {
+              final selected = await showAppOptionPicker<AppThemeMode>(
+                context,
+                title: '显示模式',
+                selectedValue: provider.appThemeMode,
+                options: const [
+                  AppPickerOption(value: AppThemeMode.system, label: '跟随系统'),
+                  AppPickerOption(value: AppThemeMode.light, label: '浅色'),
+                  AppPickerOption(value: AppThemeMode.dark, label: '深色'),
+                ],
+              );
+              if (!context.mounted || selected == null) {
+                return;
+              }
+              await provider.changeAppThemeMode(selected);
+            },
+          ),
+        ],
       ),
     );
   }
@@ -341,4 +370,12 @@ class _SettingsPageState extends State<SettingsPage> {
       SnackBar(content: Text(provider.t('all_local_data_cleared'))),
     );
   }
+}
+
+String _appThemeModeLabel(AppThemeMode mode) {
+  return switch (mode) {
+    AppThemeMode.system => '跟随系统',
+    AppThemeMode.light => '浅色',
+    AppThemeMode.dark => '深色',
+  };
 }

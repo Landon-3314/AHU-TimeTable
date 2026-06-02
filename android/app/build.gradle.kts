@@ -25,6 +25,31 @@ val releaseStorePassword = readSigningValue(
 )
 val releaseKeyAlias = readSigningValue("ANDROID_KEYSTORE_ALIAS", "keyAlias")
 val releaseKeyPassword = readSigningValue("ANDROID_KEY_PASSWORD", "keyPassword")
+val hasCompleteReleaseSigningConfig = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { value -> !value.isNullOrBlank() }
+val requestsReleaseBuild = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("release", ignoreCase = true)
+}
+
+if (requestsReleaseBuild && !hasCompleteReleaseSigningConfig) {
+    throw GradleException(
+        "Release signing configuration is incomplete. " +
+            "Provide ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, " +
+            "ANDROID_KEYSTORE_ALIAS, and ANDROID_KEY_PASSWORD.",
+    )
+}
+
+if (
+    requestsReleaseBuild &&
+    hasCompleteReleaseSigningConfig &&
+    !file(releaseStoreFile!!).exists()
+) {
+    throw GradleException("Release keystore does not exist: $releaseStoreFile")
+}
 
 android {
     namespace = "com.gh.timetable"
@@ -58,18 +83,11 @@ android {
             enableV1Signing = true
             enableV2Signing = true
 
-            if (
-                !releaseStoreFile.isNullOrBlank() &&
-                !releaseStorePassword.isNullOrBlank() &&
-                !releaseKeyAlias.isNullOrBlank() &&
-                !releaseKeyPassword.isNullOrBlank()
-            ) {
-                storeFile = file(releaseStoreFile)
-                storePassword = releaseStorePassword
-                keyAlias = releaseKeyAlias
-                keyPassword = releaseKeyPassword
-            } else {
-                initWith(getByName("debug"))
+            if (hasCompleteReleaseSigningConfig) {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword!!
+                keyAlias = releaseKeyAlias!!
+                keyPassword = releaseKeyPassword!!
             }
         }
     }
@@ -88,6 +106,7 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    testImplementation("junit:junit:4.13.2")
 }
 
 flutter {

@@ -8,7 +8,6 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/timetable_view_provider.dart';
 import '../services/app_services.dart';
-import '../services/native_alarm_service.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/semester_start_date_dialog.dart';
@@ -401,7 +400,6 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
     BuildContext context,
     SettingsProvider provider,
   ) async {
-    final courseProvider = context.read<CourseProvider>();
     final selectedDate = await _promptSemesterStartDate(
       context,
       provider.semesterStartDate,
@@ -410,20 +408,14 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
       return;
     }
 
-    await NativeAlarmService.instance.cancelAllClasses();
     final semester = await provider.createSemesterWithInitialData(
       startDate: selectedDate,
     );
-    await courseProvider.reloadForCurrentSemester(refreshReminders: false);
     if (!context.mounted) {
       return;
     }
 
     _syncTimetableToToday(context, provider);
-    await _refreshSchedules(context, provider);
-    if (!context.mounted) {
-      return;
-    }
     showAppSnackBar(
       context,
       SnackBar(content: Text('已创建并切换到${semester.name}')),
@@ -439,7 +431,6 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
       return;
     }
 
-    final courseProvider = context.read<CourseProvider>();
     DateTime? selectedDate;
     if (!semester.isInitialized) {
       selectedDate = await _promptSemesterStartDate(
@@ -452,7 +443,6 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
       }
     }
 
-    await NativeAlarmService.instance.cancelAllClasses();
     if (selectedDate != null) {
       await provider.initializeExistingSemesterAndSwitch(
         semester.id,
@@ -464,17 +454,11 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
         return;
       }
     }
-    await courseProvider.reloadForCurrentSemester(refreshReminders: false);
     if (!context.mounted) {
       return;
     }
 
     _syncTimetableToToday(context, provider);
-    await _refreshSchedules(context, provider);
-    if (!context.mounted) {
-      return;
-    }
-
     final semesterName = provider.currentSemester?.name ?? '当前学期';
     showAppSnackBar(context, SnackBar(content: Text('已切换到$semesterName')));
   }
@@ -515,7 +499,7 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.danger,
-                foregroundColor: AppColors.onPrimary,
+                foregroundColor: Theme.of(dialogContext).colorScheme.onError,
               ),
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('删除'),
@@ -528,7 +512,6 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
       return;
     }
 
-    final isDeletingCurrent = semester.id == provider.currentSemesterId;
     final remainingCount = provider.semesters.length - 1;
     DateTime? replacementStartDate;
     if (remainingCount == 0) {
@@ -543,10 +526,6 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
       }
     }
 
-    final courseProvider = context.read<CourseProvider>();
-    if (isDeletingCurrent) {
-      await NativeAlarmService.instance.cancelAllClasses();
-    }
     await provider.deleteSemester(semester.id);
 
     if (replacementStartDate != null) {
@@ -556,16 +535,12 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
       );
     }
 
-    await courseProvider.reloadForCurrentSemester(refreshReminders: false);
     if (!context.mounted) {
       return;
     }
 
     if (provider.currentSemester?.isInitialized == true) {
       _syncTimetableToToday(context, provider);
-      await _refreshSchedules(context, provider);
-    } else {
-      await NativeAlarmService.instance.cancelAllClasses();
     }
   }
 

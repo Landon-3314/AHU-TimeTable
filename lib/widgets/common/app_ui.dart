@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
 import '../../core/app_constants.dart';
+import '../../core/app_theme_tokens.dart';
+import '../../services/course_conflict_policy.dart';
 import 'app_wheel_pickers.dart';
 
 class AppSectionTitle extends StatelessWidget {
@@ -12,6 +14,7 @@ class AppSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return Padding(
       padding: const EdgeInsets.only(
         left: AppSpacing.xxs,
@@ -34,7 +37,7 @@ class AppSectionTitle extends StatelessWidget {
               subtitle!,
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ).textTheme.bodySmall?.copyWith(color: tokens.textSecondary),
             ),
           ],
         ],
@@ -48,17 +51,18 @@ class AppSurface extends StatelessWidget {
     super.key,
     required this.child,
     this.padding,
-    this.color = AppColors.surface,
-    this.borderColor = AppColors.divider,
+    this.color,
+    this.borderColor,
   });
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
-  final Color color;
-  final Color borderColor;
+  final Color? color;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     final borderRadius = BorderRadius.circular(AppRadii.xxl);
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -74,13 +78,13 @@ class AppSurface extends StatelessWidget {
         ],
       ),
       child: Material(
-        color: color,
+        color: color ?? tokens.surface,
         borderRadius: borderRadius,
         clipBehavior: Clip.antiAlias,
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: borderRadius,
-            border: Border.all(color: borderColor),
+            border: Border.all(color: borderColor ?? tokens.divider),
           ),
           child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
         ),
@@ -163,12 +167,13 @@ class AppEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: AppSurface(
           padding: const EdgeInsets.all(AppSpacing.xxxl),
-          color: AppColors.surfaceRaised,
+          color: tokens.surfaceRaised,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -197,9 +202,9 @@ class AppEmptyState extends StatelessWidget {
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
               if (action != null) ...[
                 const SizedBox(height: AppSpacing.xl),
@@ -248,7 +253,9 @@ Future<bool> showAppConfirmDialog(
                   style: danger
                       ? FilledButton.styleFrom(
                           backgroundColor: AppColors.danger,
-                          foregroundColor: AppColors.onPrimary,
+                          foregroundColor: Theme.of(
+                            dialogContext,
+                          ).colorScheme.onError,
                         )
                       : null,
                   onPressed: () => Navigator.of(dialogContext).pop(true),
@@ -262,6 +269,28 @@ Future<bool> showAppConfirmDialog(
     },
   );
   return result == true;
+}
+
+Future<bool> showCourseConflictConfirmDialog(
+  BuildContext context, {
+  required List<CourseConflict> conflicts,
+}) {
+  final summary = conflicts
+      .map(
+        (conflict) =>
+            '${conflict.candidate.name} 与 ${conflict.existingCourse.name}：'
+            '星期${conflict.candidate.weekday} '
+            '第${conflict.candidate.startPeriod}-${conflict.candidate.endPeriod}节',
+      )
+      .toSet()
+      .join('\n');
+  return showAppConfirmDialog(
+    context,
+    title: '发现课程时间冲突',
+    message: summary,
+    confirmLabel: '仍然保存',
+    cancelLabel: '取消',
+  );
 }
 
 void showAppSnackBar(BuildContext context, SnackBar snackBar) {
@@ -328,6 +357,7 @@ class AppPickerPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tokens = appThemeTokensOf(context);
     return Semantics(
       button: true,
       child: InkWell(
@@ -340,14 +370,12 @@ class AppPickerPill extends StatelessWidget {
             vertical: AppSpacing.xs,
           ),
           decoration: BoxDecoration(
-            color: enabled
-                ? colorScheme.primaryContainer
-                : AppColors.surfaceMuted,
+            color: enabled ? colorScheme.primaryContainer : tokens.surfaceMuted,
             borderRadius: BorderRadius.circular(AppRadii.pill),
             border: Border.all(
               color: enabled
                   ? colorScheme.primary.withValues(alpha: 0.20)
-                  : AppColors.divider,
+                  : tokens.divider,
             ),
           ),
           child: Row(
@@ -358,9 +386,7 @@ class AppPickerPill extends StatelessWidget {
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: enabled
-                        ? colorScheme.primary
-                        : AppColors.textTertiary,
+                    color: enabled ? colorScheme.primary : tokens.textTertiary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -369,7 +395,7 @@ class AppPickerPill extends StatelessWidget {
               Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 18,
-                color: enabled ? colorScheme.primary : AppColors.textTertiary,
+                color: enabled ? colorScheme.primary : tokens.textTertiary,
               ),
             ],
           ),
@@ -395,6 +421,7 @@ class AppPickerField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return Semantics(
       button: true,
       enabled: enabled,
@@ -411,7 +438,7 @@ class AppPickerField extends StatelessWidget {
             valueLabel,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: enabled ? AppColors.textPrimary : AppColors.textTertiary,
+              color: enabled ? tokens.textPrimary : tokens.textTertiary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -429,6 +456,15 @@ Future<T?> showAppOptionPicker<T>(
   bool grid = false,
   int gridCrossAxisCount = 3,
 }) {
+  if (grid) {
+    return _showAppGridOptionPicker<T>(
+      context,
+      title: title,
+      options: options,
+      selectedValue: selectedValue,
+      gridCrossAxisCount: gridCrossAxisCount,
+    );
+  }
   return showAppWheelValuePicker<T>(
     context,
     title: title,
@@ -441,5 +477,107 @@ Future<T?> showAppOptionPicker<T>(
           subtitle: option.subtitle,
         ),
     ],
+  );
+}
+
+Future<T?> _showAppGridOptionPicker<T>(
+  BuildContext context, {
+  required String title,
+  required List<AppPickerOption<T>> options,
+  required T selectedValue,
+  required int gridCrossAxisCount,
+}) {
+  if (options.isEmpty) {
+    return Future<T?>.value();
+  }
+  final effectiveCrossAxisCount = gridCrossAxisCount > 0
+      ? gridCrossAxisCount
+      : 1;
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      final colorScheme = Theme.of(sheetContext).colorScheme;
+      final textTheme = Theme.of(sheetContext).textTheme;
+      final tokens = appThemeTokensOf(sheetContext);
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.xs,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.6,
+              ),
+              child: GridView.builder(
+                shrinkWrap: true,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: effectiveCrossAxisCount,
+                  crossAxisSpacing: AppSpacing.sm,
+                  mainAxisSpacing: AppSpacing.sm,
+                  childAspectRatio: 2.2,
+                ),
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options[index];
+                  final isSelected = option.value == selectedValue;
+                  return Semantics(
+                    button: true,
+                    selected: isSelected,
+                    label: option.label,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).pop(option.value),
+                      borderRadius: BorderRadius.circular(AppRadii.md),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? colorScheme.primaryContainer
+                              : tokens.surfaceMuted,
+                          borderRadius: BorderRadius.circular(AppRadii.md),
+                          border: Border.all(
+                            color: isSelected
+                                ? colorScheme.primary
+                                : tokens.divider,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            option.label,
+                            textAlign: TextAlign.center,
+                            style: textTheme.labelLarge?.copyWith(
+                              color: isSelected
+                                  ? colorScheme.primary
+                                  : tokens.textPrimary,
+                              fontWeight: isSelected
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    },
   );
 }
