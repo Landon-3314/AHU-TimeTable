@@ -5,7 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/course.dart';
 import '../models/event.dart';
 import '../models/semester.dart';
+import 'corrupt_row_diagnostic_store.dart';
 import 'external_data_backup_store.dart';
+
+enum InternalDataState { missing, valid, damaged }
+
+enum AppThemeMode { system, light, dark }
 
 class StorageService {
   StorageService({
@@ -27,7 +32,18 @@ class StorageService {
   static const String _currentSemesterIdKey = 'semesters.currentId';
   static const String _semesterMigrationVersionKey =
       'semesters.migrationVersion';
+  static const String _semesterMigrationStateKey = 'semesters.migrationState';
+  static const String _semesterMigrationTargetIdKey =
+      'semesters.migrationTargetId';
+  static const String _semesterOperationJournalKey =
+      'semesters.operationJournal';
+  static const String _semesterOperationCreate = 'create';
+  static const String _semesterOperationInitialize = 'initialize';
+  static const String _semesterOperationSwitch = 'switch';
+  static const String _semesterOperationDelete = 'delete';
   static const int _semesterMigrationVersion = 1;
+  static const String _migrationStateInProgress = 'in_progress';
+  static const String _migrationStateComplete = 'complete';
   static const String _pixelsPerMinuteKey = 'settings.pixelsPerMinute';
   static const String _classDurationKey = 'settings.classDuration';
   static const String _shortBreakKey = 'settings.shortBreak';
@@ -58,6 +74,7 @@ class StorageService {
   static const String _eventReminderAdvanceMinutesKey =
       'settings.eventReminderAdvanceMinutes';
   static const String _languageCodeKey = 'settings.languageCode';
+  static const String _appThemeModeKey = 'settings.appThemeMode';
   static const String _themePaletteIdKey = 'settings.themePaletteId';
   static const String _customThemePrimaryValueKey =
       'settings.customThemePrimaryValue';
@@ -76,22 +93,58 @@ class StorageService {
     final sharedPreferences = await SharedPreferences.getInstance();
     final backupStore =
         externalDataBackupStore ?? const ExternalDataBackupStore();
-    final recoveryStatus = _hasRecoverableInternalData(sharedPreferences)
+    final diagnosticStore = CorruptRowDiagnosticStore(
+      sharedPreferences: sharedPreferences,
+    );
+    await diagnosticStore.recordAll(
+      _scanCorruptTimetableRows(sharedPreferences).diagnostics,
+    );
+    try {
+      await StorageService(
+        sharedPreferences: sharedPreferences,
+      ).resumePendingSemesterOperation();
+    } catch (_) {
+      // Classification below will treat a malformed journal as damaged data.
+    }
+    final initialInternalState = _classifyInternalData(sharedPreferences);
+    final recoveryStatus = initialInternalState == InternalDataState.valid
         ? ExternalDataRecoveryStatus.skippedInternalDataPresent
         : await backupStore.restoreToSharedPreferences(sharedPreferences);
+    final postRecoveryScan = _scanCorruptTimetableRows(sharedPreferences);
+    await diagnosticStore.recordAll(postRecoveryScan.diagnostics);
+    if (_classifyInternalData(sharedPreferences) == InternalDataState.damaged &&
+        postRecoveryScan.hasCorruptRows &&
+        _classifyInternalData(
+              sharedPreferences,
+              allowCorruptTimetableRows: true,
+            ) ==
+            InternalDataState.valid) {
+      await postRecoveryScan.sanitize(sharedPreferences);
+    }
+    if (_classifyInternalData(sharedPreferences) == InternalDataState.damaged) {
+      throw StateError('Internal timetable data is damaged');
+    }
     final service = StorageService(
       sharedPreferences: sharedPreferences,
       externalDataBackupStore: backupStore,
       lastRecoveryStatus: recoveryStatus,
     );
     await service.ensureSemesterMigration();
-    await service.syncExternalBackup();
+    if (_classifyInternalData(sharedPreferences) == InternalDataState.valid) {
+      await service.syncExternalBackup();
+    }
     return service;
   }
 
   Future<void> reload() => _sharedPreferences.reload();
 
   ExternalDataRecoveryStatus get lastRecoveryStatus => _lastRecoveryStatus;
+
+  Future<int> consumePendingCorruptRowNoticeCount() {
+    return CorruptRowDiagnosticStore(
+      sharedPreferences: _sharedPreferences,
+    ).consumePendingCount();
+  }
 
   Future<bool> syncExternalBackup() async {
     final backupStore = _externalDataBackupStore;
@@ -136,25 +189,50 @@ class StorageService {
       isInitialized: true,
     );
 
-    await _saveSemesters([...semesters, semester]);
-    await setCurrentSemesterId(semester.id);
-    await writeSemesterStartDateFor(semester.id, startDate);
+    await _writeSemesterOperationJournal({
+      'type': _semesterOperationCreate,
+      'semester': semester.toJson(),
+      'startDate': startDate.toIso8601String(),
+    });
+    await resumePendingSemesterOperation();
     return semester;
   }
 
-  Future<void> setCurrentSemesterId(String semesterId) {
-    return _setString(_currentSemesterIdKey, semesterId);
+  Future<void> setCurrentSemesterId(String semesterId, {bool sync = true}) {
+    if (!sync) {
+      return _setString(_currentSemesterIdKey, semesterId, sync: false);
+    }
+    return switchSemester(semesterId);
+  }
+
+  Future<void> switchSemester(String semesterId) async {
+    await _writeSemesterOperationJournal({
+      'type': _semesterOperationSwitch,
+      'semesterId': semesterId,
+    });
+    await resumePendingSemesterOperation();
   }
 
   Future<void> initializeExistingSemester(
     String semesterId, {
     required DateTime startDate,
   }) async {
-    await writeSemesterStartDateFor(semesterId, startDate);
-    await markSemesterInitialized(semesterId);
+    await _writeSemesterOperationJournal({
+      'type': _semesterOperationInitialize,
+      'semesterId': semesterId,
+      'startDate': startDate.toIso8601String(),
+    });
+    await resumePendingSemesterOperation();
   }
 
   Future<void> markSemesterInitialized(String semesterId) async {
+    await _markSemesterInitialized(semesterId);
+  }
+
+  Future<void> _markSemesterInitialized(
+    String semesterId, {
+    bool sync = true,
+  }) async {
     final semesters = loadSemesters();
     final updated = semesters
         .map(
@@ -163,7 +241,7 @@ class StorageService {
               : semester,
         )
         .toList();
-    await _saveSemesters(updated);
+    await _saveSemesters(updated, sync: sync);
   }
 
   Future<void> renameSemester(String semesterId, String newName) async {
@@ -187,59 +265,234 @@ class StorageService {
     final remainingSemesters = loadSemesters()
         .where((semester) => semester.id != semesterId)
         .toList();
-    await _saveSemesters(remainingSemesters);
-    await _deleteSemesterScopedData(semesterId);
-
     final currentId = currentSemesterId;
-    if (currentId != semesterId) {
-      return currentId;
-    }
-
-    if (remainingSemesters.isEmpty) {
-      await _remove(_currentSemesterIdKey);
-      return null;
-    }
-
-    for (final semester in remainingSemesters) {
-      if (semester.isInitialized) {
-        await setCurrentSemesterId(semester.id);
-        return semester.id;
+    String? replacementSemesterId;
+    if (currentId == semesterId) {
+      for (final semester in remainingSemesters) {
+        if (semester.isInitialized) {
+          replacementSemesterId = semester.id;
+          break;
+        }
       }
     }
 
-    await _remove(_currentSemesterIdKey);
-    return null;
+    await _writeSemesterOperationJournal({
+      'type': _semesterOperationDelete,
+      'semesterId': semesterId,
+      'replacementSemesterId': replacementSemesterId,
+    });
+    await resumePendingSemesterOperation();
+    return currentSemesterId;
+  }
+
+  Future<void> resumePendingSemesterOperation() async {
+    final rawJournal = _sharedPreferences.getString(
+      _semesterOperationJournalKey,
+    );
+    if (rawJournal == null) {
+      return;
+    }
+
+    final decoded = jsonDecode(rawJournal);
+    if (decoded is! Map) {
+      throw StateError('Semester operation journal is invalid');
+    }
+    final journal = Map<String, dynamic>.from(decoded);
+    switch (journal['type']) {
+      case _semesterOperationCreate:
+        await _applyCreateSemesterOperation(journal);
+      case _semesterOperationInitialize:
+        await _applyInitializeSemesterOperation(journal);
+      case _semesterOperationSwitch:
+        await _applySwitchSemesterOperation(journal);
+      case _semesterOperationDelete:
+        await _applyDeleteSemesterOperation(journal);
+      default:
+        throw StateError('Semester operation journal type is invalid');
+    }
+
+    await _remove(_semesterOperationJournalKey, sync: false);
+    await syncExternalBackup();
+  }
+
+  Future<void> _writeSemesterOperationJournal(Map<String, dynamic> journal) {
+    return _setString(
+      _semesterOperationJournalKey,
+      jsonEncode(journal),
+      sync: false,
+    );
+  }
+
+  Future<void> _applyCreateSemesterOperation(
+    Map<String, dynamic> journal,
+  ) async {
+    final rawSemester = journal['semester'];
+    final startDate = DateTime.tryParse('${journal['startDate'] ?? ''}');
+    if (rawSemester is! Map || startDate == null) {
+      throw StateError('Semester creation journal is invalid');
+    }
+    final semester = Semester.fromJson(Map<String, dynamic>.from(rawSemester));
+    final semesters = loadSemesters();
+    if (!semesters.any((item) => item.id == semester.id)) {
+      await _saveSemesters([...semesters, semester], sync: false);
+    }
+    await _setString(_currentSemesterIdKey, semester.id, sync: false);
+    await _setString(
+      _semesterScopedKey(_semesterStartDateKey, semesterId: semester.id),
+      startDate.toIso8601String(),
+      sync: false,
+    );
+  }
+
+  Future<void> _applyInitializeSemesterOperation(
+    Map<String, dynamic> journal,
+  ) async {
+    final semesterId = journal['semesterId'];
+    final startDate = DateTime.tryParse('${journal['startDate'] ?? ''}');
+    if (semesterId is! String ||
+        startDate == null ||
+        !loadSemesters().any((semester) => semester.id == semesterId)) {
+      throw StateError('Semester initialization journal is invalid');
+    }
+    await _setString(
+      _semesterScopedKey(_semesterStartDateKey, semesterId: semesterId),
+      startDate.toIso8601String(),
+      sync: false,
+    );
+    await _markSemesterInitialized(semesterId, sync: false);
+  }
+
+  Future<void> _applySwitchSemesterOperation(
+    Map<String, dynamic> journal,
+  ) async {
+    final semesterId = journal['semesterId'];
+    if (semesterId is! String ||
+        !loadSemesters().any((semester) => semester.id == semesterId)) {
+      throw StateError('Semester switch journal is invalid');
+    }
+    await _setString(_currentSemesterIdKey, semesterId, sync: false);
+  }
+
+  Future<void> _applyDeleteSemesterOperation(
+    Map<String, dynamic> journal,
+  ) async {
+    final semesterId = journal['semesterId'];
+    final replacementSemesterId = journal['replacementSemesterId'];
+    if (semesterId is! String ||
+        (replacementSemesterId != null && replacementSemesterId is! String)) {
+      throw StateError('Semester deletion journal is invalid');
+    }
+
+    final remainingSemesters = loadSemesters()
+        .where((semester) => semester.id != semesterId)
+        .toList();
+    await _saveSemesters(remainingSemesters, sync: false);
+    await _deleteSemesterScopedData(semesterId, sync: false);
+    if (currentSemesterId != semesterId) {
+      return;
+    }
+    if (replacementSemesterId != null &&
+        remainingSemesters.any(
+          (semester) => semester.id == replacementSemesterId,
+        )) {
+      await _setString(
+        _currentSemesterIdKey,
+        replacementSemesterId,
+        sync: false,
+      );
+      return;
+    }
+    await _remove(_currentSemesterIdKey, sync: false);
   }
 
   Future<void> ensureSemesterMigration() async {
+    await resumePendingSemesterOperation();
     final migrationVersion =
         _sharedPreferences.getInt(_semesterMigrationVersionKey) ?? 0;
-    final existingSemesters = loadSemesters();
+    final migrationState = _sharedPreferences.getString(
+      _semesterMigrationStateKey,
+    );
+    var existingSemesters = loadSemesters();
+    final legacyUser = _hasLegacyTimetableData();
     if (migrationVersion >= _semesterMigrationVersion &&
         existingSemesters.isNotEmpty &&
-        currentSemesterId != null) {
+        currentSemesterId != null &&
+        migrationState != _migrationStateInProgress &&
+        (migrationState == _migrationStateComplete || !legacyUser)) {
       return;
     }
 
-    if (existingSemesters.isNotEmpty) {
-      final currentId = currentSemesterId ?? existingSemesters.first.id;
-      await setCurrentSemesterId(currentId);
-      await _setInt(_semesterMigrationVersionKey, _semesterMigrationVersion);
-      return;
-    }
-
-    final legacyUser = _hasLegacyTimetableData();
-    final firstSemester = Semester(
-      id: Semester.createId(),
-      name: _defaultSemesterName(1),
-      createdAt: DateTime.now(),
-      isInitialized: legacyUser,
+    Semester targetSemester;
+    final recordedTargetId = _sharedPreferences.getString(
+      _semesterMigrationTargetIdKey,
     );
+    final currentId = currentSemesterId;
+    final reusableTargetId =
+        recordedTargetId != null &&
+            existingSemesters.any((semester) => semester.id == recordedTargetId)
+        ? recordedTargetId
+        : currentId;
+    Semester? reusableTarget;
+    for (final semester in existingSemesters) {
+      if (semester.id == reusableTargetId) {
+        reusableTarget = semester;
+        break;
+      }
+    }
+    if (reusableTarget != null) {
+      targetSemester = reusableTarget;
+    } else if (existingSemesters.isNotEmpty) {
+      targetSemester = existingSemesters.first;
+    } else {
+      targetSemester = Semester(
+        id: Semester.createId(),
+        name: _defaultSemesterName(1),
+        createdAt: DateTime.now(),
+        isInitialized: legacyUser,
+      );
+      existingSemesters = [targetSemester];
+      await _saveSemesters(existingSemesters, sync: false);
+    }
 
-    await _saveSemesters([firstSemester]);
-    await setCurrentSemesterId(firstSemester.id);
-    await _migrateLegacyTimetableData(firstSemester.id, legacyUser: legacyUser);
-    await _setInt(_semesterMigrationVersionKey, _semesterMigrationVersion);
+    await _setString(
+      _semesterMigrationTargetIdKey,
+      targetSemester.id,
+      sync: false,
+    );
+    await _setString(
+      _semesterMigrationStateKey,
+      _migrationStateInProgress,
+      sync: false,
+    );
+    await setCurrentSemesterId(targetSemester.id, sync: false);
+    await _migrateLegacyTimetableData(
+      targetSemester.id,
+      legacyUser: legacyUser,
+      sync: false,
+    );
+    final scopedCoursesKey = _semesterScopedKey(
+      _coursesKey,
+      semesterId: targetSemester.id,
+    );
+    final scopedEventsKey = _semesterScopedKey(
+      _eventsKey,
+      semesterId: targetSemester.id,
+    );
+    if (!_canDecodeCourses(_sharedPreferences, scopedCoursesKey) ||
+        !_canDecodeEvents(_sharedPreferences, scopedEventsKey)) {
+      throw StateError('Migrated timetable payload is invalid');
+    }
+    await _setInt(
+      _semesterMigrationVersionKey,
+      _semesterMigrationVersion,
+      sync: false,
+    );
+    await _setString(
+      _semesterMigrationStateKey,
+      _migrationStateComplete,
+      sync: false,
+    );
+    await syncExternalBackup();
   }
 
   List<Course> loadCourses() {
@@ -534,8 +787,16 @@ class StorageService {
     return _sharedPreferences.getString(_languageCodeKey) ?? fallback;
   }
 
-  Future<void> writeLanguageCode(String value) {
-    return _setString(_languageCodeKey, value);
+  AppThemeMode readAppThemeMode({AppThemeMode fallback = AppThemeMode.system}) {
+    final stored = _sharedPreferences.getString(_appThemeModeKey);
+    return AppThemeMode.values
+            .where((mode) => mode.name == stored)
+            .firstOrNull ??
+        fallback;
+  }
+
+  Future<void> writeAppThemeMode(AppThemeMode value) {
+    return _setString(_appThemeModeKey, value.name);
   }
 
   String readThemePaletteId({required String fallback}) {
@@ -599,10 +860,11 @@ class StorageService {
     return 'semesters.$semesterId.$key';
   }
 
-  Future<void> _saveSemesters(List<Semester> semesters) {
+  Future<void> _saveSemesters(List<Semester> semesters, {bool sync = true}) {
     return _encodeList(
       key: _semestersKey,
       items: semesters.map((semester) => semester.toJson()),
+      sync: sync,
     );
   }
 
@@ -634,42 +896,67 @@ class StorageService {
   Future<void> _migrateLegacyTimetableData(
     String semesterId, {
     required bool legacyUser,
+    bool sync = true,
   }) async {
-    final legacyCourses = _decodeList(
-      key: _coursesKey,
-      decode: Course.fromJson,
-    ).map((course) => course.copyWith(semesterId: semesterId).toJson());
-    await _encodeList(
-      key: _semesterScopedKey(_coursesKey, semesterId: semesterId),
-      items: legacyCourses,
+    final scopedCoursesKey = _semesterScopedKey(
+      _coursesKey,
+      semesterId: semesterId,
     );
+    if (_sharedPreferences.containsKey(_coursesKey) ||
+        !_sharedPreferences.containsKey(scopedCoursesKey)) {
+      final legacyCourses = _decodeList(
+        key: _coursesKey,
+        decode: Course.fromJson,
+      ).map((course) => course.copyWith(semesterId: semesterId).toJson());
+      await _encodeList(
+        key: scopedCoursesKey,
+        items: legacyCourses,
+        sync: false,
+      );
+    }
 
-    final legacyEvents = _decodeList(
-      key: _eventsKey,
-      decode: Event.fromJson,
-    ).map((event) => event.copyWith(semesterId: semesterId).toJson());
-    await _encodeList(
-      key: _semesterScopedKey(_eventsKey, semesterId: semesterId),
-      items: legacyEvents,
+    final scopedEventsKey = _semesterScopedKey(
+      _eventsKey,
+      semesterId: semesterId,
     );
+    if (_sharedPreferences.containsKey(_eventsKey) ||
+        !_sharedPreferences.containsKey(scopedEventsKey)) {
+      final legacyEvents = _decodeList(
+        key: _eventsKey,
+        decode: Event.fromJson,
+      ).map((event) => event.copyWith(semesterId: semesterId).toJson());
+      await _encodeList(key: scopedEventsKey, items: legacyEvents, sync: false);
+    }
 
-    await _copyLegacySetting(_pixelsPerMinuteKey);
-    await _copyLegacySetting(_classDurationKey);
-    await _copyLegacySetting(_shortBreakKey);
-    await _copyLegacySetting(_bigBreakKey);
-    await _copyLegacySetting(_bigBreakAfterPeriodKey);
-    await _copyLegacySetting(_morningStartTimeKey);
-    await _copyLegacySetting(_morningClassesKey);
-    await _copyLegacySetting(_morningPeriodStartTimesKey);
-    await _copyLegacySetting(_afternoonStartTimeKey);
-    await _copyLegacySetting(_afternoonClassesKey);
-    await _copyLegacySetting(_afternoonPeriodStartTimesKey);
-    await _copyLegacySetting(_eveningStartTimeKey);
-    await _copyLegacySetting(_eveningClassesKey);
-    await _copyLegacySetting(_eveningPeriodStartTimesKey);
-    await _copyLegacySetting(_semesterStartDateKey);
-    await _copyLegacySetting(_semesterStartDatePromptShownKey);
-    await _copyLegacySetting(_totalWeeksKey);
+    await _copyLegacySetting(_pixelsPerMinuteKey, semesterId: semesterId);
+    await _copyLegacySetting(_classDurationKey, semesterId: semesterId);
+    await _copyLegacySetting(_shortBreakKey, semesterId: semesterId);
+    await _copyLegacySetting(_bigBreakKey, semesterId: semesterId);
+    await _copyLegacySetting(_bigBreakAfterPeriodKey, semesterId: semesterId);
+    await _copyLegacySetting(_morningStartTimeKey, semesterId: semesterId);
+    await _copyLegacySetting(_morningClassesKey, semesterId: semesterId);
+    await _copyLegacySetting(
+      _morningPeriodStartTimesKey,
+      semesterId: semesterId,
+    );
+    await _copyLegacySetting(_afternoonStartTimeKey, semesterId: semesterId);
+    await _copyLegacySetting(_afternoonClassesKey, semesterId: semesterId);
+    await _copyLegacySetting(
+      _afternoonPeriodStartTimesKey,
+      semesterId: semesterId,
+    );
+    await _copyLegacySetting(_eveningStartTimeKey, semesterId: semesterId);
+    await _copyLegacySetting(_eveningClassesKey, semesterId: semesterId);
+    await _copyLegacySetting(
+      _eveningPeriodStartTimesKey,
+      semesterId: semesterId,
+    );
+    await _copyLegacySetting(_semesterStartDateKey, semesterId: semesterId);
+    await _copyLegacySetting(
+      _semesterStartDatePromptShownKey,
+      semesterId: semesterId,
+    );
+    await _copyLegacySetting(_totalWeeksKey, semesterId: semesterId);
 
     if (legacyUser && !_sharedPreferences.containsKey(_semesterStartDateKey)) {
       await _setString(
@@ -678,15 +965,20 @@ class StorageService {
         sync: false,
       );
     }
-    await syncExternalBackup();
+    if (sync) {
+      await syncExternalBackup();
+    }
   }
 
-  Future<void> _copyLegacySetting(String key) async {
+  Future<void> _copyLegacySetting(
+    String key, {
+    required String semesterId,
+  }) async {
     if (!_sharedPreferences.containsKey(key)) {
       return;
     }
 
-    final scopedKey = _currentSemesterKey(key);
+    final scopedKey = _semesterScopedKey(key, semesterId: semesterId);
     final value = _sharedPreferences.get(key);
     if (value is int) {
       await _setInt(scopedKey, value, sync: false);
@@ -701,7 +993,10 @@ class StorageService {
     }
   }
 
-  Future<void> _deleteSemesterScopedData(String semesterId) async {
+  Future<void> _deleteSemesterScopedData(
+    String semesterId, {
+    bool sync = true,
+  }) async {
     final prefix = 'semesters.$semesterId.';
     final keysToRemove = _sharedPreferences
         .getKeys()
@@ -710,7 +1005,9 @@ class StorageService {
     for (final key in keysToRemove) {
       await _remove(key, sync: false);
     }
-    await syncExternalBackup();
+    if (sync) {
+      await syncExternalBackup();
+    }
   }
 
   String _defaultSemesterName(int number) {
@@ -755,9 +1052,10 @@ class StorageService {
   Future<void> _encodeList({
     required String key,
     required Iterable<Map<String, dynamic>> items,
+    bool sync = true,
   }) async {
     final rawItems = items.map(jsonEncode).toList();
-    await _setStringList(key, rawItems);
+    await _setStringList(key, rawItems, sync: sync);
   }
 
   Future<void> _setString(String key, String value, {bool sync = true}) async {
@@ -806,17 +1104,337 @@ class StorageService {
     }
   }
 
-  static bool _hasRecoverableInternalData(SharedPreferences preferences) {
-    return preferences.containsKey(_semestersKey) ||
-        preferences.containsKey(_currentSemesterIdKey) ||
-        preferences.containsKey(_coursesKey) ||
-        preferences.containsKey(_eventsKey) ||
-        preferences.getKeys().any(
-          (key) =>
-              key.startsWith('semesters.') &&
-              (key.endsWith('.courses.items') ||
-                  key.endsWith('.events.items') ||
-                  key.endsWith('.settings.semesterStartDate')),
+  static InternalDataState _classifyInternalData(
+    SharedPreferences preferences, {
+    bool allowCorruptTimetableRows = false,
+  }) {
+    try {
+      final keys = preferences.getKeys();
+      final scopedKeys = keys
+          .where((key) => RegExp(r'^semesters\.[^.]+\.').hasMatch(key))
+          .toList();
+      final hasLegacyData =
+          preferences.containsKey(_coursesKey) ||
+          preferences.containsKey(_eventsKey);
+      final hasSemesterData =
+          preferences.containsKey(_semestersKey) ||
+          preferences.containsKey(_currentSemesterIdKey) ||
+          preferences.containsKey(_semesterOperationJournalKey) ||
+          scopedKeys.isNotEmpty;
+      if (!hasLegacyData && !hasSemesterData) {
+        return InternalDataState.missing;
+      }
+
+      if (!_hasValidSemesterOperationJournal(preferences)) {
+        return InternalDataState.damaged;
+      }
+
+      if (!_canDecodeCourses(
+            preferences,
+            _coursesKey,
+            skipInvalidRows: allowCorruptTimetableRows,
+          ) ||
+          !_canDecodeEvents(
+            preferences,
+            _eventsKey,
+            skipInvalidRows: allowCorruptTimetableRows,
+          )) {
+        return InternalDataState.damaged;
+      }
+
+      if (!preferences.containsKey(_semestersKey)) {
+        return hasSemesterData
+            ? InternalDataState.damaged
+            : InternalDataState.valid;
+      }
+
+      final semesters = _tryDecodeList(
+        preferences: preferences,
+        key: _semestersKey,
+        decode: Semester.fromJson,
+        validateJson: _isValidSemesterJson,
+      );
+      if (semesters == null) {
+        return InternalDataState.damaged;
+      }
+      if (semesters.isEmpty) {
+        return hasLegacyData
+            ? InternalDataState.valid
+            : InternalDataState.missing;
+      }
+
+      final semesterIds = semesters.map((semester) => semester.id).toSet();
+      if (semesterIds.length != semesters.length) {
+        return InternalDataState.damaged;
+      }
+      if (!_hasValidMigrationMetadata(preferences, semesterIds)) {
+        return InternalDataState.damaged;
+      }
+      final currentSemesterId = preferences.getString(_currentSemesterIdKey);
+      if (currentSemesterId == null ||
+          !semesterIds.contains(currentSemesterId)) {
+        return InternalDataState.damaged;
+      }
+
+      for (final key in scopedKeys) {
+        final semesterId = key.split('.')[1];
+        if (!semesterIds.contains(semesterId)) {
+          return InternalDataState.damaged;
+        }
+        if (key.endsWith('.courses.items') &&
+            !_canDecodeCourses(
+              preferences,
+              key,
+              skipInvalidRows: allowCorruptTimetableRows,
+            )) {
+          return InternalDataState.damaged;
+        }
+        if (key.endsWith('.events.items') &&
+            !_canDecodeEvents(
+              preferences,
+              key,
+              skipInvalidRows: allowCorruptTimetableRows,
+            )) {
+          return InternalDataState.damaged;
+        }
+      }
+      return InternalDataState.valid;
+    } catch (_) {
+      return InternalDataState.damaged;
+    }
+  }
+
+  static bool _canDecodeCourses(
+    SharedPreferences preferences,
+    String key, {
+    bool skipInvalidRows = false,
+  }) {
+    return _tryDecodeList(
+          preferences: preferences,
+          key: key,
+          decode: Course.fromJson,
+          validateJson: _isValidCourseJson,
+          skipInvalidRows: skipInvalidRows,
+        ) !=
+        null;
+  }
+
+  static bool _canDecodeEvents(
+    SharedPreferences preferences,
+    String key, {
+    bool skipInvalidRows = false,
+  }) {
+    return _tryDecodeList(
+          preferences: preferences,
+          key: key,
+          decode: Event.fromJson,
+          validateJson: _isValidEventJson,
+          skipInvalidRows: skipInvalidRows,
+        ) !=
+        null;
+  }
+
+  static List<T>? _tryDecodeList<T>({
+    required SharedPreferences preferences,
+    required String key,
+    required T Function(Map<String, dynamic> json) decode,
+    bool Function(Map<String, dynamic> json)? validateJson,
+    bool skipInvalidRows = false,
+  }) {
+    try {
+      if (!preferences.containsKey(key)) {
+        return <T>[];
+      }
+      final rawItems = preferences.getStringList(key);
+      if (rawItems == null) {
+        return null;
+      }
+
+      final result = <T>[];
+      for (final raw in rawItems) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is! Map) {
+            throw const FormatException('Expected JSON object');
+          }
+          final json = Map<String, dynamic>.from(decoded);
+          if (validateJson != null && !validateJson(json)) {
+            throw const FormatException('Invalid row');
+          }
+          result.add(decode(json));
+        } catch (_) {
+          if (!skipInvalidRows) {
+            return null;
+          }
+        }
+      }
+      return result;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool _isValidSemesterJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    final createdAt = json['createdAt'];
+    return id is String &&
+        id.trim().isNotEmpty &&
+        json['name'] is String &&
+        createdAt is String &&
+        DateTime.tryParse(createdAt) != null &&
+        json['isInitialized'] is bool;
+  }
+
+  static bool _hasValidMigrationMetadata(
+    SharedPreferences preferences,
+    Set<String> semesterIds,
+  ) {
+    if (preferences.containsKey(_semesterMigrationVersionKey)) {
+      final version = preferences.getInt(_semesterMigrationVersionKey);
+      if (version == null || version < 0) {
+        return false;
+      }
+    }
+    if (preferences.containsKey(_semesterMigrationStateKey)) {
+      final state = preferences.getString(_semesterMigrationStateKey);
+      if (state != _migrationStateInProgress &&
+          state != _migrationStateComplete) {
+        return false;
+      }
+    }
+    if (preferences.containsKey(_semesterMigrationTargetIdKey)) {
+      final targetId = preferences.getString(_semesterMigrationTargetIdKey);
+      if (targetId == null || !semesterIds.contains(targetId)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _hasValidSemesterOperationJournal(SharedPreferences preferences) {
+    if (!preferences.containsKey(_semesterOperationJournalKey)) {
+      return true;
+    }
+    try {
+      final raw = preferences.getString(_semesterOperationJournalKey);
+      if (raw == null) {
+        return false;
+      }
+      final decoded = jsonDecode(raw);
+      return decoded is Map && decoded['type'] is String;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool _isValidCourseJson(Map<String, dynamic> json) {
+    final weeks = json['weeks'];
+    return json['name'] is String &&
+        json['weekday'] is int &&
+        weeks is List &&
+        weeks.every((week) => week is num || int.tryParse('$week') != null) &&
+        json['startPeriod'] is int &&
+        json['endPeriod'] is int &&
+        json['colorValue'] is int;
+  }
+
+  static bool _isValidEventJson(Map<String, dynamic> json) {
+    final dateTime = json['dateTime'];
+    return json['name'] is String &&
+        json['location'] is String &&
+        dateTime is String &&
+        DateTime.tryParse(dateTime) != null &&
+        json['enableAlarm'] is bool;
+  }
+
+  static _CorruptTimetableRowScan _scanCorruptTimetableRows(
+    SharedPreferences preferences,
+  ) {
+    final diagnostics = <CorruptRowDiagnosticCandidate>[];
+    final sanitizedRowsByKey = <String, List<String>>{};
+    for (final key in preferences.getKeys().where(_isTimetableRowListKey)) {
+      List<String>? rawRows;
+      try {
+        rawRows = preferences.getStringList(key);
+      } catch (_) {
+        continue;
+      }
+      if (rawRows == null) {
+        continue;
+      }
+
+      final validRows = <String>[];
+      for (final rawRow in rawRows) {
+        if (_isValidStoredTimetableRow(key, rawRow)) {
+          validRows.add(rawRow);
+          continue;
+        }
+        diagnostics.add(
+          CorruptRowDiagnosticCandidate(
+            sourceKey: key,
+            rawValue: rawRow,
+            reason: key.endsWith(_coursesKey)
+                ? 'invalid_course_row'
+                : 'invalid_event_row',
+          ),
         );
+      }
+      if (validRows.length != rawRows.length) {
+        sanitizedRowsByKey[key] = validRows;
+      }
+    }
+    return _CorruptTimetableRowScan(
+      diagnostics: diagnostics,
+      sanitizedRowsByKey: sanitizedRowsByKey,
+    );
+  }
+
+  static bool _isTimetableRowListKey(String key) {
+    return key == _coursesKey ||
+        key == _eventsKey ||
+        key.endsWith('.$_coursesKey') ||
+        key.endsWith('.$_eventsKey');
+  }
+
+  static bool _isValidStoredTimetableRow(String key, String rawRow) {
+    try {
+      final decoded = jsonDecode(rawRow);
+      if (decoded is! Map) {
+        return false;
+      }
+      final json = Map<String, dynamic>.from(decoded);
+      if (key.endsWith(_coursesKey)) {
+        if (!_isValidCourseJson(json)) {
+          return false;
+        }
+        Course.fromJson(json);
+        return true;
+      }
+      if (!_isValidEventJson(json)) {
+        return false;
+      }
+      Event.fromJson(json);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+class _CorruptTimetableRowScan {
+  const _CorruptTimetableRowScan({
+    required this.diagnostics,
+    required this.sanitizedRowsByKey,
+  });
+
+  final List<CorruptRowDiagnosticCandidate> diagnostics;
+  final Map<String, List<String>> sanitizedRowsByKey;
+
+  bool get hasCorruptRows => sanitizedRowsByKey.isNotEmpty;
+
+  Future<void> sanitize(SharedPreferences preferences) async {
+    for (final entry in sanitizedRowsByKey.entries) {
+      await preferences.setStringList(entry.key, entry.value);
+    }
   }
 }

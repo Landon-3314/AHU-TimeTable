@@ -161,21 +161,23 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "runOneMinuteMuteTest" -> {
-                    NativeAlarmScheduler.scheduleOneMinuteMuteTest(this)
-                    result.success(true)
+                    result.success(
+                        NativeAlarmScheduler.scheduleOneMinuteMuteTest(this).toMap(),
+                    )
                 }
 
                 "runTimedMuteTest" -> {
                     val muteAfterSeconds = (call.argument<Number>("muteAfterSeconds") ?: 30).toLong()
                     val restoreAfterSeconds =
                         (call.argument<Number>("restoreAfterSeconds") ?: 60).toLong()
-                    NativeAlarmScheduler.scheduleDiagnosticMuteWindow(
-                        context = this,
-                        silentDelayMillis = muteAfterSeconds.coerceAtLeast(1L) * 1000L,
-                        restoreDelayMillis =
-                            restoreAfterSeconds.coerceAtLeast(muteAfterSeconds + 1L) * 1000L,
+                    result.success(
+                        NativeAlarmScheduler.scheduleDiagnosticMuteWindow(
+                            context = this,
+                            silentDelayMillis = muteAfterSeconds.coerceAtLeast(1L) * 1000L,
+                            restoreDelayMillis =
+                                restoreAfterSeconds.coerceAtLeast(muteAfterSeconds + 1L) * 1000L,
+                        ).toMap(),
                     )
-                    result.success(true)
                 }
 
                 "cancelTimedMuteTest" -> {

@@ -56,7 +56,8 @@ void main() {
     expect(selectedChipRect.right, lessThanOrEqualTo(scrollRect.right + 0.5));
   });
 
-  testWidgets('week selector uses confirmable wheel picker', (tester) async {
+  testWidgets('week selector uses grid picker', (tester) async {
+    int? selectedWeek;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -68,7 +69,7 @@ void main() {
               TimetableWeekOption(value: 2, label: '第 2 周'),
               TimetableWeekOption(value: 3, label: '第 3 周'),
             ],
-            onSelected: (_) {},
+            onSelected: (week) => selectedWeek = week,
           ),
         ),
       ),
@@ -77,7 +78,14 @@ void main() {
     await tester.tap(find.text('第 2 周'));
     await tester.pumpAndSettle();
 
-    expect(find.text('确定'), findsOneWidget);
+    expect(find.byType(GridView), findsOneWidget);
+    expect(find.text('确定'), findsNothing);
     expect(find.text('第 3 周'), findsOneWidget);
+
+    await tester.tap(find.text('第 3 周'));
+    await tester.pumpAndSettle();
+
+    expect(selectedWeek, 3);
+    expect(find.byType(GridView), findsNothing);
   });
 }

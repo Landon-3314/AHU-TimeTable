@@ -2,11 +2,13 @@
 
 import android.content.Context
 import android.os.Build
+import java.util.TimeZone
 import org.json.JSONArray
 import org.json.JSONObject
 
 object NativeStateStore {
     private const val KEY_ALARM_ITEMS = "alarm_items_json"
+    private const val KEY_ALARM_ITEMS_TIME_ZONE_ID = "alarm_items_time_zone_id"
     private const val KEY_TODAY_COURSES = "today_courses_json"
     private const val KEY_LAST_SCHEDULED_COUNT = "last_scheduled_count"
     private const val KEY_FOREGROUND_SERVICE_ENABLED = "foreground_service_enabled"
@@ -49,6 +51,7 @@ object NativeStateStore {
 
         prefs(context).edit()
             .putString(KEY_ALARM_ITEMS, jsonArray.toString())
+            .putString(KEY_ALARM_ITEMS_TIME_ZONE_ID, TimeZone.getDefault().id)
             .putInt(KEY_LAST_SCHEDULED_COUNT, items.size)
             .apply()
     }
@@ -134,9 +137,14 @@ object NativeStateStore {
         return prefs(context).getInt(KEY_LAST_SCHEDULED_COUNT, 0)
     }
 
+    fun getAlarmItemsTimeZoneId(context: Context): String? {
+        return prefs(context).getString(KEY_ALARM_ITEMS_TIME_ZONE_ID, null)
+    }
+
     fun clearAlarmItems(context: Context) {
         prefs(context).edit()
             .remove(KEY_ALARM_ITEMS)
+            .remove(KEY_ALARM_ITEMS_TIME_ZONE_ID)
             .remove(KEY_TODAY_COURSES)
             .putInt(KEY_LAST_SCHEDULED_COUNT, 0)
             .apply()
@@ -175,6 +183,7 @@ object NativeStateStore {
         prefs(context).edit()
             .remove(mutedKey(index))
             .remove(originalRingerModeKey(index))
+            .remove(appliedRingerModeKey(index))
             .apply()
     }
 
@@ -191,6 +200,23 @@ object NativeStateStore {
         index: Int,
     ): Int? {
         val key = originalRingerModeKey(index)
+        val values = prefs(context)
+        return if (values.contains(key)) values.getInt(key, -1) else null
+    }
+
+    fun recordAppliedRingerMode(
+        context: Context,
+        index: Int,
+        ringerMode: Int,
+    ) {
+        prefs(context).edit().putInt(appliedRingerModeKey(index), ringerMode).apply()
+    }
+
+    fun appliedRingerMode(
+        context: Context,
+        index: Int,
+    ): Int? {
+        val key = appliedRingerModeKey(index)
         val values = prefs(context)
         return if (values.contains(key)) values.getInt(key, -1) else null
     }
@@ -236,6 +262,8 @@ object NativeStateStore {
     private fun mutedKey(index: Int) = "app_did_mute_$index"
 
     private fun originalRingerModeKey(index: Int) = "original_ringer_mode_$index"
+
+    private fun appliedRingerModeKey(index: Int) = "app_applied_ringer_mode_$index"
 
     private fun JSONObject.optNullableLong(key: String): Long? {
         return if (has(key) && !isNull(key)) optLong(key) else null

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -143,10 +142,10 @@ class UpdateCheckService {
     try {
       final response = await client.get(
         uri,
-        headers: const {HttpHeaders.acceptHeader: 'application/json'},
+        headers: const {'accept': 'application/json'},
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException('Update manifest request failed', uri: uri);
+        throw StateError('Update manifest request failed: $uri');
       }
       final body = await utf8.decodeStream(response.bytes);
       return UpdateManifest.fromJson(jsonDecode(body) as Map<String, Object?>);

@@ -13,8 +13,23 @@ class ScheduleParseException implements Exception {
   String toString() => message;
 }
 
+class ScheduleParseReport<T> {
+  const ScheduleParseReport({
+    required this.items,
+    required this.skippedReasons,
+  });
+
+  final List<T> items;
+  final List<String> skippedReasons;
+
+  int get skippedCount => skippedReasons.length;
+}
+
 class ScheduleParserService {
   const ScheduleParserService();
+
+  static const int _maxSupportedWeek = 52;
+  static const int _maxSupportedPeriod = 30;
 
   static const List<int> _coursePalette = <int>[
     0xFF7C9AF2,
@@ -32,7 +47,9 @@ class ScheduleParserService {
     r'\(((?:[^()]|\((?:单|双|单周|双周)\))+?)(?:周|鍛[^\)]*)\)\s*\(([\d\-]+)(?:节|鑺[^\)]*)\)\s+(\S+)\s+(\S+)\s+(\S+)',
   );
 
-  List<Course> parse(String html) {
+  List<Course> parse(String html) => parseTimetableReport(html).items;
+
+  ScheduleParseReport<Course> parseTimetableReport(String html) {
     final normalizedHtml = html.trim();
     if (normalizedHtml.isEmpty) {
       throw ScheduleParseException('课表源码为空，无法解析。');
@@ -47,6 +64,7 @@ class ScheduleParserService {
 
       final occupiedGrid = <int, Map<int, bool>>{};
       final courses = <Course>[];
+      final skippedReasons = <String>[];
       final seen = <String>{};
       final rows = table.querySelectorAll('tr');
 
@@ -100,25 +118,34 @@ class ScheduleParserService {
                 continue;
               }
 
+              var recognizedTime = false;
               for (final match in _timeRegExp.allMatches(lesson.cleanedText)) {
-                final period = _parsePeriodRange(match.group(2) ?? '');
-                final course = Course(
-                  name: lesson.name,
-                  location: '${match.group(3) ?? ''} ${match.group(4) ?? ''}'
-                      .replaceAll(RegExp(r'\s+'), ' ')
-                      .trim(),
-                  teacher: (match.group(5) ?? '').trim(),
-                  weekday: weekday,
-                  weeks: _parseWeeks(match.group(1) ?? ''),
-                  startPeriod: period.start,
-                  endPeriod: period.end,
-                  colorValue: _pickColor(lesson.name),
-                );
+                recognizedTime = true;
+                try {
+                  final period = _parsePeriodRange(match.group(2) ?? '');
+                  final course = Course(
+                    name: lesson.name,
+                    location: '${match.group(3) ?? ''} ${match.group(4) ?? ''}'
+                        .replaceAll(RegExp(r'\s+'), ' ')
+                        .trim(),
+                    teacher: (match.group(5) ?? '').trim(),
+                    weekday: weekday,
+                    weeks: _parseWeeks(match.group(1) ?? ''),
+                    startPeriod: period.start,
+                    endPeriod: period.end,
+                    colorValue: _pickColor(lesson.name),
+                  );
 
-                final key = _courseKey(course);
-                if (seen.add(key)) {
-                  courses.add(course);
+                  final key = _courseKey(course);
+                  if (seen.add(key)) {
+                    courses.add(course);
+                  }
+                } on ScheduleParseException catch (error) {
+                  skippedReasons.add('${lesson.name}: ${error.message}');
                 }
+              }
+              if (!recognizedTime) {
+                skippedReasons.add('${lesson.name}: 无法识别课程时间。');
               }
             }
           }
@@ -128,10 +155,16 @@ class ScheduleParserService {
       }
 
       if (courses.isEmpty) {
-        throw ScheduleParseException('没有识别到课程，请确认课表 HTML 结构没有变化。');
+        final details = skippedReasons.isEmpty
+            ? '请确认课表 HTML 结构没有变化。'
+            : skippedReasons.join('；');
+        throw ScheduleParseException('没有识别到可导入课程。$details');
       }
 
-      return courses;
+      return ScheduleParseReport<Course>(
+        items: List<Course>.unmodifiable(courses),
+        skippedReasons: List<String>.unmodifiable(skippedReasons),
+      );
     } on ScheduleParseException {
       rethrow;
     } catch (error) {
@@ -328,8 +361,8 @@ class ScheduleParserService {
 
         final start = int.tryParse(bounds[0]) ?? 0;
         final end = int.tryParse(bounds[1]) ?? 0;
-        if (start <= 0 || end < start) {
-          continue;
+        if (start <= 0 || end < start || end > _maxSupportedWeek) {
+          throw ScheduleParseException('无法识别周次: $weekStr');
         }
 
         for (var week = start; week <= end; week += 1) {
@@ -341,13 +374,19 @@ class ScheduleParserService {
       }
 
       final week = int.tryParse(rawRange);
-      if (week != null && _matchesWeekQualifier(week, qualifier)) {
+      if (week != null &&
+          week > 0 &&
+          week <= _maxSupportedWeek &&
+          _matchesWeekQualifier(week, qualifier)) {
         weeks.add(week);
       }
     }
 
     final result = weeks.toSet().toList()..sort();
-    return result.isEmpty ? <int>[1] : result;
+    if (result.isEmpty) {
+      throw ScheduleParseException('无法识别周次: $weekStr');
+    }
+    return result;
   }
 
   bool _matchesWeekQualifier(int week, String qualifier) {
@@ -365,7 +404,7 @@ class ScheduleParserService {
     final normalized = rawPeriods.trim();
     final rangeMatch = RegExp(r'^(\d{1,2})-(\d{1,2})$').firstMatch(normalized);
     if (rangeMatch != null) {
-      return _PeriodRange(
+      return _validatePeriodRange(
         start: int.parse(rangeMatch.group(1)!),
         end: int.parse(rangeMatch.group(2)!),
       );
@@ -374,10 +413,17 @@ class ScheduleParserService {
     final singleMatch = RegExp(r'^(\d{1,2})$').firstMatch(normalized);
     if (singleMatch != null) {
       final value = int.parse(singleMatch.group(1)!);
-      return _PeriodRange(start: value, end: value);
+      return _validatePeriodRange(start: value, end: value);
     }
 
     throw ScheduleParseException('无法识别节次: $rawPeriods');
+  }
+
+  _PeriodRange _validatePeriodRange({required int start, required int end}) {
+    if (start < 1 || end < start || end > _maxSupportedPeriod) {
+      throw ScheduleParseException('节次范围无效: $start-$end');
+    }
+    return _PeriodRange(start: start, end: end);
   }
 
   void _markOccupied({

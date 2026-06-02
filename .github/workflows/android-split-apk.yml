@@ -39,6 +39,18 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Analyze Flutter sources
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Run Release verifier tests
+        run: python3 -m unittest tool/test_verify_release_version.py -v
+
+      - name: Build Web release
+        run: flutter build web --release
+
       - name: Resolve version from pubspec.yaml
         id: version
         shell: bash
@@ -53,46 +65,86 @@ jobs:
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "release_name=Timetable v$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Verify monotonically increasing version code
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=(--published-manifest update.json)
+          mkdir -p "$RUNNER_TEMP/published-release"
+
+          if gh release view --json tagName >/dev/null 2>&1; then
+            gh release download \
+              --pattern update.json \
+              --dir "$RUNNER_TEMP/published-release"
+            manifest_args+=(
+              --published-manifest "$RUNNER_TEMP/published-release/update.json"
+            )
+          fi
+
+          python3 tool/verify_release_version.py \
+            --pubspec pubspec.yaml \
+            "${manifest_args[@]}"
+
       - name: Prepare Android signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD_SECRET: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEYSTORE_ALIAS_SECRET: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
           ANDROID_KEY_PASSWORD_SECRET: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_SIGNING_CERT_SHA256_SECRET: ${{ secrets.ANDROID_SIGNING_CERT_SHA256 }}
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p "$RUNNER_TEMP/android-keystore"
 
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ] \
-            && [ -n "$ANDROID_KEYSTORE_PASSWORD_SECRET" ] \
-            && [ -n "$ANDROID_KEYSTORE_ALIAS_SECRET" ] \
-            && [ -n "$ANDROID_KEY_PASSWORD_SECRET" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/android-keystore/release.keystore"
-            {
-              echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/android-keystore/release.keystore"
-              echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD_SECRET"
-              echo "ANDROID_KEYSTORE_ALIAS=$ANDROID_KEYSTORE_ALIAS_SECRET"
-              echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD_SECRET"
-            } >> "$GITHUB_ENV"
-          else
-            keytool -genkeypair \
-              -v \
-              -storetype JKS \
-              -keystore "$RUNNER_TEMP/android-keystore/debug.keystore" \
-              -storepass android \
-              -keypass android \
-              -alias androiddebugkey \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-            {
-              echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/android-keystore/debug.keystore"
-              echo "ANDROID_KEYSTORE_PASSWORD=android"
-              echo "ANDROID_KEYSTORE_ALIAS=androiddebugkey"
-              echo "ANDROID_KEY_PASSWORD=android"
-            } >> "$GITHUB_ENV"
+          required_secrets=(
+            ANDROID_KEYSTORE_BASE64
+            ANDROID_KEYSTORE_PASSWORD_SECRET
+            ANDROID_KEYSTORE_ALIAS_SECRET
+            ANDROID_KEY_PASSWORD_SECRET
+            ANDROID_SIGNING_CERT_SHA256_SECRET
+          )
+          for secret_name in "${required_secrets[@]}"; do
+            if [ -z "${!secret_name}" ]; then
+              echo "Missing required Release signing secret: $secret_name" >&2
+              exit 1
+            fi
+          done
+
+          keystore_path="$RUNNER_TEMP/android-keystore/release.keystore"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+
+          normalize_fingerprint() {
+            tr '[:lower:]' '[:upper:]' | tr -d ':[:space:]'
+          }
+          actual_fingerprint="$(
+            keytool -exportcert \
+              -rfc \
+              -keystore "$keystore_path" \
+              -storepass "$ANDROID_KEYSTORE_PASSWORD_SECRET" \
+              -alias "$ANDROID_KEYSTORE_ALIAS_SECRET" |
+              openssl x509 -noout -fingerprint -sha256 |
+              cut -d= -f2 |
+              normalize_fingerprint
+          )"
+          expected_fingerprint="$(
+            printf '%s' "$ANDROID_SIGNING_CERT_SHA256_SECRET" |
+              normalize_fingerprint
+          )"
+          if [ "$actual_fingerprint" != "$expected_fingerprint" ]; then
+            echo "Release keystore certificate fingerprint mismatch" >&2
+            exit 1
           fi
+
+          {
+            echo "ANDROID_KEYSTORE_PATH=$keystore_path"
+            echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD_SECRET"
+            echo "ANDROID_KEYSTORE_ALIAS=$ANDROID_KEYSTORE_ALIAS_SECRET"
+            echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD_SECRET"
+            echo "ANDROID_SIGNING_CERT_SHA256=$expected_fingerprint"
+          } >> "$GITHUB_ENV"
 
       - name: Build release APKs with split per ABI
         run: flutter build apk --release --split-per-abi
@@ -105,6 +157,57 @@ jobs:
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "release/timetable-${VERSION}-armeabi-v7a.apk"
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "release/timetable-${VERSION}-arm64-v8a.apk"
           cp build/app/outputs/flutter-apk/app-x86_64-release.apk "release/timetable-${VERSION}-x86_64.apk"
+
+      - name: Verify APK signing certificate continuity
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          apksigner="$(
+            find "$ANDROID_HOME/build-tools" -type f -name apksigner |
+              sort -V |
+              tail -n 1
+          )"
+          if [ -z "$apksigner" ]; then
+            echo "Unable to find apksigner" >&2
+            exit 1
+          fi
+
+          apk_fingerprint() {
+            "$apksigner" verify --print-certs "$1" |
+              sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
+              head -n 1 |
+              tr '[:lower:]' '[:upper:]' |
+              tr -d ':[:space:]'
+          }
+
+          for apk in release/*.apk; do
+            fingerprint="$(apk_fingerprint "$apk")"
+            if [ "$fingerprint" != "$ANDROID_SIGNING_CERT_SHA256" ]; then
+              echo "Unexpected certificate fingerprint for $apk" >&2
+              exit 1
+            fi
+          done
+
+          if gh release view --json tagName >/dev/null 2>&1; then
+            previous_dir="$RUNNER_TEMP/previous-release"
+            mkdir -p "$previous_dir"
+            gh release download \
+              --pattern '*-arm64-v8a.apk' \
+              --dir "$previous_dir"
+            shopt -s nullglob
+            previous_apks=("$previous_dir/"*-arm64-v8a.apk)
+            if [ "${#previous_apks[@]}" -ne 1 ]; then
+              echo "Expected exactly one previous arm64-v8a APK" >&2
+              exit 1
+            fi
+            previous_fingerprint="$(apk_fingerprint "${previous_apks[0]}")"
+            if [ "$previous_fingerprint" != "$ANDROID_SIGNING_CERT_SHA256" ]; then
+              echo "Previous public APK certificate fingerprint mismatch" >&2
+              exit 1
+            fi
+          fi
 
       - name: Prepare update manifest
         env:

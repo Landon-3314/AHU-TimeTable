@@ -70,6 +70,7 @@ void main() {
       ),
     );
 
+    await _scrollToUpdateEntry(tester);
     await tester.tap(find.text('检查更新'));
     await tester.pump();
     expect(find.text('正在检测更新...'), findsOneWidget);
@@ -107,6 +108,7 @@ void main() {
       ),
     );
 
+    await _scrollToUpdateEntry(tester);
     await tester.tap(find.text('检查更新'));
     await _pumpUntilFound(tester, find.text('立即更新'));
     await tester.tap(find.text('立即更新'));
@@ -138,6 +140,7 @@ void main() {
       ),
     );
 
+    await _scrollToUpdateEntry(tester);
     await tester.tap(find.text('检查更新'));
     await _pumpUntilFound(tester, find.text('立即更新'));
     await tester.tap(find.text('立即更新'));
@@ -206,6 +209,11 @@ Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
     }
   }
   expect(finder, findsOneWidget);
+}
+
+Future<void> _scrollToUpdateEntry(WidgetTester tester) async {
+  await tester.ensureVisible(find.text('检查更新'));
+  await tester.pumpAndSettle();
 }
 
 UpdateManifest _manifest({required int versionCode}) {

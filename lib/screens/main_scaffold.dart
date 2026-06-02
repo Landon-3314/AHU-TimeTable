@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../core/app_routes.dart';
 import '../providers/settings_provider.dart';
 import '../providers/timetable_view_provider.dart';
+import '../widgets/common/app_ui.dart';
 import '../widgets/semester_start_date_dialog.dart';
 import 'settings_page.dart';
 import 'timetable_page.dart';
@@ -77,7 +78,18 @@ class _MainScaffoldState extends State<MainScaffold> {
   }
 
   Future<void> _runStartupPrompts() async {
+    await _showCorruptRowNotice();
     await _showInitialSemesterStartDatePrompt();
+  }
+
+  Future<void> _showCorruptRowNotice() async {
+    final count = await context
+        .read<SettingsProvider>()
+        .consumePendingCorruptRowNoticeCount();
+    if (!mounted || count == 0) {
+      return;
+    }
+    showAppSnackBar(context, SnackBar(content: Text('已跳过并保留 $count 条损坏日程记录')));
   }
 
   Future<void> _showInitialSemesterStartDatePrompt() async {

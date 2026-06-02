@@ -10,6 +10,8 @@ class Course {
     required this.endPeriod,
     required this.colorValue,
     this.semesterId,
+    this.importSource,
+    this.importBatchId,
     this.rescheduledFromSessionKey,
     this.rescheduledFromWeek,
   }) : id = id ?? createId(),
@@ -25,6 +27,8 @@ class Course {
   final int endPeriod;
   final int colorValue;
   final String? semesterId;
+  final String? importSource;
+  final String? importBatchId;
   final String? rescheduledFromSessionKey;
   final int? rescheduledFromWeek;
 
@@ -48,6 +52,8 @@ class Course {
     int? endPeriod,
     int? colorValue,
     String? semesterId,
+    String? importSource,
+    String? importBatchId,
     String? rescheduledFromSessionKey,
     int? rescheduledFromWeek,
     bool clearRescheduleSource = false,
@@ -63,6 +69,8 @@ class Course {
       endPeriod: endPeriod ?? this.endPeriod,
       colorValue: colorValue ?? this.colorValue,
       semesterId: semesterId ?? this.semesterId,
+      importSource: importSource ?? this.importSource,
+      importBatchId: importBatchId ?? this.importBatchId,
       rescheduledFromSessionKey: clearRescheduleSource
           ? null
           : (rescheduledFromSessionKey ?? this.rescheduledFromSessionKey),
@@ -84,6 +92,8 @@ class Course {
       'endPeriod': endPeriod,
       'colorValue': colorValue,
       'semesterId': semesterId,
+      'importSource': importSource,
+      'importBatchId': importBatchId,
       'rescheduledFromSessionKey': rescheduledFromSessionKey,
       'rescheduledFromWeek': rescheduledFromWeek,
     };
@@ -91,7 +101,7 @@ class Course {
 
   factory Course.fromJson(Map<String, dynamic> map) {
     final weeks = _parseWeeks(map['weeks']);
-    final name = (map['name'] as String?) ?? 'Untitled Course';
+    final name = (map['name'] as String?) ?? '未命名课程';
     final location = (map['location'] as String?) ?? '';
     final teacher = (map['teacher'] as String?) ?? '';
     final weekday = (map['weekday'] as int?) ?? 1;
@@ -99,6 +109,8 @@ class Course {
     final endPeriod = (map['endPeriod'] as int?) ?? 2;
     final colorValue = (map['colorValue'] as int?) ?? 0xFF7C9AF2;
     final semesterId = map['semesterId'] as String?;
+    final importSource = map['importSource'] as String?;
+    final importBatchId = map['importBatchId'] as String?;
     final rescheduledFromSessionKey =
         map['rescheduledFromSessionKey'] as String?;
     final rescheduledFromWeek = map['rescheduledFromWeek'] as int?;
@@ -125,6 +137,8 @@ class Course {
       endPeriod: endPeriod,
       colorValue: colorValue,
       semesterId: semesterId,
+      importSource: importSource,
+      importBatchId: importBatchId,
       rescheduledFromSessionKey: rescheduledFromSessionKey,
       rescheduledFromWeek: rescheduledFromWeek,
     );

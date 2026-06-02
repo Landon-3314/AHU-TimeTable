@@ -14,7 +14,8 @@ class ReminderSettingsSection extends StatelessWidget {
   });
 
   final SettingsProvider provider;
-  final String Function(int minutes, {bool isEventReminder}) reminderLabelBuilder;
+  final String Function(int minutes, {bool isEventReminder})
+  reminderLabelBuilder;
   final Future<void> Function(bool value) onToggleCourseReminder;
   final Future<void> Function() onPickCourseReminder;
   final Future<void> Function() onPickEventReminder;
@@ -43,10 +44,14 @@ class ReminderSettingsSection extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.tune_outlined),
               title: const Text('课前提醒提前时间'),
-              subtitle: Text(reminderLabelBuilder(provider.reminderAdvanceMinutes)),
+              subtitle: Text(
+                reminderLabelBuilder(provider.reminderAdvanceMinutes),
+              ),
               trailing: const Icon(Icons.chevron_right),
               enabled: provider.courseReminderEnabled,
-              onTap: provider.courseReminderEnabled ? onPickCourseReminder : null,
+              onTap: provider.courseReminderEnabled
+                  ? onPickCourseReminder
+                  : null,
             ),
             const Divider(height: 1),
             ListTile(

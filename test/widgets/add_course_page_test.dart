@@ -17,7 +17,12 @@ void main() {
 
     await tester.pumpWidget(_buildPage(bundle));
 
-    expect(find.byType(CapsuleMultiSelect<int>), findsNWidgets(2));
+    expect(find.byType(CapsuleMultiSelect<int>), findsOneWidget);
+    await _scrollTeachingWeeksIntoView(tester);
+    expect(
+      find.byKey(const ValueKey('teaching-week-selector')),
+      findsOneWidget,
+    );
     expect(find.byType(FilterChip), findsNothing);
   });
 
@@ -105,6 +110,7 @@ void main() {
 
     await tester.enterText(find.byType(TextFormField).at(0), 'Math');
     await tester.enterText(find.byType(TextFormField).at(1), 'Room 101');
+    await _scrollTeachingWeeksIntoView(tester);
     await tester.tap(find.text('第 3 周'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('第 2 周'));
@@ -125,6 +131,7 @@ void main() {
 
     await tester.enterText(find.byType(TextFormField).at(0), 'Math');
     await tester.enterText(find.byType(TextFormField).at(1), 'Room 101');
+    await _scrollTeachingWeeksIntoView(tester);
     await tester.tap(find.text('第 1 周'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('保存'));
@@ -141,6 +148,9 @@ void main() {
 
     await tester.pumpWidget(_buildPage(bundle));
 
+    await tester.enterText(find.byType(TextFormField).at(0), 'Math');
+    await tester.enterText(find.byType(TextFormField).at(1), 'Room 101');
+    await _scrollTeachingWeeksIntoView(tester);
     await tester.tap(find.text('第 3 周'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加日程'));
@@ -148,8 +158,6 @@ void main() {
     await tester.tap(find.text('添加课程'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextFormField).at(0), 'Math');
-    await tester.enterText(find.byType(TextFormField).at(1), 'Room 101');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
 
@@ -163,6 +171,7 @@ void main() {
     final bundle = await _createProviderBundle();
 
     await tester.pumpWidget(_buildPage(bundle));
+    await _scrollTeachingWeeksIntoView(tester);
 
     final listViewFinder = find.byType(ListView);
     expect(
@@ -200,6 +209,115 @@ void main() {
       isNot(isA<NeverScrollableScrollPhysics>()),
     );
   });
+
+  testWidgets('teaching week quick actions replace the current selection', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await _scrollTeachingWeeksIntoView(tester);
+
+    Set<int> selectedTeachingWeeks() {
+      return tester
+          .widget<CapsuleMultiSelect<int>>(
+            find.byKey(const ValueKey('teaching-week-selector')),
+          )
+          .selectedValues;
+    }
+
+    final allWeeks = {
+      for (int week = 1; week <= bundle.settings.totalWeeks; week++) week,
+    };
+
+    await tester.tap(find.text('全选'));
+    await tester.pump();
+    expect(selectedTeachingWeeks(), allWeeks);
+
+    await tester.tap(find.text('清空'));
+    await tester.pump();
+    expect(selectedTeachingWeeks(), isEmpty);
+
+    await tester.tap(find.text('单周'));
+    await tester.pump();
+    expect(selectedTeachingWeeks(), allWeeks.where((week) => week.isOdd));
+
+    await tester.tap(find.text('双周'));
+    await tester.pump();
+    expect(selectedTeachingWeeks(), allWeeks.where((week) => week.isEven));
+  });
+
+  testWidgets('course color options expose distinct semantics labels', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.drag(find.byType(ListView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+
+    final firstColor = find.byKey(const ValueKey('course-color-0'));
+    expect(find.bySemanticsLabel('颜色 1，青绿'), findsOneWidget);
+    expect(find.bySemanticsLabel('颜色 2，蓝色'), findsOneWidget);
+    expect(tester.getSemantics(firstColor).label, contains('颜色 1，青绿'));
+    expect(
+      tester.getSemantics(firstColor).flagsCollection.isSelected.toBoolOrNull(),
+      isTrue,
+    );
+
+    semantics.dispose();
+  });
+
+  testWidgets('course conflict asks before saving and supports cancellation', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
+    await bundle.courses.addCourse(
+      Course(
+        id: 'existing-course',
+        name: '大学英语',
+        location: 'A101',
+        teacher: '王老师',
+        weekday: DateTime.monday,
+        weeks: const [1],
+        startPeriod: 1,
+        endPeriod: 2,
+        colorValue: 0xFF2563EB,
+      ),
+    );
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.enterText(find.byType(TextFormField).at(0), '线性代数');
+    await tester.enterText(find.byType(TextFormField).at(1), 'A102');
+    await tester.enterText(find.byType(TextFormField).at(2), '李老师');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('发现课程时间冲突'), findsOneWidget);
+    expect(find.textContaining('线性代数'), findsWidgets);
+    expect(find.textContaining('大学英语'), findsWidgets);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(bundle.courses.courses, hasLength(1));
+
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('仍然保存'));
+    await tester.pumpAndSettle();
+
+    expect(bundle.courses.courses, hasLength(2));
+    expect(
+      bundle.courses.courses.map((course) => course.name),
+      contains('线性代数'),
+    );
+  });
+}
+
+Future<void> _scrollTeachingWeeksIntoView(WidgetTester tester) async {
+  await tester.drag(find.byType(ListView), const Offset(0, -360));
+  await tester.pumpAndSettle();
 }
 
 Widget _buildPage(_ProviderBundle bundle, {Course? existingCourse}) {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/app_colors.dart';
 import '../../core/app_constants.dart';
+import '../../core/app_theme_tokens.dart';
 
 class CapsuleMultiSelectOption<T> {
   const CapsuleMultiSelectOption({
@@ -268,11 +268,12 @@ class _CapsuleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tokens = appThemeTokensOf(context);
     final selectedColor = themeColor ?? colorScheme.primary;
     final backgroundColor = selected
         ? colorScheme.primaryContainer
-        : AppColors.surfaceRaised;
-    final borderColor = selected ? selectedColor : AppColors.divider;
+        : tokens.surfaceRaised;
+    final borderColor = selected ? selectedColor : tokens.divider;
     final textColor = selected ? selectedColor : colorScheme.onSurface;
     final borderRadius = BorderRadius.circular(AppRadii.pill);
 

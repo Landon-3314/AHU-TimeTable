@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_constants.dart';
+import '../core/app_theme_tokens.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
@@ -98,6 +99,7 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
                       _ColorPickerTitle(provider.t('primary_color')),
                       const SizedBox(height: AppSpacing.md),
                       _ThemeColorGrid(
+                        keyPrefix: 'theme-primary-color',
                         selectedValue: provider.customThemePrimaryValue,
                         onSelected: (value) => provider.changeCustomThemeColors(
                           primaryValue: value,
@@ -108,6 +110,7 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
                       _ColorPickerTitle(provider.t('accent_color')),
                       const SizedBox(height: AppSpacing.md),
                       _ThemeColorGrid(
+                        keyPrefix: 'theme-accent-color',
                         selectedValue: provider.customThemeAccentValue,
                         onSelected: (value) => provider.changeCustomThemeColors(
                           primaryValue: provider.customThemePrimaryValue,
@@ -141,6 +144,7 @@ class _ThemePaletteTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     final borderRadius = BorderRadius.circular(AppRadii.lg);
     return Semantics(
       button: true,
@@ -185,10 +189,7 @@ class _ThemePaletteTile extends StatelessWidget {
                 if (selected)
                   Icon(Icons.check_circle, color: palette.primary)
                 else
-                  const Icon(
-                    Icons.chevron_right,
-                    color: AppColors.textTertiary,
-                  ),
+                  Icon(Icons.chevron_right, color: tokens.textTertiary),
               ],
             ),
           ),
@@ -233,13 +234,14 @@ class _ColorSwatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return Container(
       width: 34,
       height: 28,
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(AppRadii.md),
-        border: Border.all(color: AppColors.surface, width: 2),
+        border: Border.all(color: tokens.surface, width: 2),
         boxShadow: [
           BoxShadow(
             color: color.withValues(alpha: 0.24),
@@ -270,10 +272,12 @@ class _ColorPickerTitle extends StatelessWidget {
 
 class _ThemeColorGrid extends StatelessWidget {
   const _ThemeColorGrid({
+    required this.keyPrefix,
     required this.selectedValue,
     required this.onSelected,
   });
 
+  final String keyPrefix;
   final int selectedValue;
   final ValueChanged<int> onSelected;
 
@@ -283,11 +287,13 @@ class _ThemeColorGrid extends StatelessWidget {
       spacing: AppSpacing.md,
       runSpacing: AppSpacing.md,
       children: [
-        for (final colorValue in AppColors.themePickerPaletteValues)
+        for (final entry in AppColors.themePickerPaletteValues.indexed)
           _ThemeColorChip(
-            colorValue: colorValue,
-            selected: colorValue == selectedValue,
-            onTap: () => onSelected(colorValue),
+            keyPrefix: keyPrefix,
+            index: entry.$1,
+            colorValue: entry.$2,
+            selected: entry.$2 == selectedValue,
+            onTap: () => onSelected(entry.$2),
           ),
       ],
     );
@@ -296,11 +302,15 @@ class _ThemeColorGrid extends StatelessWidget {
 
 class _ThemeColorChip extends StatelessWidget {
   const _ThemeColorChip({
+    required this.keyPrefix,
+    required this.index,
     required this.colorValue,
     required this.selected,
     required this.onTap,
   });
 
+  final String keyPrefix;
+  final int index;
   final int colorValue;
   final bool selected;
   final VoidCallback onTap;
@@ -308,9 +318,12 @@ class _ThemeColorChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Color(colorValue);
+    final tokens = appThemeTokensOf(context);
     return Semantics(
+      key: ValueKey('$keyPrefix-$index'),
       button: true,
       selected: selected,
+      label: '颜色 ${index + 1}，${AppColors.colorName(colorValue)}',
       child: InkResponse(
         onTap: onTap,
         radius: 28,
@@ -324,7 +337,7 @@ class _ThemeColorChip extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? Theme.of(context).colorScheme.onSurface
-                  : AppColors.surface,
+                  : tokens.surface,
               width: selected ? 3 : 2,
             ),
             boxShadow: [
@@ -336,7 +349,11 @@ class _ThemeColorChip extends StatelessWidget {
             ],
           ),
           child: selected
-              ? const Icon(Icons.check, color: AppColors.onPrimary, size: 20)
+              ? Icon(
+                  Icons.check,
+                  color: bestContrastingForeground(color),
+                  size: 20,
+                )
               : null,
         ),
       ),

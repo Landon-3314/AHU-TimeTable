@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_constants.dart';
+import '../core/app_theme_tokens.dart';
 import '../models/course.dart';
 import '../models/event.dart';
 import '../providers/course_provider.dart';
@@ -133,6 +134,7 @@ class _CourseFormState extends State<_CourseForm>
   Widget build(BuildContext context) {
     super.build(context);
     final provider = context.watch<SettingsProvider>();
+    final tokens = appThemeTokensOf(context);
     final periodCount = provider.timeSlots.length;
     final effectivePeriodCount = periodCount == 0 ? 1 : periodCount;
     final currentStartValue = _boundedPeriod(
@@ -220,7 +222,62 @@ class _CourseFormState extends State<_CourseForm>
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(72, 44),
+                        ),
+                        onPressed: () => _replaceSelectedWeeks(
+                          Iterable<int>.generate(
+                            provider.totalWeeks,
+                            (index) => index + 1,
+                          ),
+                        ),
+                        child: Text(provider.t('select_all')),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(72, 44),
+                        ),
+                        onPressed: () => _replaceSelectedWeeks(const <int>[]),
+                        child: Text(provider.t('clear_selection')),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(72, 44),
+                        ),
+                        onPressed: () => _replaceSelectedWeeks(
+                          Iterable<int>.generate(
+                            provider.totalWeeks,
+                            (index) => index + 1,
+                          ).where((week) => week.isOdd),
+                        ),
+                        child: Text(provider.t('odd_weeks')),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(72, 44),
+                        ),
+                        onPressed: () => _replaceSelectedWeeks(
+                          Iterable<int>.generate(
+                            provider.totalWeeks,
+                            (index) => index + 1,
+                          ).where((week) => week.isEven),
+                        ),
+                        child: Text(provider.t('even_weeks')),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
                 CapsuleMultiSelect<int>(
+                  key: const ValueKey('teaching-week-selector'),
                   options: [
                     for (int week = 1; week <= provider.totalWeeks; week++)
                       CapsuleMultiSelectOption<int>(
@@ -290,12 +347,16 @@ class _CourseFormState extends State<_CourseForm>
                 Wrap(
                   spacing: AppSpacing.lg,
                   runSpacing: AppSpacing.lg,
-                  children: _presetColors.map((colorValue) {
+                  children: _presetColors.indexed.map((entry) {
+                    final index = entry.$1;
+                    final colorValue = entry.$2;
                     final isSelected = colorValue == _selectedColorValue;
                     return Semantics(
+                      key: ValueKey('course-color-$index'),
                       button: true,
                       selected: isSelected,
-                      label: provider.t('card_color'),
+                      label:
+                          '颜色 ${index + 1}，${AppColors.colorName(colorValue)}',
                       child: InkResponse(
                         onTap: () {
                           setState(() {
@@ -312,8 +373,8 @@ class _CourseFormState extends State<_CourseForm>
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: isSelected
-                                  ? AppColors.textPrimary
-                                  : AppColors.surface,
+                                  ? tokens.textPrimary
+                                  : tokens.surface,
                               width: 3,
                             ),
                             boxShadow: [
@@ -327,9 +388,11 @@ class _CourseFormState extends State<_CourseForm>
                             ],
                           ),
                           child: isSelected
-                              ? const Icon(
+                              ? Icon(
                                   Icons.check,
-                                  color: AppColors.onPrimary,
+                                  color: bestContrastingForeground(
+                                    Color(colorValue),
+                                  ),
                                   size: 20,
                                 )
                               : null,
@@ -372,6 +435,14 @@ class _CourseFormState extends State<_CourseForm>
       _selectedWeekdays
         ..clear()
         ..addAll(nextWeekdays);
+    });
+  }
+
+  void _replaceSelectedWeeks(Iterable<int> weeks) {
+    setState(() {
+      _selectedWeeks
+        ..clear()
+        ..addAll(weeks);
     });
   }
 
@@ -440,10 +511,6 @@ class _CourseFormState extends State<_CourseForm>
       return;
     }
 
-    setState(() {
-      _isSaving = true;
-    });
-
     final selectedWeeks = _selectedWeeks.toList()..sort();
     final selectedWeekdays = _selectedWeekdays.toList()..sort();
     Course buildCourse(int weekday, {String? id}) {
@@ -461,17 +528,38 @@ class _CourseFormState extends State<_CourseForm>
     }
 
     final courseProvider = context.read<CourseProvider>();
+    final candidateCourses = _isEditMode
+        ? [buildCourse(selectedWeekdays.first, id: widget.existingCourse!.id)]
+        : [for (final weekday in selectedWeekdays) buildCourse(weekday)];
+    final conflicts = courseProvider.findCourseConflicts(
+      candidateCourses,
+      ignoredCourseId: widget.existingCourse?.id,
+    );
+    var allowConflicts = false;
+    if (conflicts.isNotEmpty) {
+      allowConflicts = await showCourseConflictConfirmDialog(
+        context,
+        conflicts: conflicts,
+      );
+      if (!mounted || !allowConflicts) {
+        return;
+      }
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
     final didSave = _isEditMode
         ? await courseProvider.updateCourse(
             originalCourse: widget.existingCourse!,
-            updatedCourse: buildCourse(
-              selectedWeekdays.first,
-              id: widget.existingCourse!.id,
-            ),
+            updatedCourse: candidateCourses.single,
+            allowConflicts: allowConflicts,
           )
-        : (await courseProvider.addCourses([
-                for (final weekday in selectedWeekdays) buildCourse(weekday),
-              ])) >
+        : (await courseProvider.addCourses(
+                candidateCourses,
+                allowConflicts: allowConflicts,
+              )) >
               0;
 
     if (!mounted) {

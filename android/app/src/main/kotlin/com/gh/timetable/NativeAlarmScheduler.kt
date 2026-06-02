@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
 import android.util.Log
+import java.util.TimeZone
 
 object NativeAlarmScheduler {
     const val PREFS = "native_alarm_prefs"
@@ -57,9 +58,24 @@ object NativeAlarmScheduler {
     ) {
         reconcileMuteState(context)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        cancelScheduledIntents(context, alarmManager)
         val now = System.currentTimeMillis()
-        val futureItems = items.filter { item -> item.hasFutureWork(now) }
+        val storedItems = NativeStateStore.loadAlarmItems(context)
+        val mutedIndexes =
+            storedItems
+                .filter { item -> NativeStateStore.wasMutedByApp(context, item.index) }
+                .mapTo(mutableSetOf()) { item -> item.index }
+        val retainedRestoreItems =
+            NativeMuteStatePolicy.retainedRestoreWork(
+                storedItems = storedItems,
+                mutedIndexes = mutedIndexes,
+                now = now,
+            )
+        cancelScheduledIntents(context, alarmManager)
+        val futureItems =
+            NativeMuteStatePolicy.mergeRetainedRestoreWork(
+                futureItems = items.filter { item -> item.hasFutureWork(now) },
+                retainedItems = retainedRestoreItems,
+            )
         NativeStateStore.saveAlarmItems(context, futureItems)
         futureItems.forEach { item ->
             scheduleClass(
@@ -84,6 +100,22 @@ object NativeAlarmScheduler {
         item.silentAtMillis?.let { silentAtMillis ->
             if (silentAtMillis <= now) {
                 muteLog("scheduleClass skip past silent index=$index at=$silentAtMillis")
+                return@let
+            }
+            if (
+                NativeMuteStatePolicy.shouldScheduleManualMuteFallback(
+                    silentAtMillis = silentAtMillis,
+                    now = now,
+                    canScheduleExact = canScheduleExact,
+                    canChangeRingerMode = canChangeRingerMode,
+                )
+            ) {
+                scheduleManualMuteFallback(
+                    context = context,
+                    item = item,
+                    triggerAtMillis = silentAtMillis,
+                    canScheduleExact = canScheduleExact,
+                )
                 return@let
             }
             if (!canChangeRingerMode) {
@@ -208,20 +240,28 @@ object NativeAlarmScheduler {
     }
 
     fun rescheduleStored(context: Context) {
-        reconcileMuteState(context)
         val now = System.currentTimeMillis()
-        val restoredItems =
-            NativeStateStore.loadAlarmItems(context)
-                .filter { item -> item.hasFutureWork(now) }
+        val storedTimeZoneId = NativeStateStore.getAlarmItemsTimeZoneId(context)
+        val currentTimeZoneId = TimeZone.getDefault().id
+        val plan =
+            NativeAlarmTimePolicy.prepareReschedule(
+                alarmItems = NativeStateStore.loadAlarmItems(context),
+                todayCourseItems = NativeStateStore.loadTodayCourses(context),
+                sourceTimeZoneId = storedTimeZoneId,
+                targetTimeZoneId = currentTimeZoneId,
+                now = now,
+            )
+        reconcileMuteState(context, items = plan.reconciliationItems)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         cancelScheduledIntents(context, alarmManager)
-        NativeStateStore.saveAlarmItems(context, restoredItems)
-        restoredItems.forEach { item -> scheduleClass(context, item, now) }
-        muteLog("rescheduleStored complete future=${restoredItems.size}")
+        NativeStateStore.saveAlarmItems(context, plan.futureItems)
+        NativeStateStore.saveTodayCourses(context, plan.todayCourseItems)
+        plan.futureItems.forEach { item -> scheduleClass(context, item, now) }
+        muteLog("rescheduleStored complete future=${plan.futureItems.size}")
     }
 
-    fun scheduleOneMinuteMuteTest(context: Context) {
-        scheduleDiagnosticMuteWindow(
+    fun scheduleOneMinuteMuteTest(context: Context): DiagnosticScheduleResult {
+        return scheduleDiagnosticMuteWindow(
             context = context,
             silentDelayMillis = 60_000L,
             restoreDelayMillis = 120_000L,
@@ -232,7 +272,7 @@ object NativeAlarmScheduler {
         context: Context,
         silentDelayMillis: Long,
         restoreDelayMillis: Long,
-    ) {
+    ): DiagnosticScheduleResult {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         cancelDiagnosticMuteWindow(context, alarmManager)
 
@@ -257,7 +297,7 @@ object NativeAlarmScheduler {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        if (canScheduleExact) {
+        val silentScheduled = if (canScheduleExact) {
             setAlarmClockSafely(
                 alarmManager = alarmManager,
                 triggerAtMillis = silentAtMillis,
@@ -269,7 +309,6 @@ object NativeAlarmScheduler {
                 pendingIntent = pendingIntent,
                 label = "diagnostic-silent",
             )
-            muteLog("scheduleDiagnosticMuteWindow silent alarm scheduled at=$silentAtMillis")
         } else {
             val scheduled =
                 setAlarmClockSafely(
@@ -281,6 +320,17 @@ object NativeAlarmScheduler {
             muteLog(
                 "scheduleDiagnosticMuteWindow silent alarm exact missing " +
                     "alarmClockScheduled=$scheduled",
+            )
+            scheduled
+        }
+        muteLog(
+            "scheduleDiagnosticMuteWindow silent alarm at=$silentAtMillis " +
+                "scheduled=$silentScheduled",
+        )
+        if (!silentScheduled) {
+            return NativeDiagnosticSchedulePolicy.result(
+                silentScheduled = false,
+                restoreScheduled = false,
             )
         }
 
@@ -307,16 +357,21 @@ object NativeAlarmScheduler {
                 triggerAtMillis = restoreAtMillis,
                 pendingIntent = restorePendingIntent,
                 label = "diagnostic-restore",
-            )
-        if (!restoreScheduled) {
+            ) ||
             setInexactAllowWhileIdleSafely(
                 alarmManager = alarmManager,
                 triggerAtMillis = restoreAtMillis,
                 pendingIntent = restorePendingIntent,
                 label = "diagnostic-restore",
             )
-        }
-        muteLog("scheduleDiagnosticMuteWindow restore alarm scheduled at=$restoreAtMillis")
+        muteLog(
+            "scheduleDiagnosticMuteWindow restore alarm at=$restoreAtMillis " +
+                "scheduled=$restoreScheduled",
+        )
+        return NativeDiagnosticSchedulePolicy.result(
+            silentScheduled = silentScheduled,
+            restoreScheduled = restoreScheduled,
+        )
     }
 
     fun cancelDiagnosticMuteWindow(context: Context) {
@@ -416,11 +471,11 @@ object NativeAlarmScheduler {
     fun reconcileMuteState(
         context: Context,
         restoreActiveAppMute: Boolean = false,
+        items: List<AlarmItem> = NativeStateStore.loadAlarmItems(context),
     ) {
         val now = System.currentTimeMillis()
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val canChangeRingerMode = canChangeRingerMode(context)
-        val items = NativeStateStore.loadAlarmItems(context)
         items.forEach { item ->
             if (!NativeStateStore.wasMutedByApp(context, item.index)) {
                 return@forEach
@@ -433,9 +488,15 @@ object NativeAlarmScheduler {
             }
 
             val currentMode = audioManager.ringerMode
+            val appAppliedMode =
+                NativeStateStore.appliedRingerMode(context, item.index)
+                    ?: AudioManager.RINGER_MODE_SILENT
             if (
-                currentMode == AudioManager.RINGER_MODE_SILENT ||
-                currentMode == AudioManager.RINGER_MODE_VIBRATE
+                NativeMuteStatePolicy.shouldRestoreOwnedMute(
+                    mutedByApp = true,
+                    currentRingerMode = currentMode,
+                    appAppliedRingerMode = appAppliedMode,
+                )
             ) {
                 if (!canChangeRingerMode) {
                     muteLog("reconcileMuteState cannot restore without DND index=${item.index}")
@@ -473,6 +534,58 @@ object NativeAlarmScheduler {
     private fun Intent.putWindowExtras(item: AlarmItem) {
         item.windowStartAtMillis?.let { putExtra(EXTRA_WINDOW_START_AT, it) }
         item.windowEndAtMillis?.let { putExtra(EXTRA_WINDOW_END_AT, it) }
+    }
+
+    private fun scheduleManualMuteFallback(
+        context: Context,
+        item: AlarmItem,
+        triggerAtMillis: Long,
+        canScheduleExact: Boolean,
+    ) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val index = item.index
+        val reminderIntent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_REMIND_CLASS
+            putExtra(EXTRA_TITLE, "上课提醒: 请手动静音")
+            putExtra(
+                EXTRA_CONTENT,
+                "${item.courseName ?: "课程"} 即将开始，当前设备权限不足，无法自动静音。",
+            )
+            putExtra(EXTRA_COURSE_INDEX, index)
+            putExtra(EXTRA_NOTIFICATION_ID, item.notificationId ?: index)
+        }
+        val reminderPendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCodeFor(ACTION_REMIND_CLASS, index),
+            reminderIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val scheduled =
+            canScheduleExact &&
+                (
+                    setAlarmClockSafely(
+                        alarmManager = alarmManager,
+                        triggerAtMillis = triggerAtMillis,
+                        pendingIntent = reminderPendingIntent,
+                        label = "manual-mute:$index",
+                    ) || setExactAllowWhileIdleSafely(
+                        alarmManager = alarmManager,
+                        triggerAtMillis = triggerAtMillis,
+                        pendingIntent = reminderPendingIntent,
+                        label = "manual-mute:$index",
+                    )
+                )
+        if (!scheduled) {
+            setInexactAllowWhileIdleSafely(
+                alarmManager = alarmManager,
+                triggerAtMillis = triggerAtMillis,
+                pendingIntent = reminderPendingIntent,
+                label = "manual-mute:$index",
+            )
+        }
+        muteLog(
+            "scheduleManualMuteFallback index=$index at=$triggerAtMillis exact=$canScheduleExact",
+        )
     }
 
     private fun AlarmItem.hasFutureWork(now: Long): Boolean {

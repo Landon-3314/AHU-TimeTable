@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_constants.dart';
 import '../../core/app_routes.dart';
+import '../../core/app_theme_tokens.dart';
 import '../../models/clock_time.dart';
 import '../../models/course.dart';
 import '../../models/event.dart';
@@ -47,14 +48,16 @@ Future<void> showCourseDetailsSheet(
     isScrollControlled: true,
     showDragHandle: true,
     builder: (sheetContext) {
+      final colorScheme = Theme.of(sheetContext).colorScheme;
+      final tokens = appThemeTokensOf(sheetContext);
       final actionButtons = <Widget>[
         if (sourceWeek != null)
           SizedBox(
             width: double.infinity,
             child: FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.surfaceMuted,
-                foregroundColor: Theme.of(sheetContext).colorScheme.primary,
+                backgroundColor: tokens.surfaceMuted,
+                foregroundColor: colorScheme.primary,
               ),
               onPressed: () async {
                 Navigator.of(sheetContext).pop();
@@ -83,8 +86,8 @@ Future<void> showCourseDetailsSheet(
           width: double.infinity,
           child: FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(sheetContext).colorScheme.primary,
-              foregroundColor: AppColors.onPrimary,
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
             ),
             onPressed: () async {
               Navigator.of(sheetContext).pop();
@@ -101,7 +104,7 @@ Future<void> showCourseDetailsSheet(
           child: FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.danger,
-              foregroundColor: AppColors.onPrimary,
+              foregroundColor: colorScheme.onError,
             ),
             onPressed: () async {
               final confirmed = await _confirmDestructiveAction(
@@ -119,9 +122,25 @@ Future<void> showCourseDetailsSheet(
               }
               Navigator.of(sheetContext).pop();
               unawaited(
-                Future<void>.delayed(
-                  AppDurations.sheetActionDelay,
-                ).then((_) => courseProvider.removeCourse(course)),
+                Future<void>.delayed(AppDurations.sheetActionDelay).then((
+                  _,
+                ) async {
+                  final removed = await courseProvider.removeCourse(course);
+                  if (removed == null) {
+                    return;
+                  }
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: const Text('已删除课程'),
+                      action: SnackBarAction(
+                        label: '撤销',
+                        onPressed: () {
+                          unawaited(courseProvider.restoreCourse(removed));
+                        },
+                      ),
+                    ),
+                  );
+                }),
               );
             },
             child: Text(settingsProvider.t('delete_course')),
@@ -201,12 +220,14 @@ Future<void> showCourseDetailsSheet(
 Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
   final settingsProvider = context.read<SettingsProvider>();
   final courseProvider = context.read<CourseProvider>();
+  final messenger = ScaffoldMessenger.of(context);
 
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (sheetContext) {
+      final colorScheme = Theme.of(sheetContext).colorScheme;
       return SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -255,7 +276,7 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
                   child: FilledButton(
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.danger,
-                      foregroundColor: AppColors.onPrimary,
+                      foregroundColor: colorScheme.onError,
                     ),
                     onPressed: () async {
                       final confirmed = await _confirmDestructiveAction(
@@ -277,7 +298,27 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
                       unawaited(
                         Future<void>.delayed(
                           AppDurations.sheetActionDelay,
-                        ).then((_) => courseProvider.deleteEvent(event.id)),
+                        ).then((_) async {
+                          final removed = await courseProvider.deleteEvent(
+                            event.id,
+                          );
+                          if (removed == null) {
+                            return;
+                          }
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: const Text('已删除日程'),
+                              action: SnackBarAction(
+                                label: '撤销',
+                                onPressed: () {
+                                  unawaited(
+                                    courseProvider.restoreEvent(removed),
+                                  );
+                                },
+                              ),
+                            ),
+                          );
+                        }),
                       );
                     },
                     child: Text(settingsProvider.t('delete_event')),
@@ -300,6 +341,7 @@ class DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -308,7 +350,7 @@ class DetailRow extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
+              color: tokens.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),

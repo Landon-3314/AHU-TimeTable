@@ -8,7 +8,6 @@ import '../models/course.dart';
 import '../models/timetable_view_data.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
-import '../services/app_services.dart';
 import '../services/timetable_navigation_controller.dart';
 import '../services/timetable_view_data_service.dart';
 import '../widgets/semester_start_date_dialog.dart';
@@ -20,6 +19,8 @@ import '../widgets/timetable/timetable_detail_sheets.dart';
 import '../widgets/timetable/timetable_grid.dart';
 import '../widgets/timetable/week_selector.dart';
 import 'import_course_page.dart';
+
+enum _TimetableToolbarAction { overview, exams, academicImport, addCourse }
 
 class TimetablePage extends StatefulWidget {
   const TimetablePage({super.key});
@@ -80,15 +81,11 @@ class _TimetablePageState extends State<TimetablePage> {
       courses: courseProvider.courses.toList(),
       events: courseProvider.events.toList(),
       totalWeeks: settingsProvider.totalWeeks,
-      languageCode: settingsProvider.languageCode,
       translate: settingsProvider.t,
       getDateFor: settingsProvider.getDateFor,
       timeSlots: settingsProvider.timeSlots,
       holidayWeekIndex: AppConstants.holidayWeekIndex,
     );
-    final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-
     return AnimatedBuilder(
       animation: _navigationController,
       builder: (context, _) {
@@ -98,190 +95,289 @@ class _TimetablePageState extends State<TimetablePage> {
         final currentWeekChips =
             screenData.dayChipsByWeek[currentDayPage.week] ??
             const <TimetableDayChipData>[];
-        return Scaffold(
-          appBar: AppBar(
-            centerTitle: false,
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                WeekSelector(
-                  key: _weekSelectorGuideKey,
-                  currentWeek: navigationState.currentDisplayWeek,
-                  options: screenData.weekOptions,
-                  tooltip: settingsProvider.t('jump_to_week'),
-                  onSelected: _navigationController.jumpToWeek,
-                ),
-                IconButton(
-                  key: _todayGuideKey,
-                  onPressed: _navigationController.jumpToToday,
-                  icon: const Icon(Icons.today),
-                  tooltip: settingsProvider.t('today'),
-                ),
-                TextButton(
-                  key: _overviewGuideKey,
-                  onPressed: () => _showCourseOverview(context),
-                  child: Text(
-                    '总览',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              IconButton(
-                key: _importGuideKey,
-                onPressed: () async {
-                  final canImport =
-                      await _ensureSemesterInitializedBeforeImport(context);
-                  if (!canImport || !mounted) {
-                    return;
-                  }
-
-                  final importResult = await navigator
-                      .pushNamed<AcademicImportResult>(AppRoutes.importCourses);
-
-                  if (!mounted || importResult == null) {
-                    return;
-                  }
-
-                  final summaryMessage = _buildImportSummaryMessage(
-                    settingsProvider,
-                    importResult,
-                  );
-                  messenger
-                    ..removeCurrentSnackBar()
-                    ..showSnackBar(SnackBar(content: Text(summaryMessage)));
-                },
-                icon: const Icon(Icons.cloud_download_outlined),
-                tooltip: settingsProvider.t('import_from_system'),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return Scaffold(
+              appBar: _buildAppBar(
+                context,
+                settingsProvider: settingsProvider,
+                navigationState: navigationState,
+                screenData: screenData,
+                isNarrow: constraints.maxWidth < 420,
               ),
-              IconButton(
-                key: _addCourseGuideKey,
-                onPressed: () async {
-                  await navigator.pushNamed(AppRoutes.addCourse);
-                },
-                icon: const Icon(Icons.add),
-                tooltip: settingsProvider.t('add_course'),
-              ),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(68),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: SegmentedButton<TimetableMode>(
-                  selectedIcon: const SizedBox.shrink(),
-                  segments: [
-                    ButtonSegment<TimetableMode>(
-                      value: TimetableMode.day,
-                      label: Text(settingsProvider.t('day_view')),
-                      icon: const Icon(Icons.view_day_outlined),
-                    ),
-                    ButtonSegment<TimetableMode>(
-                      value: TimetableMode.week,
-                      label: Text(settingsProvider.t('week_view')),
-                      icon: const Icon(Icons.calendar_view_week_outlined),
-                    ),
-                  ],
-                  selected: {navigationState.mode},
-                  onSelectionChanged: (selection) {
-                    _navigationController.setMode(selection.first);
-                  },
-                ),
-              ),
-            ),
-          ),
-          body: AnimatedSwitcher(
-            duration: AppDurations.switcher,
-            child: navigationState.mode == TimetableMode.day
-                ? Column(
-                    key: const ValueKey('day-view'),
-                    children: [
-                      DayWeekHeader(
-                        summaryLabel: currentDayPage.summaryLabel,
-                        chips: currentWeekChips,
-                        selectedWeekday: navigationState.currentWeekday,
-                        onDaySelected: (weekday) {
-                          _navigationController.jumpToDay(
-                            week: navigationState.currentWeek,
-                            weekday: weekday,
-                          );
-                        },
-                      ),
-                      Expanded(
-                        child: PageView.builder(
-                          controller: _navigationController.dayPageController,
-                          itemCount: screenData.dayPages.length,
-                          onPageChanged:
-                              _navigationController.handleDayPageChanged,
-                          itemBuilder: (context, index) {
-                            final pageData = screenData.dayPages[index];
-                            return DayAgendaView(
-                              pageData: pageData,
-                              onCourseTap: (course) {
-                                showCourseDetailsSheet(
-                                  context,
-                                  course,
-                                  sourceWeek: pageData.week,
+              body: AnimatedSwitcher(
+                duration: AppDurations.switcher,
+                child: navigationState.mode == TimetableMode.day
+                    ? Column(
+                        key: const ValueKey('day-view'),
+                        children: [
+                          DayWeekHeader(
+                            summaryLabel: currentDayPage.summaryLabel,
+                            chips: currentWeekChips,
+                            selectedWeekday: navigationState.currentWeekday,
+                            onDaySelected: (weekday) {
+                              _navigationController.jumpToDay(
+                                week: navigationState.currentWeek,
+                                weekday: weekday,
+                              );
+                            },
+                          ),
+                          Expanded(
+                            child: PageView.builder(
+                              controller:
+                                  _navigationController.dayPageController,
+                              itemCount: screenData.dayPages.length,
+                              onPageChanged:
+                                  _navigationController.handleDayPageChanged,
+                              itemBuilder: (context, index) {
+                                final pageData = screenData.dayPages[index];
+                                return DayAgendaView(
+                                  pageData: pageData,
+                                  onCourseTap: (course) {
+                                    showCourseDetailsSheet(
+                                      context,
+                                      course,
+                                      sourceWeek: pageData.week,
+                                    );
+                                  },
+                                  onEventTap: (event) {
+                                    showEventDetailsSheet(context, event);
+                                  },
+                                  coursePeriodTextBuilder:
+                                      _buildCoursePeriodText,
+                                  eventMarkerLabel: settingsProvider.t(
+                                    'event_marker',
+                                  ),
+                                  locationPendingLabel: settingsProvider.t(
+                                    'location_pending',
+                                  ),
+                                  emptyAction: _buildEmptyStateActions(
+                                    context,
+                                    settingsProvider,
+                                  ),
                                 );
                               },
+                            ),
+                          ),
+                        ],
+                      )
+                    : PageView.builder(
+                        key: const ValueKey('week-view'),
+                        controller: _navigationController.weekPageController,
+                        itemCount: screenData.weekPages.length + 1,
+                        onPageChanged:
+                            _navigationController.handleWeekPageChanged,
+                        itemBuilder: (context, index) {
+                          if (index == screenData.weekPages.length) {
+                            return HolidayListView(
+                              pageData: screenData.holidayPage,
                               onEventTap: (event) {
                                 showEventDetailsSheet(context, event);
                               },
-                              coursePeriodTextBuilder: _buildCoursePeriodText,
-                              eventMarkerLabel: settingsProvider.t(
-                                'event_marker',
-                              ),
-                              locationPendingLabel: settingsProvider.t(
-                                'location_pending',
+                              emptyAction: _buildEmptyStateActions(
+                                context,
+                                settingsProvider,
                               ),
                             );
-                          },
-                        ),
-                      ),
-                    ],
-                  )
-                : PageView.builder(
-                    key: const ValueKey('week-view'),
-                    controller: _navigationController.weekPageController,
-                    itemCount: screenData.weekPages.length + 1,
-                    onPageChanged: _navigationController.handleWeekPageChanged,
-                    itemBuilder: (context, index) {
-                      if (index == screenData.weekPages.length) {
-                        return HolidayListView(
-                          pageData: screenData.holidayPage,
-                          onEventTap: (event) {
-                            showEventDetailsSheet(context, event);
-                          },
-                        );
-                      }
+                          }
 
-                      final pageData = screenData.weekPages[index];
-                      return TimetableGrid(
-                        pageData: pageData,
-                        onCourseTap: (course) {
-                          showCourseDetailsSheet(
-                            context,
-                            course,
-                            sourceWeek: pageData.week,
+                          final pageData = screenData.weekPages[index];
+                          return TimetableGrid(
+                            pageData: pageData,
+                            onCourseTap: (course) {
+                              showCourseDetailsSheet(
+                                context,
+                                course,
+                                sourceWeek: pageData.week,
+                              );
+                            },
+                            onEventTap: (event) {
+                              showEventDetailsSheet(context, event);
+                            },
+                            coursePeriodTextBuilder: _buildCoursePeriodText,
+                            emptyAction: _buildEmptyStateActions(
+                              context,
+                              settingsProvider,
+                            ),
                           );
                         },
-                        onEventTap: (event) {
-                          showEventDetailsSheet(context, event);
-                        },
-                        coursePeriodTextBuilder: _buildCoursePeriodText,
-                      );
-                    },
-                  ),
-          ),
+                      ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context, {
+    required SettingsProvider settingsProvider,
+    required TimetableNavigationState navigationState,
+    required TimetableScreenData screenData,
+    required bool isNarrow,
+  }) {
+    return AppBar(
+      centerTitle: false,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          WeekSelector(
+            key: _weekSelectorGuideKey,
+            currentWeek: navigationState.currentDisplayWeek,
+            options: screenData.weekOptions,
+            tooltip: settingsProvider.t('jump_to_week'),
+            onSelected: _navigationController.jumpToWeek,
+          ),
+          IconButton(
+            key: _todayGuideKey,
+            onPressed: _navigationController.jumpToToday,
+            icon: const Icon(Icons.today),
+            tooltip: settingsProvider.t('today'),
+          ),
+          if (!isNarrow)
+            TextButton(
+              key: _overviewGuideKey,
+              onPressed: () => _showCourseOverview(context),
+              child: Text(
+                '总览',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+        ],
+      ),
+      actions: isNarrow
+          ? [
+              PopupMenuButton<_TimetableToolbarAction>(
+                tooltip: '更多操作',
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: _TimetableToolbarAction.overview,
+                    child: Text('总览'),
+                  ),
+                  PopupMenuItem(
+                    value: _TimetableToolbarAction.exams,
+                    child: Text('教务考试'),
+                  ),
+                  PopupMenuItem(
+                    value: _TimetableToolbarAction.academicImport,
+                    child: Text('导入教务课表'),
+                  ),
+                  PopupMenuItem(
+                    value: _TimetableToolbarAction.addCourse,
+                    child: Text('添加课程'),
+                  ),
+                ],
+                onSelected: (action) => _handleToolbarAction(context, action),
+              ),
+            ]
+          : [
+              IconButton(
+                onPressed: () =>
+                    Navigator.of(context).pushNamed(AppRoutes.exams),
+                icon: const Icon(Icons.assignment_outlined),
+                tooltip: '教务考试',
+              ),
+              IconButton(
+                key: _importGuideKey,
+                onPressed: () => _openAcademicImport(context),
+                icon: const Icon(Icons.cloud_download_outlined),
+                tooltip: settingsProvider.t('import_from_system'),
+              ),
+              IconButton(
+                key: _addCourseGuideKey,
+                onPressed: () => _openAddCourse(context),
+                icon: const Icon(Icons.add),
+                tooltip: settingsProvider.t('add_course'),
+              ),
+            ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(68),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: SegmentedButton<TimetableMode>(
+            selectedIcon: const SizedBox.shrink(),
+            segments: [
+              ButtonSegment<TimetableMode>(
+                value: TimetableMode.day,
+                label: Text(settingsProvider.t('day_view')),
+                icon: const Icon(Icons.view_day_outlined),
+              ),
+              ButtonSegment<TimetableMode>(
+                value: TimetableMode.week,
+                label: Text(settingsProvider.t('week_view')),
+                icon: const Icon(Icons.calendar_view_week_outlined),
+              ),
+            ],
+            selected: {navigationState.mode},
+            onSelectionChanged: (selection) {
+              _navigationController.setMode(selection.first);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleToolbarAction(
+    BuildContext context,
+    _TimetableToolbarAction action,
+  ) {
+    switch (action) {
+      case _TimetableToolbarAction.overview:
+        _showCourseOverview(context);
+      case _TimetableToolbarAction.exams:
+        Navigator.of(context).pushNamed(AppRoutes.exams);
+      case _TimetableToolbarAction.academicImport:
+        _openAcademicImport(context);
+      case _TimetableToolbarAction.addCourse:
+        _openAddCourse(context);
+    }
+  }
+
   String _buildCoursePeriodText(Course course) {
     return _buildCoursePeriodTextFor(context.read<SettingsProvider>(), course);
+  }
+
+  Widget _buildEmptyStateActions(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    return _EmptyStateActions(
+      addCourseLabel: settingsProvider.t('add_course'),
+      importCoursesLabel: settingsProvider.t('import_from_system'),
+      onAddCourse: () => _openAddCourse(context),
+      onImportCourses: () => _openAcademicImport(context),
+    );
+  }
+
+  Future<void> _openAddCourse(BuildContext context) async {
+    await Navigator.of(context).pushNamed(AppRoutes.addCourse);
+  }
+
+  Future<void> _openAcademicImport(BuildContext context) async {
+    final canImport = await _ensureSemesterInitializedBeforeImport(context);
+    if (!canImport || !mounted || !context.mounted) {
+      return;
+    }
+
+    final importResult = await Navigator.of(
+      context,
+    ).pushNamed<AcademicImportResult>(AppRoutes.importCourses);
+    if (!mounted || !context.mounted || importResult == null) {
+      return;
+    }
+
+    final settingsProvider = context.read<SettingsProvider>();
+    final summaryMessage = _buildImportSummaryMessage(
+      settingsProvider,
+      importResult,
+    );
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(summaryMessage)));
   }
 
   String _buildCoursePeriodTextFor(
@@ -299,17 +395,20 @@ class _TimetablePageState extends State<TimetablePage> {
     AcademicImportResult result,
   ) {
     if (result.kind == AcademicImportKind.exam) {
-      return settingsProvider.languageCode == 'en'
-          ? 'Successfully imported ${result.importedCount} exams'
-          : '成功导入 ${result.importedCount} 场考试';
+      return '成功导入 ${result.importedCount} 场考试';
     }
 
-    return settingsProvider.languageCode == 'en'
-        ? 'Successfully imported ${result.importedCount} courses'
-        : '总共添加了 ${result.importedCount} 门课';
+    final summary = '总共添加了 ${result.importedCount} 门课';
+    if (result.skippedCount == 0) {
+      return summary;
+    }
+
+    final reasons = result.skippedReasons.join('；');
+    return '$summary；跳过 ${result.skippedCount} 条：$reasons';
   }
 
   Future<void> _showCourseOverview(BuildContext context) async {
+    final pageContext = context;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -325,6 +424,18 @@ class _TimetablePageState extends State<TimetablePage> {
                 courseGroups: courseGroups,
                 groupCountLabelBuilder: (group) =>
                     _buildCourseGroupCountLabel(settingsProvider, group),
+                emptyAction: _EmptyStateActions(
+                  addCourseLabel: settingsProvider.t('add_course'),
+                  importCoursesLabel: settingsProvider.t('import_from_system'),
+                  onAddCourse: () async {
+                    Navigator.of(sheetContext).pop();
+                    await _openAddCourse(pageContext);
+                  },
+                  onImportCourses: () async {
+                    Navigator.of(sheetContext).pop();
+                    await _openAcademicImport(pageContext);
+                  },
+                ),
                 onCourseGroupTap: (group) async {
                   final selectedCourse = await _showCourseGroupRecords(
                     context,
@@ -352,9 +463,6 @@ class _TimetablePageState extends State<TimetablePage> {
     SettingsProvider settingsProvider,
     CourseGroup group,
   ) {
-    if (settingsProvider.languageCode == 'en') {
-      return group.recordCount == 1 ? '1 slot' : '${group.recordCount} slots';
-    }
     return '${group.recordCount}个时段';
   }
 
@@ -442,7 +550,6 @@ class _TimetablePageState extends State<TimetablePage> {
     BuildContext context,
   ) async {
     final settingsProvider = context.read<SettingsProvider>();
-    final courseProvider = context.read<CourseProvider>();
     if (settingsProvider.isCurrentSemesterInitialized) {
       return true;
     }
@@ -487,12 +594,6 @@ class _TimetablePageState extends State<TimetablePage> {
       await settingsProvider.completeInitialSemesterStartDate(selectedDate);
     }
 
-    await courseProvider.reloadForCurrentSemester(refreshReminders: false);
-    await AppServices.refreshSchedules(
-      courses: courseProvider.courses.toList(),
-      events: courseProvider.events.toList(),
-      settings: settingsProvider,
-    );
     return settingsProvider.isCurrentSemesterInitialized;
   }
 
@@ -588,6 +689,43 @@ class _TimetablePageState extends State<TimetablePage> {
     return left.year == right.year &&
         left.month == right.month &&
         left.day == right.day;
+  }
+}
+
+class _EmptyStateActions extends StatelessWidget {
+  const _EmptyStateActions({
+    required this.addCourseLabel,
+    required this.importCoursesLabel,
+    required this.onAddCourse,
+    required this.onImportCourses,
+  });
+
+  final String addCourseLabel;
+  final String importCoursesLabel;
+  final VoidCallback onAddCourse;
+  final VoidCallback onImportCourses;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+          onPressed: onAddCourse,
+          icon: const Icon(Icons.add),
+          label: Text(addCourseLabel),
+        ),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+          onPressed: onImportCourses,
+          icon: const Icon(Icons.cloud_download_outlined),
+          label: Text(importCoursesLabel),
+        ),
+      ],
+    );
   }
 }
 
@@ -751,11 +889,7 @@ class _CourseGroupRecordList extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.md),
-          _RecordCountPill(
-            text: settingsProvider.languageCode == 'en'
-                ? '${group.recordCount} records'
-                : '${group.recordCount}条',
-          ),
+          _RecordCountPill(text: '${group.recordCount}条'),
         ],
       ),
     );

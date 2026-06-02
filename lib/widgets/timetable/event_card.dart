@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/app_colors.dart';
 import '../../core/app_constants.dart';
+import '../../core/app_theme_tokens.dart';
 import '../../models/event.dart';
 import '../common/app_ui.dart';
 
@@ -23,6 +24,7 @@ class EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tokens = appThemeTokensOf(context);
     return AppSurface(
       padding: EdgeInsets.zero,
       color: colorScheme.secondaryContainer.withValues(alpha: 0.56),
@@ -59,7 +61,7 @@ class EventCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: tokens.textSecondary,
                       ),
                     ),
                   ],
@@ -89,9 +91,10 @@ class CompactEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return Card(
       elevation: 0,
-      color: AppColors.surfaceMuted,
+      color: tokens.surfaceMuted,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadii.lg),
         side: const BorderSide(color: AppColors.infoBorder),
@@ -121,11 +124,12 @@ class HolidayEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadii.lg),
-        side: const BorderSide(color: AppColors.divider),
+        side: BorderSide(color: tokens.divider),
       ),
       child: ListTile(
         leading: const Icon(Icons.event_note_outlined),

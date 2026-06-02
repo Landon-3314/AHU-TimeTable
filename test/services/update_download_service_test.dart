@@ -72,54 +72,55 @@ void main() {
     expect(file.path, contains('timetable-0.3.5+2-arm64-v8a.apk'));
   });
 
-  test('retries APK download through a GitHub mirror after direct failure', () async {
-    final directory = await Directory.systemTemp.createTemp('update-test-');
-    addTearDown(() => directory.delete(recursive: true));
+  test(
+    'retries APK download through a GitHub mirror after direct failure',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('update-test-');
+      addTearDown(() => directory.delete(recursive: true));
 
-    final apkBytes = utf8.encode('apk-bytes');
-    final expectedHash = sha256.convert(apkBytes).toString();
-    final primaryUri = Uri.parse(
-      'https://github.com/owner/repo/releases/download/v1/app-arm64-v8a.apk',
-    );
-    final mirrorUri = Uri.parse(
-      'https://gh-proxy.example/$primaryUri',
-    );
-    final client = _FakeUpdateHttpClient([
-      _FakeHttpFailure(const SocketException('blocked')),
-      _FakeHttpSuccess(apkBytes),
-    ]);
-    final update = AvailableUpdate(
-      manifest: UpdateManifest(
-        versionName: '0.3.5+2',
-        versionCode: 2,
-        releaseNotes: '',
-        assets: [
-          UpdateAsset(
-            abi: 'arm64-v8a',
-            url: primaryUri,
-            sha256: expectedHash,
-            size: apkBytes.length,
-          ),
-        ],
-      ),
-      asset: UpdateAsset(
-        abi: 'arm64-v8a',
-        url: primaryUri,
-        sha256: expectedHash,
-        size: apkBytes.length,
-      ),
-    );
-    final service = UpdateDownloadService(
-      platform: _FakeAppUpdatePlatform(directory),
-      httpClientFactory: () => client,
-      githubMirrorPrefixes: const ['https://gh-proxy.example/'],
-    );
+      final apkBytes = utf8.encode('apk-bytes');
+      final expectedHash = sha256.convert(apkBytes).toString();
+      final primaryUri = Uri.parse(
+        'https://github.com/owner/repo/releases/download/v1/app-arm64-v8a.apk',
+      );
+      final mirrorUri = Uri.parse('https://gh-proxy.example/$primaryUri');
+      final client = _FakeUpdateHttpClient([
+        _FakeHttpFailure(const SocketException('blocked')),
+        _FakeHttpSuccess(apkBytes),
+      ]);
+      final update = AvailableUpdate(
+        manifest: UpdateManifest(
+          versionName: '0.3.5+2',
+          versionCode: 2,
+          releaseNotes: '',
+          assets: [
+            UpdateAsset(
+              abi: 'arm64-v8a',
+              url: primaryUri,
+              sha256: expectedHash,
+              size: apkBytes.length,
+            ),
+          ],
+        ),
+        asset: UpdateAsset(
+          abi: 'arm64-v8a',
+          url: primaryUri,
+          sha256: expectedHash,
+          size: apkBytes.length,
+        ),
+      );
+      final service = UpdateDownloadService(
+        platform: _FakeAppUpdatePlatform(directory),
+        httpClientFactory: () => client,
+        githubMirrorPrefixes: const ['https://gh-proxy.example/'],
+      );
 
-    final file = await service.downloadApk(update);
+      final file = await service.downloadApk(update);
 
-    expect(client.requestedUris, [primaryUri, mirrorUri]);
-    expect(await file.readAsBytes(), apkBytes);
-  });
+      expect(client.requestedUris, [primaryUri, mirrorUri]);
+      expect(await file.readAsBytes(), apkBytes);
+    },
+  );
 }
 
 class _FakeAppUpdatePlatform extends AppUpdatePlatform {
@@ -138,7 +139,10 @@ class _FakeUpdateHttpClient implements UpdateHttpClient {
   final List<Uri> requestedUris = [];
 
   @override
-  Future<UpdateHttpResponse> get(Uri uri, {Map<String, String>? headers}) async {
+  Future<UpdateHttpResponse> get(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) async {
     requestedUris.add(uri);
     final response = _responses.removeAt(0);
     return response.resolve(uri);

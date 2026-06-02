@@ -7,6 +7,9 @@ class Event {
     required this.dateTime,
     required this.enableAlarm,
     this.semesterId,
+    this.importSource,
+    this.importBatchId,
+    this.importedAt,
   }) : id = id ?? createId();
 
   final String id;
@@ -16,6 +19,9 @@ class Event {
   final DateTime dateTime;
   final bool enableAlarm;
   final String? semesterId;
+  final String? importSource;
+  final String? importBatchId;
+  final DateTime? importedAt;
 
   Event copyWith({
     String? id,
@@ -25,6 +31,9 @@ class Event {
     DateTime? dateTime,
     bool? enableAlarm,
     String? semesterId,
+    String? importSource,
+    String? importBatchId,
+    DateTime? importedAt,
   }) {
     return Event(
       id: id ?? this.id,
@@ -34,6 +43,9 @@ class Event {
       dateTime: dateTime ?? this.dateTime,
       enableAlarm: enableAlarm ?? this.enableAlarm,
       semesterId: semesterId ?? this.semesterId,
+      importSource: importSource ?? this.importSource,
+      importBatchId: importBatchId ?? this.importBatchId,
+      importedAt: importedAt ?? this.importedAt,
     );
   }
 
@@ -46,18 +58,31 @@ class Event {
       'dateTime': dateTime.toIso8601String(),
       'enableAlarm': enableAlarm,
       'semesterId': semesterId,
+      'importSource': importSource,
+      'importBatchId': importBatchId,
+      'importedAt': importedAt?.toIso8601String(),
     };
   }
 
   factory Event.fromJson(Map<String, dynamic> json) {
-    final name = (json['name'] as String?) ?? 'Untitled Event';
+    final name = (json['name'] as String?) ?? '未命名日程';
     final location = (json['location'] as String?) ?? '';
     final note = (json['note'] as String?) ?? '';
-    final dateTime =
-        DateTime.tryParse((json['dateTime'] as String?) ?? '') ??
-        DateTime.now();
+    final rawDateTime = json['dateTime'];
+    final dateTime = rawDateTime is String
+        ? DateTime.tryParse(rawDateTime)
+        : null;
+    if (dateTime == null) {
+      throw const FormatException('Invalid event dateTime');
+    }
     final enableAlarm = (json['enableAlarm'] as bool?) ?? false;
     final semesterId = json['semesterId'] as String?;
+    final importSource = json['importSource'] as String?;
+    final importBatchId = json['importBatchId'] as String?;
+    final rawImportedAt = json['importedAt'];
+    final importedAt = rawImportedAt is String
+        ? DateTime.tryParse(rawImportedAt)
+        : null;
 
     return Event(
       id:
@@ -74,6 +99,9 @@ class Event {
       dateTime: dateTime,
       enableAlarm: enableAlarm,
       semesterId: semesterId,
+      importSource: importSource,
+      importBatchId: importBatchId,
+      importedAt: importedAt,
     );
   }
 

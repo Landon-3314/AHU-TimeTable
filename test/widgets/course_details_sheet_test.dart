@@ -80,4 +80,51 @@ void main() {
     expect(providers.courses.courses, hasLength(1));
     expect(find.text('Linear Algebra'), findsOneWidget);
   });
+
+  testWidgets('course deletion snackbar can restore course', (tester) async {
+    final providers = await buildProviders();
+    final course = providers.courses.courses.first;
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SettingsProvider>.value(
+            value: providers.settings,
+          ),
+          ChangeNotifierProvider<CourseProvider>.value(
+            value: providers.courses,
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return FilledButton(
+                  onPressed: () => showCourseDetailsSheet(context, course),
+                  child: const Text('Open'),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除课程'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除课程').last);
+    await tester.pumpAndSettle();
+
+    expect(providers.courses.courses, isEmpty);
+    expect(find.text('已删除课程'), findsOneWidget);
+    expect(find.text('撤销'), findsOneWidget);
+
+    await tester.tap(find.text('撤销'));
+    await tester.pumpAndSettle();
+
+    expect(providers.courses.courses.single.id, course.id);
+  });
 }

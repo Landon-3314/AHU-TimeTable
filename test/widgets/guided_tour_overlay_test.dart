@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timetable/widgets/common/guided_tour_overlay.dart';
@@ -77,5 +79,103 @@ void main() {
     await tester.pump();
 
     expect(completed, isTrue);
+  });
+
+  testWidgets('blocks underlying semantics while keeping tour action visible', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final targetKey = GlobalKey();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              Semantics(
+                label: 'Underlying timetable content',
+                child: SizedBox(
+                  key: targetKey,
+                  width: 64,
+                  height: 48,
+                  child: const Placeholder(),
+                ),
+              ),
+              GuidedTourOverlay(
+                steps: [
+                  GuidedTourStep(
+                    targetKey: targetKey,
+                    title: 'Tour title',
+                    body: 'Tour body',
+                  ),
+                ],
+                nextLabel: 'Next',
+                doneLabel: 'Done',
+                stepLabelBuilder: (current, total) => '$current/$total',
+                onCompleted: () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.bySemanticsLabel('Underlying timetable content'), findsNothing);
+    expect(find.bySemanticsLabel('Done'), findsOneWidget);
+
+    semantics.dispose();
+  });
+
+  testWidgets('dialog barrier and current step expose Chinese semantics', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final targetKey = GlobalKey();
+    late BuildContext hostContext;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) {
+              hostContext = context;
+              return SizedBox(
+                key: targetKey,
+                width: 64,
+                height: 48,
+                child: const Placeholder(),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    unawaited(
+      showGuidedTourOverlay(
+        context: hostContext,
+        steps: [
+          GuidedTourStep(
+            targetKey: targetKey,
+            title: '选择周次',
+            body: '在这里跳转到目标周次。',
+          ),
+          GuidedTourStep(
+            targetKey: targetKey,
+            title: '返回今天',
+            body: '快速定位当前日期。',
+          ),
+        ],
+        nextLabel: '下一步',
+        doneLabel: '完成',
+        stepLabelBuilder: (current, total) => '第 $current 步，共 $total 步',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('功能引导'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('第 1 步，共 2 步')), findsWidgets);
+
+    semantics.dispose();
   });
 }

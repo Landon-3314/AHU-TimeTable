@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_constants.dart';
+import '../core/app_theme_tokens.dart';
 import '../models/course.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
@@ -278,19 +279,37 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
       return;
     }
 
+    final courseProvider = context.read<CourseProvider>();
+    final conflicts = courseProvider.findRescheduleCourseConflicts(
+      originalCourse: widget.course,
+      sourceWeek: widget.sourceWeek,
+      targetWeek: targetWeek,
+      targetWeekday: targetWeekday,
+      targetStartPeriod: targetStartPeriod,
+    );
+    var allowConflicts = false;
+    if (conflicts.isNotEmpty) {
+      allowConflicts = await showCourseConflictConfirmDialog(
+        context,
+        conflicts: conflicts,
+      );
+      if (!mounted || !allowConflicts) {
+        return;
+      }
+    }
+
     setState(() {
       _isSaving = true;
     });
 
-    final didReschedule = await context
-        .read<CourseProvider>()
-        .rescheduleCourseOccurrence(
-          originalCourse: widget.course,
-          sourceWeek: widget.sourceWeek,
-          targetWeek: targetWeek,
-          targetWeekday: targetWeekday,
-          targetStartPeriod: targetStartPeriod,
-        );
+    final didReschedule = await courseProvider.rescheduleCourseOccurrence(
+      originalCourse: widget.course,
+      sourceWeek: widget.sourceWeek,
+      targetWeek: targetWeek,
+      targetWeekday: targetWeekday,
+      targetStartPeriod: targetStartPeriod,
+      allowConflicts: allowConflicts,
+    );
 
     if (!mounted) {
       return;
@@ -357,6 +376,7 @@ class _SummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -365,7 +385,7 @@ class _SummaryRow extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
+              color: tokens.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),

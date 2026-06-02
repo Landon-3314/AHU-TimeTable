@@ -365,4 +365,92 @@ void main() {
       );
     },
   );
+
+  test('semester coverage horizon includes courses after day fourteen', () {
+    final course = Course(
+      id: 'course-week-3',
+      name: '编译原理',
+      location: 'E501',
+      teacher: '周老师',
+      weekday: DateTime.monday,
+      weeks: const [3],
+      startPeriod: 1,
+      endPeriod: 1,
+      colorValue: 0xFF7C9AF2,
+    );
+
+    final boundedPlan = SchedulePlanBuilder.build(
+      courses: [course],
+      events: const [],
+      timeSlots: slots,
+      semesterStartDate: DateTime(2026, 4, 27),
+      totalWeeks: 20,
+      courseReminderAdvanceMinutes: 0,
+      eventReminderAdvanceMinutes: 0,
+      autoMuteEnabled: true,
+      canAutoMute: true,
+      now: DateTime(2026, 4, 27, 7, 0),
+    );
+    final semesterPlan = SchedulePlanBuilder.build(
+      courses: [course],
+      events: const [],
+      timeSlots: slots,
+      semesterStartDate: DateTime(2026, 4, 27),
+      totalWeeks: 20,
+      courseReminderAdvanceMinutes: 0,
+      eventReminderAdvanceMinutes: 0,
+      autoMuteEnabled: true,
+      canAutoMute: true,
+      now: DateTime(2026, 4, 27, 7, 0),
+      horizonDays: SchedulePlanBuilder.semesterCoverageDays(20),
+    );
+
+    expect(boundedPlan.courseAutomationWindows, isEmpty);
+    expect(semesterPlan.courseAutomationWindows, hasLength(1));
+    expect(
+      semesterPlan.courseAutomationWindows.single.startAt,
+      DateTime(2026, 5, 11, 8, 0),
+    );
+  });
+
+  test(
+    'native fallback retains dormant mute window without duplicate reminder',
+    () {
+      final course = Course(
+        id: 'course-native-fallback',
+        name: '操作系统',
+        location: 'E502',
+        teacher: '吴老师',
+        weekday: DateTime.monday,
+        weeks: const [1],
+        startPeriod: 1,
+        endPeriod: 1,
+        colorValue: 0xFF7C9AF2,
+      );
+
+      final plan = SchedulePlanBuilder.build(
+        courses: [course],
+        events: const [],
+        timeSlots: slots,
+        semesterStartDate: DateTime(2026, 4, 27),
+        totalWeeks: 20,
+        courseReminderAdvanceMinutes: 0,
+        eventReminderAdvanceMinutes: 0,
+        autoMuteEnabled: true,
+        canAutoMute: false,
+        retainAutoMuteWindows: true,
+        nativeMuteFallbackEnabled: true,
+        now: DateTime(2026, 4, 27, 7, 0),
+      );
+
+      expect(plan.courseAutomationWindows, hasLength(1));
+      expect(
+        plan.notifications.where(
+          (item) => item.kind == ManagedNotificationKind.manualMute,
+        ),
+        isEmpty,
+      );
+      expect(plan.autoMuteFallbackEnabled, isTrue);
+    },
+  );
 }

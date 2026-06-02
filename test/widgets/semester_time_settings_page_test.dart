@@ -192,9 +192,7 @@ void main() {
     expect(find.text('分'), findsOneWidget);
   });
 
-  testWidgets('course period single choice uses confirmable wheel picker', (
-    tester,
-  ) async {
+  testWidgets('course period single choice uses grid picker', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -215,11 +213,10 @@ void main() {
     await tester.tap(find.text('第 1 节'));
     await tester.pumpAndSettle();
 
-    expect(find.text('确定'), findsOneWidget);
+    expect(find.byType(GridView), findsOneWidget);
+    expect(find.text('确定'), findsNothing);
 
     await tester.tap(find.text('第 3 节'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
 
     expect(find.text('第 3 节'), findsNWidgets(2));

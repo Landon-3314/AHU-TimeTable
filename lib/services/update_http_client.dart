@@ -1,18 +1,15 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:cronet_http/cronet_http.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
+
+import 'update_http_client_platform.dart'
+    if (dart.library.io) 'update_http_client_platform_io.dart'
+    as platform;
 
 typedef UpdateHttpClientFactory = UpdateHttpClient Function();
 
 abstract class UpdateHttpClient {
-  Future<UpdateHttpResponse> get(
-    Uri uri, {
-    Map<String, String>? headers,
-  });
+  Future<UpdateHttpResponse> get(Uri uri, {Map<String, String>? headers});
 
   void close();
 }
@@ -37,7 +34,7 @@ UpdateHttpClient createDefaultUpdateHttpClient() {
 
 class PackageUpdateHttpClient implements UpdateHttpClient {
   PackageUpdateHttpClient({http.Client? client})
-    : _client = client ?? _createPlatformClient();
+    : _client = client ?? platform.createPlatformUpdateClient();
 
   final http.Client _client;
 
@@ -62,29 +59,5 @@ class PackageUpdateHttpClient implements UpdateHttpClient {
   @override
   void close() {
     _client.close();
-  }
-
-  static http.Client _createPlatformClient() {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      try {
-        final engine = CronetEngine.build(
-          cacheMode: CacheMode.memory,
-          cacheMaxSize: 2 * 1024 * 1024,
-          userAgent: 'TimetableUpdater',
-        );
-        return CronetClient.fromCronetEngine(engine, closeEngine: true);
-      } catch (_) {
-        return _createIoClient();
-      }
-    }
-    return _createIoClient();
-  }
-
-  static http.Client _createIoClient() {
-    return IOClient(
-      HttpClient()
-        ..connectionTimeout = const Duration(seconds: 20)
-        ..userAgent = 'TimetableUpdater',
-    );
   }
 }

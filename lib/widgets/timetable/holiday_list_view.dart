@@ -12,10 +12,12 @@ class HolidayListView extends StatefulWidget {
     super.key,
     required this.pageData,
     required this.onEventTap,
+    this.emptyAction,
   });
 
   final TimetableHolidayPageData pageData;
   final ValueChanged<Event> onEventTap;
+  final Widget? emptyAction;
 
   @override
   State<HolidayListView> createState() => _HolidayListViewState();
@@ -36,6 +38,7 @@ class _HolidayListViewState extends State<HolidayListView> {
       return EmptyScheduleState(
         title: widget.pageData.emptyTitle,
         subtitle: widget.pageData.emptySubtitle,
+        action: widget.emptyAction,
       );
     }
 
