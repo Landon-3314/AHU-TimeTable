@@ -8,6 +8,7 @@ import 'package:timetable/screens/add_course_page.dart';
 import 'package:timetable/screens/reminder_settings_page.dart';
 import 'package:timetable/screens/semester_time_settings_page.dart';
 import 'package:timetable/services/storage_service.dart';
+import 'package:timetable/widgets/common/app_ui.dart';
 import 'package:timetable/widgets/common/app_wheel_pickers.dart';
 
 void main() {
@@ -99,6 +100,50 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('09:00'), findsOneWidget);
+  });
+
+  testWidgets('calendar weeks and session counts use wheel pickers', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SettingsProvider>.value(
+            value: bundle.settings,
+          ),
+          ChangeNotifierProvider<CourseProvider>.value(value: bundle.courses),
+        ],
+        child: const MaterialApp(home: SemesterTimeSettingsPage()),
+      ),
+    );
+
+    await tester.tap(find.byType(AppPickerPill).first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byType(AppWheelPicker<AppWheelPickerOption<int>>),
+      findsOneWidget,
+    );
+    expect(find.byType(GridView), findsNothing);
+    expect(find.text('确定'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(AppPickerPill).at(1));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byType(AppWheelPicker<AppWheelPickerOption<int>>),
+      findsOneWidget,
+    );
+    expect(find.byType(GridView), findsNothing);
+    expect(find.text('确定'), findsOneWidget);
   });
 
   testWidgets('event time uses wheel time picker', (tester) async {

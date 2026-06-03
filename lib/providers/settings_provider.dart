@@ -143,6 +143,14 @@ class SettingsProvider extends ChangeNotifier {
            .readCourseReminderPersistentDisplayEnabled(fallback: false),
        _timetableToolbarGuideConfirmed = storageService
            .readTimetableToolbarGuideConfirmed(fallback: false),
+       // 向后兼容：menu guide 的 key 对老用户不存在，
+       // fallback 取 toolbar guide 的值（老用户 toolbar=true → menu 默认跳过）
+       _timetableMenuGuideConfirmed = storageService
+           .readTimetableMenuGuideConfirmed(
+             fallback: storageService.readTimetableToolbarGuideConfirmed(
+               fallback: false,
+             ),
+           ),
        _importWebViewGuideConfirmed = storageService
            .readImportWebViewGuideConfirmed(fallback: false);
 
@@ -192,6 +200,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _autoMuteEnabled;
   bool _courseReminderPersistentDisplayEnabled;
   bool _timetableToolbarGuideConfirmed;
+  bool _timetableMenuGuideConfirmed;
   bool _importWebViewGuideConfirmed;
   List<Semester> _semesters;
   String? _currentSemesterId;
@@ -274,6 +283,8 @@ class SettingsProvider extends ChangeNotifier {
   bool get isCurrentSemesterInitialized =>
       currentSemester?.isInitialized == true;
   bool get shouldShowTimetableToolbarGuide => !_timetableToolbarGuideConfirmed;
+  /// 折叠菜单引导是否需要展示。
+  bool get shouldShowTimetableMenuGuide => !_timetableMenuGuideConfirmed;
   bool get shouldShowImportWebViewGuide => !_importWebViewGuideConfirmed;
   bool get courseReminderEnabled =>
       _reminderAdvanceMinutes > 0 || _courseReminderPersistentDisplayEnabled;
@@ -420,6 +431,20 @@ class SettingsProvider extends ChangeNotifier {
     _timetableToolbarGuideConfirmed = true;
     notifyListeners();
     await _storageService.writeTimetableToolbarGuideConfirmed(true);
+    // 显式写入 menuGuide=false，确保 key 存在于存储中。
+    // 这样新用户重启后不会因为 fallback 到 toolbar 值而误跳过菜单引导。
+    if (!_timetableMenuGuideConfirmed) {
+      await _storageService.writeTimetableMenuGuideConfirmed(false);
+    }
+  }
+
+  Future<void> confirmTimetableMenuGuide() async {
+    if (_timetableMenuGuideConfirmed) {
+      return;
+    }
+    _timetableMenuGuideConfirmed = true;
+    notifyListeners();
+    await _storageService.writeTimetableMenuGuideConfirmed(true);
   }
 
   Future<void> confirmImportWebViewGuide() async {
@@ -1033,6 +1058,10 @@ class SettingsProvider extends ChangeNotifier {
     _totalWeeks = _storageService.readTotalWeeks(fallback: _defaultTotalWeeks);
     _timetableToolbarGuideConfirmed = _storageService
         .readTimetableToolbarGuideConfirmed(fallback: false);
+    _timetableMenuGuideConfirmed = _storageService
+        .readTimetableMenuGuideConfirmed(
+          fallback: _timetableToolbarGuideConfirmed,
+        );
     _importWebViewGuideConfirmed = _storageService
         .readImportWebViewGuideConfirmed(fallback: false);
   }

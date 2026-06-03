@@ -16,11 +16,33 @@ import 'package:timetable/screens/add_course_page.dart';
 import 'package:timetable/screens/exam_overview_page.dart';
 import 'package:timetable/screens/timetable_page.dart';
 import 'package:timetable/services/storage_service.dart';
+import 'package:timetable/services/timetable_navigation_controller.dart';
 import 'package:timetable/widgets/common/app_ui.dart';
 import 'package:timetable/widgets/timetable/course_overview_panel.dart';
 import 'package:timetable/widgets/timetable/timetable_detail_sheets.dart';
 
 void main() {
+  testWidgets('today button target switches navigation back to day mode', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
+    final controller = TimetableNavigationController(
+      settingsProvider: bundle.settings,
+      timetableViewProvider: bundle.timetableView,
+      holidayWeekIndex: AppConstants.holidayWeekIndex,
+    );
+    addTearDown(controller.dispose);
+
+    controller.setMode(TimetableMode.week);
+    expect(controller.state.mode, TimetableMode.week);
+
+    await controller.jumpToToday();
+
+    expect(controller.state.mode, TimetableMode.day);
+    expect(controller.state.currentWeek, bundle.settings.currentRealWeek);
+    expect(controller.state.currentWeekday, bundle.settings.currentRealWeekday);
+  });
+
   testWidgets('day and week view switcher uses one text-only pill indicator', (
     tester,
   ) async {

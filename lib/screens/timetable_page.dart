@@ -46,7 +46,13 @@ class _TimetablePageState extends State<TimetablePage> {
   final GlobalKey _overviewGuideKey = GlobalKey();
   final GlobalKey _importGuideKey = GlobalKey();
   final GlobalKey _addCourseGuideKey = GlobalKey();
+  // 折叠菜单内引导使用的 GlobalKey
+  final GlobalKey _menuOverviewGuideKey = GlobalKey();
+  final GlobalKey _menuImportGuideKey = GlobalKey();
+  final GlobalKey _menuAddCourseGuideKey = GlobalKey();
   bool _isToolbarGuideShowing = false;
+  bool _isMenuGuideShowing = false;
+  bool _isNarrowMode = false;
 
   @override
   void initState() {
@@ -101,13 +107,22 @@ class _TimetablePageState extends State<TimetablePage> {
             const <TimetableDayChipData>[];
         return LayoutBuilder(
           builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 420;
+            // 在 build 期间不能 setState，用 postFrameCallback 延迟更新
+            if (_isNarrowMode != isNarrow) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _isNarrowMode = isNarrow;
+                }
+              });
+            }
             return Scaffold(
               appBar: _buildAppBar(
                 context,
                 settingsProvider: settingsProvider,
                 navigationState: navigationState,
                 screenData: screenData,
-                isNarrow: constraints.maxWidth < 420,
+                isNarrow: isNarrow,
               ),
               body: AnimatedSwitcher(
                 duration: AppDurations.switcher,
@@ -322,12 +337,22 @@ class _TimetablePageState extends State<TimetablePage> {
       Offset.zero,
       ancestor: overlayRenderObject,
     );
+
+    // 检查是否需要在菜单弹出后展示引导
+    final needMenuGuide =
+        context.read<SettingsProvider>().shouldShowTimetableMenuGuide;
+
     final action = await navigator.push<_TimetableToolbarAction>(
       _TimetableToolbarMenuRoute(
         anchorRect: topLeft & buttonRenderObject.size,
         barrierLabel: MaterialLocalizations.of(
           context,
         ).modalBarrierDismissLabel,
+        // 需要引导时传入 GlobalKey，让菜单项绑定 key
+        overviewGuideKey: needMenuGuide ? _menuOverviewGuideKey : null,
+        importGuideKey: needMenuGuide ? _menuImportGuideKey : null,
+        addCourseGuideKey: needMenuGuide ? _menuAddCourseGuideKey : null,
+        onMenuReady: needMenuGuide ? _showMenuGuideIfNeeded : null,
       ),
     );
     if (!mounted || action == null) {
@@ -605,31 +630,111 @@ class _TimetablePageState extends State<TimetablePage> {
     }
 
     _isToolbarGuideShowing = true;
+
+    // 窄屏模式：只展示可见按钮的引导（周次选择器 + 今日按钮）
+    // 宽屏模式：展示全部5步引导
+    final steps = _isNarrowMode
+        ? [
+            GuidedTourStep(
+              targetKey: _weekSelectorGuideKey,
+              title: settingsProvider.t('guide_timetable_week_title'),
+              body: settingsProvider.t('guide_timetable_week_body'),
+            ),
+            GuidedTourStep(
+              targetKey: _todayGuideKey,
+              title: settingsProvider.t('guide_timetable_today_title'),
+              body: settingsProvider.t('guide_timetable_today_body'),
+            ),
+          ]
+        : [
+            GuidedTourStep(
+              targetKey: _weekSelectorGuideKey,
+              title: settingsProvider.t('guide_timetable_week_title'),
+              body: settingsProvider.t('guide_timetable_week_body'),
+            ),
+            GuidedTourStep(
+              targetKey: _todayGuideKey,
+              title: settingsProvider.t('guide_timetable_today_title'),
+              body: settingsProvider.t('guide_timetable_today_body'),
+            ),
+            GuidedTourStep(
+              targetKey: _overviewGuideKey,
+              title: settingsProvider.t('guide_timetable_overview_title'),
+              body: settingsProvider.t('guide_timetable_overview_body'),
+            ),
+            GuidedTourStep(
+              targetKey: _importGuideKey,
+              title: settingsProvider.t('guide_timetable_import_title'),
+              body: settingsProvider.t('guide_timetable_import_body'),
+            ),
+            GuidedTourStep(
+              targetKey: _addCourseGuideKey,
+              title: settingsProvider.t('guide_timetable_add_title'),
+              body: settingsProvider.t('guide_timetable_add_body'),
+            ),
+          ];
+
+    await showGuidedTourOverlay(
+      context: context,
+      steps: steps,
+      nextLabel: settingsProvider.t('guide_next'),
+      doneLabel: settingsProvider.t('guide_done'),
+      stepLabelBuilder: (currentStep, totalSteps) {
+        return settingsProvider
+            .t('guide_step_counter')
+            .replaceAll('{current}', currentStep.toString())
+            .replaceAll('{total}', totalSteps.toString());
+      },
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    await context.read<SettingsProvider>().confirmTimetableToolbarGuide();
+    // 宽屏模式已展示全部5步引导，菜单引导也视为已完成
+    if (!_isNarrowMode) {
+      if (!mounted) return;
+      await context.read<SettingsProvider>().confirmTimetableMenuGuide();
+    }
+    _isToolbarGuideShowing = false;
+  }
+
+  /// 折叠菜单打开后，检查是否需要展示菜单内引导。
+  /// 引导会叠加在菜单路由之上，高亮菜单中的各项。
+  Future<void> _showMenuGuideIfNeeded() async {
+    if (_isMenuGuideShowing || !mounted) {
+      return;
+    }
+
+    final settingsProvider = context.read<SettingsProvider>();
+    if (!settingsProvider.shouldShowTimetableMenuGuide) {
+      return;
+    }
+
+    _isMenuGuideShowing = true;
+
+    // 等待一帧让菜单项完成布局，确保 GlobalKey 能找到 RenderBox
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    if (!mounted) {
+      return;
+    }
+
     await showGuidedTourOverlay(
       context: context,
       steps: [
         GuidedTourStep(
-          targetKey: _weekSelectorGuideKey,
-          title: settingsProvider.t('guide_timetable_week_title'),
-          body: settingsProvider.t('guide_timetable_week_body'),
-        ),
-        GuidedTourStep(
-          targetKey: _todayGuideKey,
-          title: settingsProvider.t('guide_timetable_today_title'),
-          body: settingsProvider.t('guide_timetable_today_body'),
-        ),
-        GuidedTourStep(
-          targetKey: _overviewGuideKey,
+          targetKey: _menuOverviewGuideKey,
           title: settingsProvider.t('guide_timetable_overview_title'),
           body: settingsProvider.t('guide_timetable_overview_body'),
         ),
         GuidedTourStep(
-          targetKey: _importGuideKey,
+          targetKey: _menuImportGuideKey,
           title: settingsProvider.t('guide_timetable_import_title'),
           body: settingsProvider.t('guide_timetable_import_body'),
         ),
         GuidedTourStep(
-          targetKey: _addCourseGuideKey,
+          targetKey: _menuAddCourseGuideKey,
           title: settingsProvider.t('guide_timetable_add_title'),
           body: settingsProvider.t('guide_timetable_add_body'),
         ),
@@ -648,8 +753,8 @@ class _TimetablePageState extends State<TimetablePage> {
       return;
     }
 
-    await context.read<SettingsProvider>().confirmTimetableToolbarGuide();
-    _isToolbarGuideShowing = false;
+    await context.read<SettingsProvider>().confirmTimetableMenuGuide();
+    _isMenuGuideShowing = false;
   }
 
   void _handleSettingsChanged() {
@@ -948,10 +1053,18 @@ class _TimetableToolbarMenuRoute extends PopupRoute<_TimetableToolbarAction> {
   _TimetableToolbarMenuRoute({
     required this.anchorRect,
     required String barrierLabel,
+    this.overviewGuideKey,
+    this.importGuideKey,
+    this.addCourseGuideKey,
+    this.onMenuReady,
   }) : _barrierLabel = barrierLabel;
 
   final Rect anchorRect;
   final String _barrierLabel;
+  final GlobalKey? overviewGuideKey;
+  final GlobalKey? importGuideKey;
+  final GlobalKey? addCourseGuideKey;
+  final VoidCallback? onMenuReady;
 
   @override
   Color? get barrierColor => null;
@@ -976,7 +1089,13 @@ class _TimetableToolbarMenuRoute extends PopupRoute<_TimetableToolbarAction> {
   ) {
     return CustomSingleChildLayout(
       delegate: _TimetableToolbarMenuLayout(anchorRect: anchorRect),
-      child: _TimetableToolbarMenu(animation: animation),
+      child: _TimetableToolbarMenu(
+        animation: animation,
+        overviewGuideKey: overviewGuideKey,
+        importGuideKey: importGuideKey,
+        addCourseGuideKey: addCourseGuideKey,
+        onMenuReady: onMenuReady,
+      ),
     );
   }
 }
@@ -1021,8 +1140,14 @@ class _TimetableToolbarMenuLayout extends SingleChildLayoutDelegate {
   }
 }
 
-class _TimetableToolbarMenu extends StatelessWidget {
-  const _TimetableToolbarMenu({required this.animation});
+class _TimetableToolbarMenu extends StatefulWidget {
+  const _TimetableToolbarMenu({
+    required this.animation,
+    this.overviewGuideKey,
+    this.importGuideKey,
+    this.addCourseGuideKey,
+    this.onMenuReady,
+  });
 
   static const _contentFadeInCurve = Interval(
     40 / 220,
@@ -1036,26 +1161,52 @@ class _TimetableToolbarMenu extends StatelessWidget {
   );
 
   final Animation<double> animation;
+  final GlobalKey? overviewGuideKey;
+  final GlobalKey? importGuideKey;
+  final GlobalKey? addCourseGuideKey;
+  final VoidCallback? onMenuReady;
+
+  @override
+  State<_TimetableToolbarMenu> createState() => _TimetableToolbarMenuState();
+}
+
+class _TimetableToolbarMenuState extends State<_TimetableToolbarMenu> {
+  bool _guideTriggered = false;
 
   @override
   Widget build(BuildContext context) {
     final tokens = appThemeTokensOf(context);
     final colorScheme = Theme.of(context).colorScheme;
     return AnimatedBuilder(
-      animation: animation,
+      animation: widget.animation,
       child: _TimetableToolbarMenuItems(
         onSelected: (action) => Navigator.of(context).pop(action),
+        overviewGuideKey: widget.overviewGuideKey,
+        importGuideKey: widget.importGuideKey,
+        addCourseGuideKey: widget.addCourseGuideKey,
       ),
       builder: (context, child) {
-        final isClosing = animation.status == AnimationStatus.reverse;
+        final isClosing =
+            widget.animation.status == AnimationStatus.reverse;
         final revealProgress =
             (isClosing ? Curves.easeInCubic : Curves.easeOutCubic).transform(
-              animation.value,
+              widget.animation.value,
             );
         final contentProgress =
-            (isClosing ? _contentFadeOutCurve : _contentFadeInCurve).transform(
-              animation.value,
-            );
+            (isClosing
+                    ? _TimetableToolbarMenu._contentFadeOutCurve
+                    : _TimetableToolbarMenu._contentFadeInCurve)
+                .transform(widget.animation.value);
+
+        // 菜单展开完成后触发引导回调（仅触发一次）
+        if (!_guideTriggered &&
+            widget.onMenuReady != null &&
+            widget.animation.status == AnimationStatus.completed) {
+          _guideTriggered = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onMenuReady?.call();
+          });
+        }
         return Opacity(
           key: const ValueKey('narrow-toolbar-menu-container-opacity'),
           opacity: revealProgress,
@@ -1111,9 +1262,17 @@ class _TimetableToolbarMenu extends StatelessWidget {
 }
 
 class _TimetableToolbarMenuItems extends StatelessWidget {
-  const _TimetableToolbarMenuItems({required this.onSelected});
+  const _TimetableToolbarMenuItems({
+    required this.onSelected,
+    this.overviewGuideKey,
+    this.importGuideKey,
+    this.addCourseGuideKey,
+  });
 
   final ValueChanged<_TimetableToolbarAction> onSelected;
+  final GlobalKey? overviewGuideKey;
+  final GlobalKey? importGuideKey;
+  final GlobalKey? addCourseGuideKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1121,23 +1280,29 @@ class _TimetableToolbarMenuItems extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _TimetableToolbarMenuItem(
-          key: const ValueKey('narrow-toolbar-menu-action-overview'),
-          icon: Icons.dashboard_outlined,
-          label: '总览',
-          onTap: () => onSelected(_TimetableToolbarAction.overview),
+        KeyedSubtree(
+          key: overviewGuideKey ?? const ValueKey('narrow-toolbar-menu-action-overview'),
+          child: _TimetableToolbarMenuItem(
+            icon: Icons.dashboard_outlined,
+            label: '总览',
+            onTap: () => onSelected(_TimetableToolbarAction.overview),
+          ),
         ),
-        _TimetableToolbarMenuItem(
-          key: const ValueKey('narrow-toolbar-menu-action-academic-import'),
-          icon: Icons.cloud_download_outlined,
-          label: '导入教务课表',
-          onTap: () => onSelected(_TimetableToolbarAction.academicImport),
+        KeyedSubtree(
+          key: importGuideKey ?? const ValueKey('narrow-toolbar-menu-action-academic-import'),
+          child: _TimetableToolbarMenuItem(
+            icon: Icons.cloud_download_outlined,
+            label: '导入教务课表',
+            onTap: () => onSelected(_TimetableToolbarAction.academicImport),
+          ),
         ),
-        _TimetableToolbarMenuItem(
-          key: const ValueKey('narrow-toolbar-menu-action-add-course'),
-          icon: Icons.add,
-          label: '添加课程',
-          onTap: () => onSelected(_TimetableToolbarAction.addCourse),
+        KeyedSubtree(
+          key: addCourseGuideKey ?? const ValueKey('narrow-toolbar-menu-action-add-course'),
+          child: _TimetableToolbarMenuItem(
+            icon: Icons.add,
+            label: '添加课程/日程',
+            onTap: () => onSelected(_TimetableToolbarAction.addCourse),
+          ),
         ),
       ],
     );
@@ -1146,7 +1311,6 @@ class _TimetableToolbarMenuItems extends StatelessWidget {
 
 class _TimetableToolbarMenuItem extends StatelessWidget {
   const _TimetableToolbarMenuItem({
-    super.key,
     required this.icon,
     required this.label,
     required this.onTap,

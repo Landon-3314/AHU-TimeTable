@@ -9,6 +9,7 @@ import '../providers/settings_provider.dart';
 import '../providers/timetable_view_provider.dart';
 import '../services/app_services.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/common/app_wheel_pickers.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/semester_start_date_dialog.dart';
 import 'period_start_time_settings_page.dart';
@@ -177,15 +178,13 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
     BuildContext context,
     SettingsProvider provider,
   ) async {
-    final selected = await showAppOptionPicker<int>(
+    final selected = await showAppWheelValuePicker<int>(
       context,
       title: '上课周数',
       selectedValue: provider.totalWeeks,
-      grid: true,
-      gridCrossAxisCount: 3,
       options: [
         for (int week = 12; week <= 30; week++)
-          AppPickerOption(value: week, label: '$week 周'),
+          AppWheelPickerOption(value: week, label: '$week 周'),
       ],
     );
     if (selected != null && context.mounted) {
@@ -276,15 +275,13 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
     required int max,
     required Future<void> Function(int value) onChanged,
   }) async {
-    final selected = await showAppOptionPicker<int>(
+    final selected = await showAppWheelValuePicker<int>(
       context,
       title: title,
       selectedValue: value.clamp(0, max).toInt(),
-      grid: true,
-      gridCrossAxisCount: 3,
       options: [
         for (int count = 0; count <= max; count++)
-          AppPickerOption(value: count, label: '$count 节'),
+          AppWheelPickerOption(value: count, label: '$count 节'),
       ],
     );
     if (selected != null) {

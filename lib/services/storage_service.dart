@@ -68,6 +68,8 @@ class StorageService {
       'onboarding.timetableToolbarGuideConfirmed.v1';
   static const String _importWebViewGuideConfirmedKey =
       'onboarding.importWebViewGuideConfirmed.v1';
+  static const String _timetableMenuGuideConfirmedKey =
+      'onboarding.timetableMenuGuideConfirmed.v1';
   static const String _totalWeeksKey = 'settings.totalWeeks';
   static const String _reminderAdvanceMinutesKey =
       'settings.reminderAdvanceMinutes';
@@ -746,6 +748,15 @@ class StorageService {
 
   Future<void> writeTimetableToolbarGuideConfirmed(bool value) {
     return _setBool(_timetableToolbarGuideConfirmedKey, value);
+  }
+
+  bool readTimetableMenuGuideConfirmed({required bool fallback}) {
+    return _sharedPreferences.getBool(_timetableMenuGuideConfirmedKey) ??
+        fallback;
+  }
+
+  Future<void> writeTimetableMenuGuideConfirmed(bool value) {
+    return _setBool(_timetableMenuGuideConfirmedKey, value);
   }
 
   bool readImportWebViewGuideConfirmed({required bool fallback}) {

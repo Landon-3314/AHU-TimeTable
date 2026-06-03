@@ -150,6 +150,7 @@ class TimetableNavigationController extends ChangeNotifier {
         .clamp(1, 7)
         .toInt();
 
+    _mode = TimetableMode.day;
     _selectedWeekForWeekView = targetWeek;
     _setCurrentWeekAndWeekday(week: targetWeek, weekday: targetWeekday);
     notifyListeners();
