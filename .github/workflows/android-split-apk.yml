@@ -212,19 +212,24 @@ jobs:
             exit 1
           fi
 
+          normalize_fingerprint() {
+            tr '[:lower:]' '[:upper:]' | tr -d ':[:space:]'
+          }
+
           apk_fingerprint() {
             "$apksigner" verify --print-certs "$1" |
-              sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
+              sed -nE 's/^.*certificate SHA-256 digest:[[:space:]]*//p' |
               head -n 1 |
-              tr '[:lower:]' '[:upper:]' |
-              tr -d ':[:space:]'
+              normalize_fingerprint
           }
+
+          expected_fingerprint="$(printf '%s' "$ANDROID_SIGNING_CERT_SHA256" | normalize_fingerprint)"
 
           for apk in release/*.apk; do
             fingerprint="$(apk_fingerprint "$apk")"
-            if [ "$fingerprint" != "$ANDROID_SIGNING_CERT_SHA256" ]; then
+            if [ "$fingerprint" != "$expected_fingerprint" ]; then
               echo "Unexpected certificate fingerprint for $apk" >&2
-              echo "Expected certificate fingerprint: $ANDROID_SIGNING_CERT_SHA256" >&2
+              echo "Expected certificate fingerprint: $expected_fingerprint" >&2
               echo "Actual certificate fingerprint: ${fingerprint:-<empty>}" >&2
               "$apksigner" verify --print-certs "$apk" >&2
               exit 1
@@ -244,7 +249,7 @@ jobs:
               exit 1
             fi
             previous_fingerprint="$(apk_fingerprint "${previous_apks[0]}")"
-            if [ "$previous_fingerprint" != "$ANDROID_SIGNING_CERT_SHA256" ]; then
+            if [ "$previous_fingerprint" != "$expected_fingerprint" ]; then
               echo "Previous public APK certificate fingerprint mismatch" >&2
               exit 1
             fi
