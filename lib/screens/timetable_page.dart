@@ -96,6 +96,7 @@ class _TimetablePageState extends State<TimetablePage> {
       timeSlots: settingsProvider.timeSlots,
       holidayWeekIndex: AppConstants.holidayWeekIndex,
     );
+    final showEmptyImportAction = !courseProvider.hasImportedTimetableCourses;
     return AnimatedBuilder(
       animation: _navigationController,
       builder: (context, _) {
@@ -173,6 +174,7 @@ class _TimetablePageState extends State<TimetablePage> {
                                   emptyAction: _buildEmptyStateActions(
                                     context,
                                     settingsProvider,
+                                    showImportCourses: showEmptyImportAction,
                                   ),
                                 );
                               },
@@ -196,6 +198,7 @@ class _TimetablePageState extends State<TimetablePage> {
                               emptyAction: _buildEmptyStateActions(
                                 context,
                                 settingsProvider,
+                                showImportCourses: true,
                               ),
                             );
                           }
@@ -217,6 +220,7 @@ class _TimetablePageState extends State<TimetablePage> {
                             emptyAction: _buildEmptyStateActions(
                               context,
                               settingsProvider,
+                              showImportCourses: true,
                             ),
                           );
                         },
@@ -339,8 +343,9 @@ class _TimetablePageState extends State<TimetablePage> {
     );
 
     // 检查是否需要在菜单弹出后展示引导
-    final needMenuGuide =
-        context.read<SettingsProvider>().shouldShowTimetableMenuGuide;
+    final needMenuGuide = context
+        .read<SettingsProvider>()
+        .shouldShowTimetableMenuGuide;
 
     final action = await navigator.push<_TimetableToolbarAction>(
       _TimetableToolbarMenuRoute(
@@ -381,11 +386,13 @@ class _TimetablePageState extends State<TimetablePage> {
 
   Widget _buildEmptyStateActions(
     BuildContext context,
-    SettingsProvider settingsProvider,
-  ) {
+    SettingsProvider settingsProvider, {
+    required bool showImportCourses,
+  }) {
     return _EmptyStateActions(
       addCourseLabel: settingsProvider.t('add_course'),
       importCoursesLabel: settingsProvider.t('import_from_system'),
+      showImportCourses: showImportCourses,
       onAddCourse: () => _openAddCourse(context),
       onImportCourses: () => _openAcademicImport(context),
     );
@@ -870,6 +877,7 @@ class _TimetableOverviewSheetState extends State<_TimetableOverviewSheet> {
                 emptyAction: _EmptyStateActions(
                   addCourseLabel: settingsProvider.t('add_course'),
                   importCoursesLabel: settingsProvider.t('import_from_system'),
+                  showImportCourses: true,
                   onAddCourse: widget.onAddCourse,
                   onImportCourses: widget.onImportCourses,
                 ),
@@ -1186,8 +1194,7 @@ class _TimetableToolbarMenuState extends State<_TimetableToolbarMenu> {
         addCourseGuideKey: widget.addCourseGuideKey,
       ),
       builder: (context, child) {
-        final isClosing =
-            widget.animation.status == AnimationStatus.reverse;
+        final isClosing = widget.animation.status == AnimationStatus.reverse;
         final revealProgress =
             (isClosing ? Curves.easeInCubic : Curves.easeOutCubic).transform(
               widget.animation.value,
@@ -1281,7 +1288,9 @@ class _TimetableToolbarMenuItems extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         KeyedSubtree(
-          key: overviewGuideKey ?? const ValueKey('narrow-toolbar-menu-action-overview'),
+          key:
+              overviewGuideKey ??
+              const ValueKey('narrow-toolbar-menu-action-overview'),
           child: _TimetableToolbarMenuItem(
             icon: Icons.dashboard_outlined,
             label: '总览',
@@ -1289,7 +1298,9 @@ class _TimetableToolbarMenuItems extends StatelessWidget {
           ),
         ),
         KeyedSubtree(
-          key: importGuideKey ?? const ValueKey('narrow-toolbar-menu-action-academic-import'),
+          key:
+              importGuideKey ??
+              const ValueKey('narrow-toolbar-menu-action-academic-import'),
           child: _TimetableToolbarMenuItem(
             icon: Icons.cloud_download_outlined,
             label: '导入教务课表',
@@ -1297,7 +1308,9 @@ class _TimetableToolbarMenuItems extends StatelessWidget {
           ),
         ),
         KeyedSubtree(
-          key: addCourseGuideKey ?? const ValueKey('narrow-toolbar-menu-action-add-course'),
+          key:
+              addCourseGuideKey ??
+              const ValueKey('narrow-toolbar-menu-action-add-course'),
           child: _TimetableToolbarMenuItem(
             icon: Icons.add,
             label: '添加课程/日程',
@@ -1366,12 +1379,14 @@ class _EmptyStateActions extends StatelessWidget {
   const _EmptyStateActions({
     required this.addCourseLabel,
     required this.importCoursesLabel,
+    required this.showImportCourses,
     required this.onAddCourse,
     required this.onImportCourses,
   });
 
   final String addCourseLabel;
   final String importCoursesLabel;
+  final bool showImportCourses;
   final VoidCallback onAddCourse;
   final VoidCallback onImportCourses;
 
@@ -1388,12 +1403,13 @@ class _EmptyStateActions extends StatelessWidget {
           icon: const Icon(Icons.add),
           label: Text(addCourseLabel),
         ),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-          onPressed: onImportCourses,
-          icon: const Icon(Icons.cloud_download_outlined),
-          label: Text(importCoursesLabel),
-        ),
+        if (showImportCourses)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+            onPressed: onImportCourses,
+            icon: const Icon(Icons.cloud_download_outlined),
+            label: Text(importCoursesLabel),
+          ),
       ],
     );
   }

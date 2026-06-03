@@ -35,6 +35,10 @@ class CourseProvider extends ChangeNotifier {
 
   UnmodifiableListView<Course> get courses => UnmodifiableListView(_courses);
   UnmodifiableListView<Event> get events => UnmodifiableListView(_events);
+  bool get hasImportedTimetableCourses => _courses.any(
+    (course) => course.importSource == academicTimetableImportSource,
+  );
+
   List<CourseGroup> get sortedCourseGroups {
     final byName = <String, List<Course>>{};
     for (final course in _courses) {

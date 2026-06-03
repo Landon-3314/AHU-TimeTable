@@ -226,6 +226,30 @@ void main() {
     expect(find.byType(AddCoursePage), findsOneWidget);
   });
 
+  testWidgets('empty day after timetable import exposes only add action', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
+    final otherWeekday = bundle.settings.currentRealWeekday == 1 ? 2 : 1;
+    await bundle.courses.mergeImportedCourses([
+      Course(
+        name: 'Imported Course',
+        location: 'Room A',
+        teacher: 'Dr. Chen',
+        weekday: otherWeekday,
+        weeks: [bundle.settings.currentRealWeek],
+        startPeriod: 1,
+        endPeriod: 2,
+        colorValue: 0xFF7C9AF2,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildPage(bundle));
+
+    expect(find.widgetWithText(FilledButton, '添加课程/日程'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '导入教务课表'), findsNothing);
+  });
+
   testWidgets('empty week view exposes add and import actions', (tester) async {
     final bundle = await _createProviderBundle();
 
