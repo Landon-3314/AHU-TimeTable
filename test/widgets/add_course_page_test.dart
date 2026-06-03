@@ -155,7 +155,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加日程'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('添加课程'));
+    await tester.tap(find.text('添加课程/日程'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('保存'));

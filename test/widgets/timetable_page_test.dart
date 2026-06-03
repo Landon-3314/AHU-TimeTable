@@ -217,10 +217,10 @@ void main() {
 
     await tester.pumpWidget(_buildPage(bundle));
 
-    expect(find.widgetWithText(FilledButton, '添加课程'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '添加课程/日程'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, '导入教务课表'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, '添加课程'));
+    await tester.tap(find.widgetWithText(FilledButton, '添加课程/日程'));
     await tester.pumpAndSettle();
 
     expect(find.byType(AddCoursePage), findsOneWidget);
@@ -233,7 +233,7 @@ void main() {
     await tester.tap(find.text('周视图'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(FilledButton, '添加课程'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '添加课程/日程'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, '导入教务课表'), findsOneWidget);
   });
 
@@ -248,7 +248,7 @@ void main() {
     expect(
       find.descendant(
         of: overviewPanel,
-        matching: find.widgetWithText(FilledButton, '添加课程'),
+        matching: find.widgetWithText(FilledButton, '添加课程/日程'),
       ),
       findsOneWidget,
     );
@@ -496,6 +496,8 @@ Future<_ProviderBundle> _createProviderBundle() async {
   final storage = StorageService(sharedPreferences: preferences);
   await storage.ensureSemesterMigration();
   final settings = SettingsProvider(storageService: storage);
+  await settings.confirmTimetableToolbarGuide();
+  await settings.confirmTimetableMenuGuide();
   final timetableView = TimetableViewProvider()
     ..initializeRealDate(
       week: settings.currentRealWeek,
