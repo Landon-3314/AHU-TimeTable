@@ -19,6 +19,9 @@ reconstruction_progress.txt
 .svn/
 .swiftpm/
 migrate_working_dir/
+AGENTS.md
+.antigravitycli/
+.superpowers/
 
 # IntelliJ related
 *.iml

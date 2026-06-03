@@ -341,7 +341,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                   statusLabel,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: requiredGranted
-                        ? colorScheme.primary
+                        ? colorScheme.secondary
                         : colorScheme.error,
                     fontWeight: FontWeight.w800,
                   ),

@@ -131,7 +131,7 @@ void main() {
 
     expect(decoration.color, theme.colorScheme.primaryContainer);
     expect(border.top.color, theme.colorScheme.primary);
-    expect(selectedText.style?.color, theme.colorScheme.primary);
+    expect(selectedText.style?.color, theme.colorScheme.secondary);
   });
 
   testWidgets(

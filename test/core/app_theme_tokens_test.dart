@@ -26,13 +26,21 @@ void main() {
     }
   });
 
-  test('dark theme publishes dark semantic tokens', () {
+  test('dark theme publishes primary-tinted semantic tokens', () {
     final theme = AppTheme.dark();
     final tokens = theme.extension<AppThemeTokens>();
 
     expect(theme.brightness, Brightness.dark);
-    expect(tokens, AppThemeTokens.dark);
-    expect(theme.scaffoldBackgroundColor, AppThemeTokens.dark.pageBackground);
-    expect(theme.colorScheme.surface, AppThemeTokens.dark.surface);
+    expect(tokens, isNotNull);
+    expect(
+      tokens!.pageBackground,
+      Color.lerp(
+        AppThemeTokens.dark.pageBackground,
+        AppThemePalette.defaultPalette.primary,
+        0.10,
+      ),
+    );
+    expect(theme.scaffoldBackgroundColor, tokens.pageBackground);
+    expect(theme.colorScheme.surface, tokens.surface);
   });
 }

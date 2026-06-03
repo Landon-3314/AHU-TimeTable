@@ -657,6 +657,7 @@ class _WheelPickerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = appThemeTokensOf(context);
+    final colorScheme = Theme.of(context).colorScheme;
     final distance = _wheelDistance(index, selectedIndex, itemCount);
     final opacity = switch (distance) {
       0 => 1.0,
@@ -669,7 +670,8 @@ class _WheelPickerItem extends StatelessWidget {
         duration: AppDurations.fast,
         curve: Curves.easeOut,
         style: TextStyle(
-          color: tokens.textPrimary.withValues(alpha: opacity),
+          color: (distance == 0 ? colorScheme.secondary : tokens.textPrimary)
+              .withValues(alpha: opacity),
           fontSize: fontSize,
           fontWeight: distance == 0 ? FontWeight.w800 : FontWeight.w700,
           height: 1,

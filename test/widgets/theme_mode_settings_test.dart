@@ -24,9 +24,14 @@ void main() {
       ),
     );
 
-    expect(find.text('显示模式'), findsOneWidget);
+    expect(find.text('显示模式'), findsNothing);
 
-    await tester.tap(find.text('显示模式'));
+    await tester.tap(find.text('主题颜色'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('显示模式'), findsWidgets);
+
+    await tester.tap(find.widgetWithText(AppActionTile, '显示模式'));
     await tester.pumpAndSettle();
 
     expect(find.text('跟随系统'), findsWidgets);
@@ -76,9 +81,12 @@ void main() {
   });
 
   testWidgets('common surfaces use dark semantic tokens', (tester) async {
+    final darkTheme = AppTheme.dark();
+    final darkTokens = darkTheme.extension<AppThemeTokens>()!;
+
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.dark(),
+        theme: darkTheme,
         home: const Scaffold(
           body: Column(
             children: [
@@ -113,8 +121,8 @@ void main() {
           .first,
     );
 
-    expect(defaultMaterial.color, AppThemeTokens.dark.surface);
-    expect(emptyMaterial.color, AppThemeTokens.dark.surfaceRaised);
+    expect(defaultMaterial.color, darkTokens.surface);
+    expect(emptyMaterial.color, darkTokens.surfaceRaised);
     expect(tester.takeException(), isNull);
   });
 }

@@ -261,7 +261,7 @@ class _GuidedTourCard extends StatelessWidget {
                     Text(
                       stepLabel,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colorScheme.primary,
+                        color: colorScheme.secondary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

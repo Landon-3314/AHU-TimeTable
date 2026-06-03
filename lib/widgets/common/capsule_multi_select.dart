@@ -274,7 +274,9 @@ class _CapsuleChip extends StatelessWidget {
         ? colorScheme.primaryContainer
         : tokens.surfaceRaised;
     final borderColor = selected ? selectedColor : tokens.divider;
-    final textColor = selected ? selectedColor : colorScheme.onSurface;
+    final textColor = selected
+        ? themeColor ?? colorScheme.secondary
+        : colorScheme.onSurface;
     final borderRadius = BorderRadius.circular(AppRadii.pill);
 
     return Semantics(

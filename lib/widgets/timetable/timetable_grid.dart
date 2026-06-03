@@ -256,7 +256,7 @@ class _DayWeekHeaderState extends State<DayWeekHeader> {
                         chip.label,
                         style: TextStyle(
                           color: widget.selectedWeekday == chip.weekday
-                              ? colorScheme.primary
+                              ? colorScheme.secondary
                               : tokens.textPrimary,
                           fontWeight: FontWeight.w800,
                         ),

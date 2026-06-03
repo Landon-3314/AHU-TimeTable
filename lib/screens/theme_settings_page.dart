@@ -5,6 +5,7 @@ import '../core/app_colors.dart';
 import '../core/app_constants.dart';
 import '../core/app_theme_tokens.dart';
 import '../providers/settings_provider.dart';
+import '../services/storage_service.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 
@@ -41,6 +42,16 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
             controller: _scrollController,
             padding: AppSpacing.pagePadding,
             children: [
+              const AppSectionTitle(title: '显示模式', subtitle: '选择跟随系统、浅色或深色外观'),
+              AppSurface(
+                child: AppActionTile(
+                  icon: Icons.brightness_6_outlined,
+                  title: '显示模式',
+                  subtitle: _appThemeModeLabel(provider.appThemeMode),
+                  onTap: () => _selectAppThemeMode(context, provider),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
               AppSectionTitle(
                 title: provider.t('theme_color'),
                 subtitle: provider.t('theme_color_subtitle'),
@@ -127,6 +138,34 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
       ),
     );
   }
+
+  Future<void> _selectAppThemeMode(
+    BuildContext context,
+    SettingsProvider provider,
+  ) async {
+    final selected = await showAppOptionPicker<AppThemeMode>(
+      context,
+      title: '显示模式',
+      selectedValue: provider.appThemeMode,
+      options: const [
+        AppPickerOption(value: AppThemeMode.system, label: '跟随系统'),
+        AppPickerOption(value: AppThemeMode.light, label: '浅色'),
+        AppPickerOption(value: AppThemeMode.dark, label: '深色'),
+      ],
+    );
+    if (!context.mounted || selected == null) {
+      return;
+    }
+    await provider.changeAppThemeMode(selected);
+  }
+}
+
+String _appThemeModeLabel(AppThemeMode mode) {
+  return switch (mode) {
+    AppThemeMode.system => '跟随系统',
+    AppThemeMode.light => '浅色',
+    AppThemeMode.dark => '深色',
+  };
 }
 
 class _ThemePaletteTile extends StatelessWidget {
@@ -180,14 +219,14 @@ class _ThemePaletteTile extends StatelessWidget {
                     label,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: selected
-                          ? palette.primaryDark
+                          ? palette.accent
                           : Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
                 if (selected)
-                  Icon(Icons.check_circle, color: palette.primary)
+                  Icon(Icons.check_circle, color: palette.accent)
                 else
                   Icon(Icons.chevron_right, color: tokens.textTertiary),
               ],

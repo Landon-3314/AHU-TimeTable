@@ -27,8 +27,8 @@ class EventCard extends StatelessWidget {
     final tokens = appThemeTokensOf(context);
     return AppSurface(
       padding: EdgeInsets.zero,
-      color: colorScheme.secondaryContainer.withValues(alpha: 0.56),
-      borderColor: colorScheme.secondary.withValues(alpha: 0.34),
+      color: colorScheme.primaryContainer.withValues(alpha: 0.56),
+      borderColor: colorScheme.primary.withValues(alpha: 0.34),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadii.xxl),

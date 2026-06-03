@@ -25,11 +25,37 @@ class AppTheme {
     required AppThemePalette palette,
   }) {
     final tokens = brightness == Brightness.dark
-        ? AppThemeTokens.dark
+        ? AppThemeTokens.dark.copyWith(
+            pageBackground: _tint(
+              AppThemeTokens.dark.pageBackground,
+              palette.primary,
+              0.10,
+            ),
+            surface: _tint(AppThemeTokens.dark.surface, palette.primary, 0.08),
+            surfaceRaised: _tint(
+              AppThemeTokens.dark.surfaceRaised,
+              palette.primary,
+              0.10,
+            ),
+            surfaceMuted: _tint(
+              AppThemeTokens.dark.surfaceMuted,
+              palette.primary,
+              0.12,
+            ),
+            divider: _tint(AppThemeTokens.dark.divider, palette.primary, 0.18),
+            infoSurface: _tint(
+              AppThemeTokens.dark.infoSurface,
+              palette.primary,
+              0.18,
+            ),
+          )
         : AppThemeTokens.light.copyWith(
             pageBackground: palette.scaffoldBackground,
+            surface: _tint(Colors.white, palette.primary, 0.02),
+            surfaceRaised: _tint(Colors.white, palette.primary, 0.05),
             surfaceMuted: palette.surfaceMuted,
             divider: palette.divider,
+            infoSurface: palette.primarySoft,
           );
     final colorScheme =
         ColorScheme.fromSeed(
@@ -75,10 +101,14 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
+        iconTheme: IconThemeData(color: colorScheme.secondary),
+        actionsIconTheme: IconThemeData(color: colorScheme.secondary),
       ),
+      iconTheme: IconThemeData(color: colorScheme.secondary),
+      listTileTheme: ListTileThemeData(iconColor: colorScheme.secondary),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: tokens.surface,
-        selectedItemColor: colorScheme.primary,
+        selectedItemColor: colorScheme.secondary,
         unselectedItemColor: tokens.textTertiary,
         type: BottomNavigationBarType.fixed,
         elevation: 12,
@@ -132,7 +162,8 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
-          side: BorderSide(color: tokens.divider),
+          foregroundColor: colorScheme.secondary,
+          side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.42)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.lg),
           ),
@@ -140,14 +171,15 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
+          foregroundColor: colorScheme.secondary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.md),
           ),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: colorScheme.secondary,
-        foregroundColor: colorScheme.onSecondary,
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: tokens.surface,
@@ -155,7 +187,7 @@ class AppTheme {
         disabledColor: tokens.surfaceMuted,
         labelStyle: TextStyle(color: tokens.textPrimary),
         secondaryLabelStyle: TextStyle(
-          color: colorScheme.primary,
+          color: colorScheme.secondary,
           fontWeight: FontWeight.w700,
         ),
         side: BorderSide(color: tokens.divider),
@@ -179,5 +211,9 @@ class AppTheme {
       ),
       dividerColor: tokens.divider,
     );
+  }
+
+  static Color _tint(Color base, Color tint, double amount) {
+    return Color.lerp(base, tint, amount)!;
   }
 }

@@ -57,7 +57,7 @@ Future<void> showCourseDetailsSheet(
             child: FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: tokens.surfaceMuted,
-                foregroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.secondary,
               ),
               onPressed: () async {
                 Navigator.of(sheetContext).pop();

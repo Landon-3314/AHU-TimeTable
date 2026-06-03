@@ -1,10 +1,14 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetable/core/app_constants.dart';
 import 'package:timetable/core/app_routes.dart';
 import 'package:timetable/core/app_theme.dart';
 import 'package:timetable/models/course.dart';
+import 'package:timetable/models/event.dart';
 import 'package:timetable/providers/course_provider.dart';
 import 'package:timetable/providers/settings_provider.dart';
 import 'package:timetable/providers/timetable_view_provider.dart';
@@ -17,20 +21,46 @@ import 'package:timetable/widgets/timetable/course_overview_panel.dart';
 import 'package:timetable/widgets/timetable/timetable_detail_sheets.dart';
 
 void main() {
-  testWidgets(
-    'day and week view switcher does not show a selected check icon',
-    (tester) async {
-      final bundle = await _createProviderBundle();
+  testWidgets('day and week view switcher uses one text-only pill indicator', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
 
-      await tester.pumpWidget(_buildPage(bundle));
+    await tester.pumpWidget(_buildPage(bundle));
 
-      await tester.tap(find.text('周视图'));
-      await tester.pumpAndSettle();
+    final switcher = find.byKey(const ValueKey('timetable-mode-switcher'));
+    expect(switcher, findsOneWidget);
+    expect(find.byType(SegmentedButton<dynamic>), findsNothing);
+    expect(
+      find.descendant(
+        of: switcher,
+        matching: find.byKey(
+          const ValueKey('timetable-mode-switcher-indicator'),
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: switcher,
+        matching: find.byIcon(Icons.view_day_outlined),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: switcher,
+        matching: find.byIcon(Icons.calendar_view_week_outlined),
+      ),
+      findsNothing,
+    );
 
-      expect(find.byIcon(Icons.check), findsNothing);
-      expect(find.byIcon(Icons.done), findsNothing);
-    },
-  );
+    await tester.tap(find.text('周视图'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.check), findsNothing);
+    expect(find.byIcon(Icons.done), findsNothing);
+  });
 
   testWidgets(
     'overview groups courses by name and opens a single record edit',
@@ -209,21 +239,17 @@ void main() {
     );
   });
 
-  testWidgets('toolbar exam action opens academic exam overview', (
+  testWidgets('toolbar no longer exposes standalone exam action', (
     tester,
   ) async {
     final bundle = await _createProviderBundle();
 
     await tester.pumpWidget(_buildPage(bundle));
 
-    expect(find.byTooltip('教务考试'), findsOneWidget);
-    await tester.tap(find.byTooltip('教务考试'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ExamOverviewPage), findsOneWidget);
+    expect(find.byTooltip('教务考试'), findsNothing);
   });
 
-  testWidgets('narrow toolbar groups secondary actions into a menu', (
+  testWidgets('narrow toolbar uses themed anchored action menu', (
     tester,
   ) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -235,29 +261,175 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byTooltip('更多操作'), findsOneWidget);
+    expect(find.byType(PopupMenuButton<dynamic>), findsNothing);
 
     await tester.tap(find.byTooltip('更多操作'));
     await tester.pumpAndSettle();
 
-    final menuItems = find.byWidgetPredicate(
-      (widget) => widget is PopupMenuItem,
-    );
+    final menuCard = find.byKey(const ValueKey('narrow-toolbar-menu-card'));
+    expect(menuCard, findsOneWidget);
+    expect(tester.getSize(menuCard).width, lessThan(208));
+    expect(tester.getSize(menuCard).width, greaterThan(150));
+    final menuShadow = find.byKey(const ValueKey('narrow-toolbar-menu-shadow'));
+    expect(menuShadow, findsOneWidget);
+    final shadowDecoration =
+        tester.widget<DecoratedBox>(menuShadow).decoration as BoxDecoration;
+    expect(shadowDecoration.borderRadius, BorderRadius.circular(AppRadii.xxl));
+    expect(shadowDecoration.boxShadow, isNotEmpty);
+    expect(tester.widget<Material>(menuCard).elevation, 0);
     expect(
-      find.descendant(of: menuItems, matching: find.text('总览')),
+      find.byKey(const ValueKey('narrow-toolbar-menu-action-overview')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: menuItems, matching: find.text('教务考试')),
+      find.byKey(const ValueKey('narrow-toolbar-menu-action-exams')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('narrow-toolbar-menu-action-academic-import')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: menuItems, matching: find.text('导入教务课表')),
+      find.byKey(const ValueKey('narrow-toolbar-menu-action-add-course')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: menuItems, matching: find.text('添加课程')),
+      find.descendant(
+        of: menuCard,
+        matching: find.byIcon(Icons.dashboard_outlined),
+      ),
       findsOneWidget,
     );
+    expect(find.text('教务考试'), findsNothing);
+    expect(find.byIcon(Icons.assignment_outlined), findsNothing);
+    expect(
+      find.descendant(
+        of: menuCard,
+        matching: find.byIcon(Icons.cloud_download_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: menuCard, matching: find.byIcon(Icons.add)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('narrow toolbar menu reveals container before content', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 720));
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+
+    final containerOpacity = tester.widget<Opacity>(
+      find.byKey(const ValueKey('narrow-toolbar-menu-container-opacity')),
+    );
+    final contentOpacity = tester.widget<Opacity>(
+      find.byKey(const ValueKey('narrow-toolbar-menu-content-opacity')),
+    );
+    expect(containerOpacity.opacity, greaterThan(0));
+    expect(contentOpacity.opacity, 0);
+
+    await tester.pumpAndSettle();
+
+    final settledContentOpacity = tester.widget<Opacity>(
+      find.byKey(const ValueKey('narrow-toolbar-menu-content-opacity')),
+    );
+    expect(settledContentOpacity.opacity, 1);
+  });
+
+  testWidgets('narrow toolbar menu closes when tapping outside', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 720));
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('narrow-toolbar-menu-card')),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(const Offset(12, 700));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('narrow-toolbar-menu-card')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('overview sheet switches from course to exam page by swipe', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final bundle = await _createProviderBundle();
+    await bundle.courses.addEvent(
+      Event(
+        id: 'academic-exam',
+        name: '线性代数考试',
+        location: 'A101',
+        note: '座位号 1',
+        dateTime: DateTime.now().add(const Duration(days: 2)),
+        enableAlarm: true,
+        importSource: CourseProvider.academicExamImportSource,
+      ),
+    );
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('总览'));
+    await tester.pumpAndSettle();
+
+    final coursesTab = find.byKey(const ValueKey('overview-tab-courses'));
+    final examsTab = find.byKey(const ValueKey('overview-tab-exams'));
+    expect(coursesTab, findsOneWidget);
+    expect(examsTab, findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('overview-tabs')),
+        matching: find.byKey(const ValueKey('overview-tabs-indicator')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSemantics(coursesTab).flagsCollection.isSelected,
+      Tristate.isTrue,
+    );
+    expect(
+      tester.getSemantics(examsTab).flagsCollection.isSelected,
+      Tristate.isFalse,
+    );
+
+    await tester.fling(
+      find.byKey(const ValueKey('overview-pages')),
+      const Offset(-600, 0),
+      1000,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSemantics(coursesTab).flagsCollection.isSelected,
+      Tristate.isFalse,
+    );
+    expect(
+      tester.getSemantics(examsTab).flagsCollection.isSelected,
+      Tristate.isTrue,
+    );
+    expect(find.text('线性代数考试'), findsOneWidget);
+    semantics.dispose();
   });
 }
 

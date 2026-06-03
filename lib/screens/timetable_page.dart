@@ -1,8 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_constants.dart';
 import '../core/app_routes.dart';
+import '../core/app_theme_tokens.dart';
 import '../models/clock_time.dart';
 import '../models/course.dart';
 import '../models/timetable_view_data.dart';
@@ -18,9 +21,10 @@ import '../widgets/timetable/course_overview_panel.dart';
 import '../widgets/timetable/timetable_detail_sheets.dart';
 import '../widgets/timetable/timetable_grid.dart';
 import '../widgets/timetable/week_selector.dart';
+import 'exam_overview_page.dart';
 import 'import_course_page.dart';
 
-enum _TimetableToolbarAction { overview, exams, academicImport, addCourse }
+enum _TimetableToolbarAction { overview, academicImport, addCourse }
 
 class TimetablePage extends StatefulWidget {
   const TimetablePage({super.key});
@@ -249,37 +253,8 @@ class _TimetablePageState extends State<TimetablePage> {
         ],
       ),
       actions: isNarrow
-          ? [
-              PopupMenuButton<_TimetableToolbarAction>(
-                tooltip: '更多操作',
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: _TimetableToolbarAction.overview,
-                    child: Text('总览'),
-                  ),
-                  PopupMenuItem(
-                    value: _TimetableToolbarAction.exams,
-                    child: Text('教务考试'),
-                  ),
-                  PopupMenuItem(
-                    value: _TimetableToolbarAction.academicImport,
-                    child: Text('导入教务课表'),
-                  ),
-                  PopupMenuItem(
-                    value: _TimetableToolbarAction.addCourse,
-                    child: Text('添加课程'),
-                  ),
-                ],
-                onSelected: (action) => _handleToolbarAction(context, action),
-              ),
-            ]
+          ? [_buildNarrowToolbarMenu(context)]
           : [
-              IconButton(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed(AppRoutes.exams),
-                icon: const Icon(Icons.assignment_outlined),
-                tooltip: '教务考试',
-              ),
               IconButton(
                 key: _importGuideKey,
                 onPressed: () => _openAcademicImport(context),
@@ -297,28 +272,68 @@ class _TimetablePageState extends State<TimetablePage> {
         preferredSize: const Size.fromHeight(68),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: SegmentedButton<TimetableMode>(
-            selectedIcon: const SizedBox.shrink(),
-            segments: [
-              ButtonSegment<TimetableMode>(
+          child: _PillTabSwitcher<TimetableMode>(
+            key: const ValueKey('timetable-mode-switcher'),
+            indicatorKey: const ValueKey('timetable-mode-switcher-indicator'),
+            selectedValue: navigationState.mode,
+            itemWidth: 88,
+            items: [
+              _PillTabItem<TimetableMode>(
                 value: TimetableMode.day,
                 label: Text(settingsProvider.t('day_view')),
-                icon: const Icon(Icons.view_day_outlined),
               ),
-              ButtonSegment<TimetableMode>(
+              _PillTabItem<TimetableMode>(
                 value: TimetableMode.week,
                 label: Text(settingsProvider.t('week_view')),
-                icon: const Icon(Icons.calendar_view_week_outlined),
               ),
             ],
-            selected: {navigationState.mode},
-            onSelectionChanged: (selection) {
-              _navigationController.setMode(selection.first);
-            },
+            onSelected: _navigationController.setMode,
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildNarrowToolbarMenu(BuildContext context) {
+    return Builder(
+      builder: (buttonContext) {
+        return IconButton(
+          key: const ValueKey('narrow-toolbar-menu-button'),
+          tooltip: '更多操作',
+          onPressed: () => _openNarrowToolbarMenu(buttonContext),
+          icon: const Icon(Icons.more_vert),
+        );
+      },
+    );
+  }
+
+  Future<void> _openNarrowToolbarMenu(BuildContext buttonContext) async {
+    final navigator = Navigator.of(context);
+    final buttonRenderObject = buttonContext.findRenderObject();
+    final overlayRenderObject = navigator.overlay?.context.findRenderObject();
+    if (buttonRenderObject is! RenderBox ||
+        overlayRenderObject is! RenderBox ||
+        !buttonRenderObject.hasSize ||
+        !overlayRenderObject.hasSize) {
+      return;
+    }
+
+    final topLeft = buttonRenderObject.localToGlobal(
+      Offset.zero,
+      ancestor: overlayRenderObject,
+    );
+    final action = await navigator.push<_TimetableToolbarAction>(
+      _TimetableToolbarMenuRoute(
+        anchorRect: topLeft & buttonRenderObject.size,
+        barrierLabel: MaterialLocalizations.of(
+          context,
+        ).modalBarrierDismissLabel,
+      ),
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    _handleToolbarAction(context, action);
   }
 
   void _handleToolbarAction(
@@ -328,8 +343,6 @@ class _TimetablePageState extends State<TimetablePage> {
     switch (action) {
       case _TimetableToolbarAction.overview:
         _showCourseOverview(context);
-      case _TimetableToolbarAction.exams:
-        Navigator.of(context).pushNamed(AppRoutes.exams);
       case _TimetableToolbarAction.academicImport:
         _openAcademicImport(context);
       case _TimetableToolbarAction.addCourse:
@@ -416,41 +429,27 @@ class _TimetablePageState extends State<TimetablePage> {
       builder: (sheetContext) {
         return SizedBox(
           height: MediaQuery.of(sheetContext).size.height * 0.8,
-          child: Consumer<CourseProvider>(
-            builder: (context, courseProvider, _) {
-              final courseGroups = courseProvider.sortedCourseGroups;
-              final settingsProvider = context.watch<SettingsProvider>();
-              return CourseOverviewPanel(
-                courseGroups: courseGroups,
-                groupCountLabelBuilder: (group) =>
-                    _buildCourseGroupCountLabel(settingsProvider, group),
-                emptyAction: _EmptyStateActions(
-                  addCourseLabel: settingsProvider.t('add_course'),
-                  importCoursesLabel: settingsProvider.t('import_from_system'),
-                  onAddCourse: () async {
-                    Navigator.of(sheetContext).pop();
-                    await _openAddCourse(pageContext);
-                  },
-                  onImportCourses: () async {
-                    Navigator.of(sheetContext).pop();
-                    await _openAcademicImport(pageContext);
-                  },
-                ),
-                onCourseGroupTap: (group) async {
-                  final selectedCourse = await _showCourseGroupRecords(
-                    context,
-                    group,
-                  );
-                  if (selectedCourse == null || !context.mounted) {
-                    return;
-                  }
-                  await Navigator.of(context).pushNamed(
-                    AppRoutes.addCourse,
-                    arguments: AddCourseRouteArgs(
-                      existingCourse: selectedCourse,
-                    ),
-                  );
-                },
+          child: _TimetableOverviewSheet(
+            groupCountLabelBuilder: _buildCourseGroupCountLabel,
+            onAddCourse: () async {
+              Navigator.of(sheetContext).pop();
+              await _openAddCourse(pageContext);
+            },
+            onImportCourses: () async {
+              Navigator.of(sheetContext).pop();
+              await _openAcademicImport(pageContext);
+            },
+            onCourseGroupTap: (group) async {
+              final selectedCourse = await _showCourseGroupRecords(
+                sheetContext,
+                group,
+              );
+              if (selectedCourse == null || !sheetContext.mounted) {
+                return;
+              }
+              await Navigator.of(sheetContext).pushNamed(
+                AppRoutes.addCourse,
+                arguments: AddCourseRouteArgs(existingCourse: selectedCourse),
               );
             },
           ),
@@ -459,10 +458,7 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  String _buildCourseGroupCountLabel(
-    SettingsProvider settingsProvider,
-    CourseGroup group,
-  ) {
+  String _buildCourseGroupCountLabel(SettingsProvider _, CourseGroup group) {
     return '${group.recordCount}个时段';
   }
 
@@ -689,6 +685,516 @@ class _TimetablePageState extends State<TimetablePage> {
     return left.year == right.year &&
         left.month == right.month &&
         left.day == right.day;
+  }
+}
+
+enum _TimetableOverviewPage { courses, exams }
+
+class _TimetableOverviewSheet extends StatefulWidget {
+  const _TimetableOverviewSheet({
+    required this.groupCountLabelBuilder,
+    required this.onAddCourse,
+    required this.onImportCourses,
+    required this.onCourseGroupTap,
+  });
+
+  final String Function(SettingsProvider settingsProvider, CourseGroup group)
+  groupCountLabelBuilder;
+  final VoidCallback onAddCourse;
+  final VoidCallback onImportCourses;
+  final ValueChanged<CourseGroup> onCourseGroupTap;
+
+  @override
+  State<_TimetableOverviewSheet> createState() =>
+      _TimetableOverviewSheetState();
+}
+
+class _TimetableOverviewSheetState extends State<_TimetableOverviewSheet> {
+  final PageController _pageController = PageController();
+  _TimetableOverviewPage _selectedPage = _TimetableOverviewPage.courses;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _selectPage(_TimetableOverviewPage page) {
+    if (page == _selectedPage) {
+      return;
+    }
+    _pageController.animateToPage(
+      page.index,
+      duration: AppDurations.switcher,
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final courseProvider = context.watch<CourseProvider>();
+    final settingsProvider = context.watch<SettingsProvider>();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.sm,
+            AppSpacing.xl,
+            AppSpacing.xs,
+          ),
+          child: _TimetableOverviewTabs(
+            selectedPage: _selectedPage,
+            onSelected: _selectPage,
+          ),
+        ),
+        Expanded(
+          child: PageView(
+            key: const ValueKey('overview-pages'),
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                _selectedPage = _TimetableOverviewPage.values[index];
+              });
+            },
+            children: [
+              CourseOverviewPanel(
+                courseGroups: courseProvider.sortedCourseGroups,
+                groupCountLabelBuilder: (group) =>
+                    widget.groupCountLabelBuilder(settingsProvider, group),
+                emptyAction: _EmptyStateActions(
+                  addCourseLabel: settingsProvider.t('add_course'),
+                  importCoursesLabel: settingsProvider.t('import_from_system'),
+                  onAddCourse: widget.onAddCourse,
+                  onImportCourses: widget.onImportCourses,
+                ),
+                onCourseGroupTap: widget.onCourseGroupTap,
+              ),
+              ExamOverviewPanel(onImport: widget.onImportCourses),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TimetableOverviewTabs extends StatelessWidget {
+  const _TimetableOverviewTabs({
+    required this.selectedPage,
+    required this.onSelected,
+  });
+
+  final _TimetableOverviewPage selectedPage;
+  final ValueChanged<_TimetableOverviewPage> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PillTabSwitcher<_TimetableOverviewPage>(
+      key: const ValueKey('overview-tabs'),
+      indicatorKey: const ValueKey('overview-tabs-indicator'),
+      selectedValue: selectedPage,
+      itemWidth: 76,
+      items: const [
+        _PillTabItem<_TimetableOverviewPage>(
+          key: ValueKey('overview-tab-courses'),
+          value: _TimetableOverviewPage.courses,
+          label: Text('课程'),
+        ),
+        _PillTabItem<_TimetableOverviewPage>(
+          key: ValueKey('overview-tab-exams'),
+          value: _TimetableOverviewPage.exams,
+          label: Text('考试'),
+        ),
+      ],
+      onSelected: onSelected,
+    );
+  }
+}
+
+class _PillTabSwitcher<T> extends StatelessWidget {
+  const _PillTabSwitcher({
+    super.key,
+    required this.indicatorKey,
+    required this.selectedValue,
+    required this.itemWidth,
+    required this.items,
+    required this.onSelected,
+  });
+
+  final Key indicatorKey;
+  final T selectedValue;
+  final double itemWidth;
+  final List<_PillTabItem<T>> items;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
+    final selectedIndex = items.indexWhere(
+      (item) => item.value == selectedValue,
+    );
+    assert(selectedIndex >= 0);
+    final indicatorAlignment = items.length == 1
+        ? Alignment.center
+        : Alignment(-1 + (2 * selectedIndex / (items.length - 1)), 0);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+        border: Border.all(color: tokens.divider),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xxs),
+        child: SizedBox(
+          width: itemWidth * items.length,
+          height: 36,
+          child: Stack(
+            children: [
+              AnimatedAlign(
+                duration: AppDurations.fast,
+                curve: Curves.easeOutCubic,
+                alignment: indicatorAlignment,
+                child: DecoratedBox(
+                  key: indicatorKey,
+                  decoration: BoxDecoration(
+                    color: tokens.surfaceRaised,
+                    borderRadius: BorderRadius.circular(AppRadii.pill),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: SizedBox(width: itemWidth, height: 36),
+                ),
+              ),
+              Row(
+                children: [
+                  for (final item in items)
+                    SizedBox(
+                      width: itemWidth,
+                      height: 36,
+                      child: _PillTab(
+                        item: item,
+                        selected: item.value == selectedValue,
+                        onTap: () => onSelected(item.value),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PillTabItem<T> {
+  const _PillTabItem({this.key, required this.value, required this.label});
+
+  final Key? key;
+  final T value;
+  final Widget label;
+}
+
+class _PillTab<T> extends StatelessWidget {
+  const _PillTab({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _PillTabItem<T> item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final tokens = appThemeTokensOf(context);
+    final label = item.label;
+    return Semantics(
+      key: item.key,
+      button: true,
+      selected: selected,
+      excludeSemantics: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadii.pill),
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: AppDurations.fast,
+              curve: Curves.easeOutCubic,
+              style: Theme.of(context).textTheme.labelLarge!.copyWith(
+                color: selected ? colorScheme.secondary : tokens.textSecondary,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              ),
+              child: label,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TimetableToolbarMenuRoute extends PopupRoute<_TimetableToolbarAction> {
+  _TimetableToolbarMenuRoute({
+    required this.anchorRect,
+    required String barrierLabel,
+  }) : _barrierLabel = barrierLabel;
+
+  final Rect anchorRect;
+  final String _barrierLabel;
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  bool get barrierDismissible => true;
+
+  @override
+  String? get barrierLabel => _barrierLabel;
+
+  @override
+  Duration get transitionDuration => AppDurations.switcher;
+
+  @override
+  Duration get reverseTransitionDuration => AppDurations.switcher;
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
+    return CustomSingleChildLayout(
+      delegate: _TimetableToolbarMenuLayout(anchorRect: anchorRect),
+      child: _TimetableToolbarMenu(animation: animation),
+    );
+  }
+}
+
+class _TimetableToolbarMenuLayout extends SingleChildLayoutDelegate {
+  const _TimetableToolbarMenuLayout({required this.anchorRect});
+
+  static const double _screenPadding = AppSpacing.sm;
+  static const double _anchorGap = AppSpacing.xs;
+
+  final Rect anchorRect;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    return BoxConstraints.loose(
+      Size(
+        math.max(0, constraints.maxWidth - _screenPadding * 2),
+        math.max(0, constraints.maxHeight - _screenPadding * 2),
+      ),
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final maxLeft = math.max(_screenPadding, size.width - childSize.width);
+    final left = (anchorRect.right - childSize.width)
+        .clamp(_screenPadding, maxLeft)
+        .toDouble();
+    final maxTop = math.max(_screenPadding, size.height - childSize.height);
+    final belowAnchor = anchorRect.bottom + _anchorGap;
+    final aboveAnchor = anchorRect.top - _anchorGap - childSize.height;
+    final preferredTop = belowAnchor + childSize.height <= size.height
+        ? belowAnchor
+        : aboveAnchor;
+    final top = preferredTop.clamp(_screenPadding, maxTop).toDouble();
+    return Offset(left, top);
+  }
+
+  @override
+  bool shouldRelayout(covariant _TimetableToolbarMenuLayout oldDelegate) {
+    return anchorRect != oldDelegate.anchorRect;
+  }
+}
+
+class _TimetableToolbarMenu extends StatelessWidget {
+  const _TimetableToolbarMenu({required this.animation});
+
+  static const _contentFadeInCurve = Interval(
+    40 / 220,
+    160 / 220,
+    curve: Curves.easeOutCubic,
+  );
+  static const _contentFadeOutCurve = Interval(
+    60 / 220,
+    1,
+    curve: Curves.easeInCubic,
+  );
+
+  final Animation<double> animation;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: animation,
+      child: _TimetableToolbarMenuItems(
+        onSelected: (action) => Navigator.of(context).pop(action),
+      ),
+      builder: (context, child) {
+        final isClosing = animation.status == AnimationStatus.reverse;
+        final revealProgress =
+            (isClosing ? Curves.easeInCubic : Curves.easeOutCubic).transform(
+              animation.value,
+            );
+        final contentProgress =
+            (isClosing ? _contentFadeOutCurve : _contentFadeInCurve).transform(
+              animation.value,
+            );
+        return Opacity(
+          key: const ValueKey('narrow-toolbar-menu-container-opacity'),
+          opacity: revealProgress,
+          child: DecoratedBox(
+            key: const ValueKey('narrow-toolbar-menu-shadow'),
+            decoration: BoxDecoration(
+              color: tokens.surfaceRaised,
+              borderRadius: BorderRadius.circular(AppRadii.xxl),
+              border: Border.all(color: tokens.divider),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.primary.withValues(alpha: 0.16),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadii.xxl),
+              clipBehavior: Clip.antiAlias,
+              child: Align(
+                alignment: Alignment.topRight,
+                widthFactor: 0.14 + 0.86 * revealProgress,
+                heightFactor: 0.11 + 0.89 * revealProgress,
+                child: IntrinsicWidth(
+                  child: Material(
+                    key: const ValueKey('narrow-toolbar-menu-card'),
+                    color: tokens.surfaceRaised,
+                    surfaceTintColor: Colors.transparent,
+                    elevation: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.xs),
+                      child: Opacity(
+                        key: const ValueKey(
+                          'narrow-toolbar-menu-content-opacity',
+                        ),
+                        opacity: contentProgress,
+                        child: Transform.translate(
+                          offset: Offset(0, -4 * (1 - contentProgress)),
+                          child: child,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TimetableToolbarMenuItems extends StatelessWidget {
+  const _TimetableToolbarMenuItems({required this.onSelected});
+
+  final ValueChanged<_TimetableToolbarAction> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TimetableToolbarMenuItem(
+          key: const ValueKey('narrow-toolbar-menu-action-overview'),
+          icon: Icons.dashboard_outlined,
+          label: '总览',
+          onTap: () => onSelected(_TimetableToolbarAction.overview),
+        ),
+        _TimetableToolbarMenuItem(
+          key: const ValueKey('narrow-toolbar-menu-action-academic-import'),
+          icon: Icons.cloud_download_outlined,
+          label: '导入教务课表',
+          onTap: () => onSelected(_TimetableToolbarAction.academicImport),
+        ),
+        _TimetableToolbarMenuItem(
+          key: const ValueKey('narrow-toolbar-menu-action-add-course'),
+          icon: Icons.add,
+          label: '添加课程',
+          onTap: () => onSelected(_TimetableToolbarAction.addCourse),
+        ),
+      ],
+    );
+  }
+}
+
+class _TimetableToolbarMenuItem extends StatelessWidget {
+  const _TimetableToolbarMenuItem({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+        child: SizedBox(
+          height: 52,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                  ),
+                  child: Icon(icon, color: colorScheme.secondary, size: 18),
+                ),
+                const SizedBox(width: AppSpacing.lg),
+                Text(
+                  label,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -956,7 +1462,7 @@ class _RecordCountPill extends StatelessWidget {
         child: Text(
           text,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: colorScheme.primary,
+            color: colorScheme.secondary,
             fontWeight: FontWeight.w800,
           ),
         ),

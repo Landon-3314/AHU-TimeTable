@@ -116,7 +116,7 @@ class AppActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final effectiveColor = danger ? AppColors.danger : colorScheme.primary;
+    final effectiveColor = danger ? AppColors.danger : colorScheme.secondary;
     final borderRadius = BorderRadius.circular(AppRadii.xxl);
     return ListTile(
       shape: RoundedRectangleBorder(borderRadius: borderRadius),
@@ -186,7 +186,7 @@ class AppEmptyState extends StatelessWidget {
                 ),
                 child: Icon(
                   icon,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: Theme.of(context).colorScheme.secondary,
                   size: 30,
                 ),
               ),
@@ -386,7 +386,9 @@ class AppPickerPill extends StatelessWidget {
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: enabled ? colorScheme.primary : tokens.textTertiary,
+                    color: enabled
+                        ? colorScheme.secondary
+                        : tokens.textTertiary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -395,7 +397,7 @@ class AppPickerPill extends StatelessWidget {
               Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 18,
-                color: enabled ? colorScheme.primary : tokens.textTertiary,
+                color: enabled ? colorScheme.secondary : tokens.textTertiary,
               ),
             ],
           ),
@@ -561,7 +563,7 @@ Future<T?> _showAppGridOptionPicker<T>(
                             textAlign: TextAlign.center,
                             style: textTheme.labelLarge?.copyWith(
                               color: isSelected
-                                  ? colorScheme.primary
+                                  ? colorScheme.secondary
                                   : tokens.textPrimary,
                               fontWeight: isSelected
                                   ? FontWeight.w800

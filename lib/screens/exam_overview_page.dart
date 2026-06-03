@@ -14,6 +14,20 @@ class ExamOverviewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('教务考试')),
+      body: const ExamOverviewPanel(),
+    );
+  }
+}
+
+class ExamOverviewPanel extends StatelessWidget {
+  const ExamOverviewPanel({super.key, this.onImport});
+
+  final VoidCallback? onImport;
+
+  @override
+  Widget build(BuildContext context) {
     final courseProvider = context.watch<CourseProvider>();
     final exams =
         courseProvider.events
@@ -24,29 +38,28 @@ class ExamOverviewPage extends StatelessWidget {
             .toList()
           ..sort((left, right) => left.dateTime.compareTo(right.dateTime));
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('教务考试')),
-      body: exams.isEmpty
-          ? AppEmptyState(
-              icon: Icons.assignment_outlined,
-              title: '暂无教务考试',
-              subtitle: '从教务系统导入考试后，会在这里集中展示。',
-              action: FilledButton.icon(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed(AppRoutes.importCourses),
-                icon: const Icon(Icons.cloud_download_outlined),
-                label: const Text('导入考试'),
-              ),
-            )
-          : ListView.separated(
-              padding: AppSpacing.pagePadding,
-              itemCount: exams.length,
-              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.lg),
-              itemBuilder: (context, index) {
-                return _ExamCard(event: exams[index]);
-              },
+    return exams.isEmpty
+        ? AppEmptyState(
+            icon: Icons.assignment_outlined,
+            title: '暂无教务考试',
+            subtitle: '从教务系统导入考试后，会在这里集中展示。',
+            action: FilledButton.icon(
+              onPressed:
+                  onImport ??
+                  () =>
+                      Navigator.of(context).pushNamed(AppRoutes.importCourses),
+              icon: const Icon(Icons.cloud_download_outlined),
+              label: const Text('导入考试'),
             ),
-    );
+          )
+        : ListView.separated(
+            padding: AppSpacing.pagePadding,
+            itemCount: exams.length,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.lg),
+            itemBuilder: (context, index) {
+              return _ExamCard(event: exams[index]);
+            },
+          );
   }
 }
 
@@ -81,7 +94,7 @@ class _ExamCard extends StatelessWidget {
                   Text(
                     examCountdownLabel(event.dateTime, DateTime.now()),
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
+                      color: Theme.of(context).colorScheme.secondary,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
