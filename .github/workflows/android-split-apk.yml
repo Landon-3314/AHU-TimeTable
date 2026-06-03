@@ -224,6 +224,9 @@ jobs:
             fingerprint="$(apk_fingerprint "$apk")"
             if [ "$fingerprint" != "$ANDROID_SIGNING_CERT_SHA256" ]; then
               echo "Unexpected certificate fingerprint for $apk" >&2
+              echo "Expected certificate fingerprint: $ANDROID_SIGNING_CERT_SHA256" >&2
+              echo "Actual certificate fingerprint: ${fingerprint:-<empty>}" >&2
+              "$apksigner" verify --print-certs "$apk" >&2
               exit 1
             fi
           done
