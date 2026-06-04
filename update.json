@@ -1,24 +1,24 @@
 {
   "versionName": "0.3.8",
-  "versionCode": 1,
-  "releaseNotes": "安课 0.3.8+1 更新。",
+  "versionCode": 2,
+  "releaseNotes": "安课 0.3.8+2 更新。",
   "assets": [
     {
       "abi": "armeabi-v7a",
-      "url": "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.8%2B1/timetable-0.3.8%2B1-armeabi-v7a.apk",
-      "sha256": "a5162a6cc38f4713c8a29d294c16add646d06529f16d345e5f122eaa86a419c4",
+      "url": "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.8%2B2/timetable-0.3.8%2B2-armeabi-v7a.apk",
+      "sha256": "a4a05ef242bf2d703411f25df474a8d41fe6eb2fdc7a7bc6346e45e6233848d2",
       "size": 19803180
     },
     {
       "abi": "arm64-v8a",
-      "url": "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.8%2B1/timetable-0.3.8%2B1-arm64-v8a.apk",
-      "sha256": "82eaaa092a64ba620a279400077d7dacb63ef47788292f584738ff2efdfaa75d",
+      "url": "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.8%2B2/timetable-0.3.8%2B2-arm64-v8a.apk",
+      "sha256": "9b0182c54ac81f2a0068aba7702b66603146c810cda6e83000ea30e4f4a1aff8",
       "size": 21998628
     },
     {
       "abi": "x86_64",
-      "url": "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.8%2B1/timetable-0.3.8%2B1-x86_64.apk",
-      "sha256": "76fbf024c799df84e5d8ccf7986fdd8210aac3928606c96d9be890a326dcb013",
+      "url": "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.8%2B2/timetable-0.3.8%2B2-x86_64.apk",
+      "sha256": "eb18bbbb398d91a7496a5c4a2089ce0e554af953b60b088f97771ad18a7b229a",
       "size": 23522328
     }
   ]
