@@ -40,6 +40,34 @@ class AcademicImportResult {
   int get skippedCount => skippedReasons.length;
 }
 
+AcademicImportResult buildExamImportResult({
+  required bool hasParsedEvents,
+  required int importedCount,
+  required String emptyMessage,
+  required String duplicatedMessage,
+}) {
+  if (!hasParsedEvents) {
+    return AcademicImportResult(
+      kind: AcademicImportKind.exam,
+      importedCount: 0,
+      skippedReasons: <String>[emptyMessage],
+    );
+  }
+
+  if (importedCount == 0) {
+    return AcademicImportResult(
+      kind: AcademicImportKind.exam,
+      importedCount: 0,
+      skippedReasons: <String>[duplicatedMessage],
+    );
+  }
+
+  return AcademicImportResult(
+    kind: AcademicImportKind.exam,
+    importedCount: importedCount,
+  );
+}
+
 Future<int?> importTimetableCoursesWithConflictConfirmation({
   required BuildContext context,
   required CourseProvider courseProvider,
@@ -68,11 +96,15 @@ class ImportCoursePage extends StatefulWidget {
     this.initialAutoAction,
     this.showWebView = true,
     this.showCredentialPanel = false,
+    this.onImportResult,
+    this.onImportError,
   });
 
   final AcademicAutoAction? initialAutoAction;
   final bool showWebView;
   final bool showCredentialPanel;
+  final ValueChanged<AcademicImportResult>? onImportResult;
+  final ValueChanged<String>? onImportError;
 
   @override
   State<ImportCoursePage> createState() => _ImportCoursePageState();
@@ -572,7 +604,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
           .t('auto_import_failed')
           .replaceAll('{reason}', error.toString());
       _finishImportWithMessage(message);
-      if (!widget.showWebView) {
+      if (!widget.showWebView && widget.onImportError == null) {
         setState(() {
           _autoImportStatus = message;
         });
@@ -868,7 +900,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       if (!mounted || importedCount == null) {
         return;
       }
-      Navigator.of(context).pop(
+      _completeImport(
         AcademicImportResult(
           kind: AcademicImportKind.timetable,
           importedCount: importedCount,
@@ -911,22 +943,20 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       if (!mounted) {
         return;
       }
-      if (importedEvents.isEmpty) {
-        _finishImportWithNeutralMessage(emptyMessage);
-        return;
-      }
-
-      if (importedCount == 0) {
-        _finishImportWithNeutralMessage(duplicatedMessage);
-        return;
-      }
-
-      Navigator.of(context).pop(
-        AcademicImportResult(
-          kind: AcademicImportKind.exam,
-          importedCount: importedCount,
-        ),
+      final result = buildExamImportResult(
+        hasParsedEvents: importedEvents.isNotEmpty,
+        importedCount: importedCount,
+        emptyMessage: emptyMessage,
+        duplicatedMessage: duplicatedMessage,
       );
+      if (result.importedCount == 0 &&
+          widget.onImportResult == null &&
+          widget.showWebView) {
+        _finishImportWithNeutralMessage(result.skippedReasons.first);
+        return;
+      }
+
+      _completeImport(result);
     } on ScheduleParseException catch (error) {
       _finishImportWithMessage('考试导入失败：${error.message}');
     } catch (error) {
@@ -938,6 +968,16 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         });
       }
     }
+  }
+
+  void _completeImport(AcademicImportResult result) {
+    final onImportResult = widget.onImportResult;
+    if (onImportResult != null) {
+      onImportResult(result);
+      return;
+    }
+
+    Navigator.of(context).pop(result);
   }
 
   void _finishImportWithNeutralMessage(String message) {
@@ -960,6 +1000,12 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     setState(() {
       _activeAction = null;
     });
+
+    final onImportError = widget.onImportError;
+    if (onImportError != null) {
+      onImportError(message);
+      return;
+    }
 
     showAppSnackBar(
       context,

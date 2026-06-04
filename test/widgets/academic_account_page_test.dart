@@ -68,6 +68,43 @@ void main() {
       ]);
     },
   );
+
+  testWidgets(
+    'academic account page runs default auto import silently in place',
+    (tester) async {
+      final settings = await _createSettingsProvider();
+      final store = _MemoryCredentialStore();
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<SettingsProvider>.value(
+          value: settings,
+          child: MaterialApp(
+            home: AcademicAccountPage(
+              credentialService: AcademicCredentialService(store: store),
+              silentAutoImportBuilder: (context, action, onResult, onError) {
+                return _SilentAutoImportProbe(
+                  action: action,
+                  onResult: onResult,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(_textFieldWithLabel('学号'), 'G12345678');
+      await tester.enterText(_textFieldWithLabel('密码'), 'secret');
+      await tester.ensureVisible(find.text('自动提取考试'));
+      await tester.tap(find.text('自动提取考试'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(AcademicAccountPage), findsOneWidget);
+      expect(find.text('教务账号'), findsOneWidget);
+      expect(find.text('当前页面没有未结束考试安排'), findsOneWidget);
+    },
+  );
 }
 
 Future<SettingsProvider> _createSettingsProvider() async {
@@ -100,5 +137,36 @@ class _MemoryCredentialStore implements AcademicCredentialStore {
   @override
   Future<void> write({required String key, required String value}) async {
     values[key] = value;
+  }
+}
+
+class _SilentAutoImportProbe extends StatefulWidget {
+  const _SilentAutoImportProbe({required this.action, required this.onResult});
+
+  final AcademicAutoAction action;
+  final ValueChanged<AcademicImportResult> onResult;
+
+  @override
+  State<_SilentAutoImportProbe> createState() => _SilentAutoImportProbeState();
+}
+
+class _SilentAutoImportProbeState extends State<_SilentAutoImportProbe> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onResult(
+        const AcademicImportResult(
+          kind: AcademicImportKind.exam,
+          importedCount: 0,
+          skippedReasons: ['当前页面没有未结束考试安排'],
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('silent auto import ${widget.action.name}');
   }
 }
