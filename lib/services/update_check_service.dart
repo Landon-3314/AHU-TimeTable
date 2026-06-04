@@ -20,6 +20,33 @@ class AvailableUpdate {
   final UpdateAsset asset;
 }
 
+enum UpdateCheckStatus {
+  updateAvailable,
+  noUpdate,
+  checkFailed,
+  unsupportedAbi,
+}
+
+class UpdateCheckResult {
+  const UpdateCheckResult._({required this.status, this.update, this.error});
+
+  const UpdateCheckResult.updateAvailable(AvailableUpdate update)
+    : this._(status: UpdateCheckStatus.updateAvailable, update: update);
+
+  const UpdateCheckResult.noUpdate()
+    : this._(status: UpdateCheckStatus.noUpdate);
+
+  const UpdateCheckResult.checkFailed(Object error)
+    : this._(status: UpdateCheckStatus.checkFailed, error: error);
+
+  const UpdateCheckResult.unsupportedAbi()
+    : this._(status: UpdateCheckStatus.unsupportedAbi);
+
+  final UpdateCheckStatus status;
+  final AvailableUpdate? update;
+  final Object? error;
+}
+
 class UpdateCheckService {
   UpdateCheckService({
     required UpdateManifestLoader manifestLoader,
@@ -62,15 +89,9 @@ class UpdateCheckService {
   }
 
   static final Uri defaultManifestUri = Uri.parse(
-    'https://raw.githubusercontent.com/Landon-3314/AHU-TimeTable/main/update.json',
+    'https://update.277620035.xyz/latest',
   );
-  static final List<Uri> defaultManifestUris = UpdateMirrorUrls.dedupe([
-    defaultManifestUri,
-    Uri.parse(
-      'https://cdn.jsdelivr.net/gh/Landon-3314/AHU-TimeTable@main/update.json',
-    ),
-    ...UpdateMirrorUrls.withGithubMirrors(defaultManifestUri).skip(1),
-  ]);
+  static final List<Uri> defaultManifestUris = [defaultManifestUri];
   static const String _ignoredVersionCodeKey = 'updates.ignoredVersionCode.v1';
 
   final UpdateManifestLoader _manifestLoader;
@@ -90,26 +111,49 @@ class UpdateCheckService {
   Future<AvailableUpdate?> checkForUpdateOrThrow({
     bool respectIgnoredVersion = true,
   }) async {
+    final result = await _checkForUpdateDetailedOrThrow(
+      respectIgnoredVersion: respectIgnoredVersion,
+    );
+    return result.update;
+  }
+
+  Future<UpdateCheckResult> checkForUpdateDetailed({
+    bool respectIgnoredVersion = true,
+  }) async {
+    try {
+      return await _checkForUpdateDetailedOrThrow(
+        respectIgnoredVersion: respectIgnoredVersion,
+      );
+    } catch (error) {
+      return UpdateCheckResult.checkFailed(error);
+    }
+  }
+
+  Future<UpdateCheckResult> _checkForUpdateDetailedOrThrow({
+    required bool respectIgnoredVersion,
+  }) async {
     final currentVersionCode = await _currentVersionCodeLoader();
     final ignoredVersionCode = respectIgnoredVersion
         ? await _ignoredVersionCodeLoader()
         : null;
     final supportedAbis = await _supportedAbisLoader();
     if (supportedAbis.isEmpty) {
-      return null;
+      return const UpdateCheckResult.unsupportedAbi();
     }
 
     final manifest = await _manifestLoader();
     if (manifest.versionCode <= currentVersionCode ||
         manifest.versionCode == ignoredVersionCode) {
-      return null;
+      return const UpdateCheckResult.noUpdate();
     }
 
     final asset = manifest.selectAssetForAbis(supportedAbis);
     if (asset == null) {
-      return null;
+      return const UpdateCheckResult.unsupportedAbi();
     }
-    return AvailableUpdate(manifest: manifest, asset: asset);
+    return UpdateCheckResult.updateAvailable(
+      AvailableUpdate(manifest: manifest, asset: asset),
+    );
   }
 
   Future<void> ignoreUpdate(AvailableUpdate update) {
@@ -142,7 +186,11 @@ class UpdateCheckService {
     try {
       final response = await client.get(
         uri,
-        headers: const {'accept': 'application/json'},
+        headers: const {
+          'accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw StateError('Update manifest request failed: $uri');

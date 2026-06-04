@@ -41,6 +41,11 @@ class AppStrings {
       'zh': '当前平台不支持应用内更新',
       'en': 'In-app updates are not supported on this platform.',
     },
+    'update_unsupported_abi': {
+      'zh': '发现新版本，但当前设备架构暂无可用安装包',
+      'en':
+          'A new version is available, but no APK matches this device architecture.',
+    },
     'update_download_failed': {
       'zh': '更新下载失败，请稍后重试',
       'en': 'Update download failed. Please try again later.',

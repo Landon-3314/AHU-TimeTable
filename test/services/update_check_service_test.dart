@@ -153,6 +153,84 @@ void main() {
     },
   );
 
+  test('uses the Cloudflare Worker manifest endpoint by default', () {
+    expect(UpdateCheckService.defaultManifestUris, hasLength(1));
+    expect(
+      UpdateCheckService.defaultManifestUris.single.toString(),
+      'https://update.277620035.xyz/latest',
+    );
+  });
+
+  test('reports detailed update check status for each outcome', () async {
+    final manifest = UpdateManifest.fromJson(
+      jsonDecode(manifestJson) as Map<String, Object?>,
+    );
+
+    final availableService = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 1,
+      supportedAbisLoader: () async => const ['arm64-v8a'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+    final available = await availableService.checkForUpdateDetailed();
+    expect(available.status, UpdateCheckStatus.updateAvailable);
+    expect(available.update, isA<AvailableUpdate>());
+    expect(available.error, isNull);
+
+    final currentVersionService = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 2,
+      supportedAbisLoader: () async => const ['arm64-v8a'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+    final currentVersion = await currentVersionService.checkForUpdateDetailed();
+    expect(currentVersion.status, UpdateCheckStatus.noUpdate);
+    expect(currentVersion.update, isNull);
+
+    final unsupportedAbiService = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 1,
+      supportedAbisLoader: () async => const ['x86_64'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+    final unsupportedAbi = await unsupportedAbiService.checkForUpdateDetailed();
+    expect(unsupportedAbi.status, UpdateCheckStatus.unsupportedAbi);
+    expect(unsupportedAbi.update, isNull);
+
+    final failedService = UpdateCheckService(
+      manifestLoader: () async => throw const FormatException('bad manifest'),
+      currentVersionCodeLoader: () async => 1,
+      supportedAbisLoader: () async => const ['arm64-v8a'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+    final failed = await failedService.checkForUpdateDetailed();
+    expect(failed.status, UpdateCheckStatus.checkFailed);
+    expect(failed.update, isNull);
+    expect(failed.error, isA<FormatException>());
+  });
+
+  test('detailed update check treats ignored versions as no update', () async {
+    final manifest = UpdateManifest.fromJson(
+      jsonDecode(manifestJson) as Map<String, Object?>,
+    );
+    final service = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 1,
+      supportedAbisLoader: () async => const ['arm64-v8a'],
+      ignoredVersionCodeLoader: () async => 2,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+
+    final result = await service.checkForUpdateDetailed();
+
+    expect(result.status, UpdateCheckStatus.noUpdate);
+    expect(result.update, isNull);
+  });
+
   test('writes ignored version code for the selected update', () async {
     int? ignoredVersionCode;
     final manifest = UpdateManifest.fromJson(

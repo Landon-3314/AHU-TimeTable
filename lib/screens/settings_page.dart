@@ -206,15 +206,31 @@ class _SettingsPageState extends State<SettingsPage> {
       final service =
           widget.updateCheckService ??
           UpdateCheckService.githubManifest(platform: platform);
-      final update = await service.checkForUpdateOrThrow(
+      final result = await service.checkForUpdateDetailed(
         respectIgnoredVersion: false,
       );
       if (!mounted) {
         return;
       }
 
+      switch (result.status) {
+        case UpdateCheckStatus.noUpdate:
+          _showSnackBar(provider.t('already_latest'));
+          return;
+        case UpdateCheckStatus.checkFailed:
+          debugPrint('[AppUpdate] manual check failed: ${result.error}');
+          _showSnackBar(provider.t('update_check_failed'));
+          return;
+        case UpdateCheckStatus.unsupportedAbi:
+          _showSnackBar(provider.t('update_unsupported_abi'));
+          return;
+        case UpdateCheckStatus.updateAvailable:
+          break;
+      }
+
+      final update = result.update;
       if (update == null) {
-        _showSnackBar(provider.t('already_latest'));
+        _showSnackBar(provider.t('update_check_failed'));
         return;
       }
 
@@ -254,8 +270,9 @@ class _SettingsPageState extends State<SettingsPage> {
           _isCheckingUpdate = false;
         });
       }
+    }
   }
-}
+
   Future<void> _downloadAndInstallUpdate(
     AvailableUpdate update,
     SettingsProvider provider,

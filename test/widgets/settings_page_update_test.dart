@@ -150,6 +150,69 @@ void main() {
     expect(downloadService.installCallCount, 0);
     expect(find.text('本地数据备份失败，已取消更新'), findsOneWidget);
   });
+
+  testWidgets('manual update check shows failed state instead of latest', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
+    final updateService = UpdateCheckService(
+      manifestLoader: () async => throw const FormatException('bad manifest'),
+      currentVersionCodeLoader: () async => 1,
+      supportedAbisLoader: () async => const ['arm64-v8a'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+
+    await tester.pumpWidget(
+      _SettingsHost(
+        settings: bundle.settings,
+        courses: bundle.courses,
+        child: SettingsPage(
+          updatePlatform: const _SupportedUpdatePlatform(),
+          updateCheckService: updateService,
+        ),
+      ),
+    );
+
+    await _scrollToUpdateEntry(tester);
+    await tester.tap(find.text('检查更新'));
+    await _pumpUntilFound(tester, find.text('更新检查失败，请稍后重试'));
+
+    expect(find.text('更新检查失败，请稍后重试'), findsOneWidget);
+    expect(find.text('当前已是最新版本'), findsNothing);
+  });
+
+  testWidgets('manual update check reports unsupported ABI separately', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
+    final manifest = _manifest(versionCode: 3);
+    final updateService = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 2,
+      supportedAbisLoader: () async => const ['x86_64'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+
+    await tester.pumpWidget(
+      _SettingsHost(
+        settings: bundle.settings,
+        courses: bundle.courses,
+        child: SettingsPage(
+          updatePlatform: const _SupportedUpdatePlatform(),
+          updateCheckService: updateService,
+        ),
+      ),
+    );
+
+    await _scrollToUpdateEntry(tester);
+    await tester.tap(find.text('检查更新'));
+    await _pumpUntilFound(tester, find.text('发现新版本，但当前设备架构暂无可用安装包'));
+
+    expect(find.text('发现新版本，但当前设备架构暂无可用安装包'), findsOneWidget);
+    expect(find.text('当前已是最新版本'), findsNothing);
+  });
 }
 
 class _SupportedUpdatePlatform extends AppUpdatePlatform {

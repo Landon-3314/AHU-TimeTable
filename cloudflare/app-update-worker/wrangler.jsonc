@@ -1,0 +1,12 @@
+{
+  "name": "timetable-update-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-04",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "update.277620035.xyz",
+      "custom_domain": true
+    }
+  ]
+}
