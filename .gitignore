@@ -44,6 +44,20 @@ AGENTS.md
 /build/
 /coverage/
 /android/build/
+**/node_modules/
+
+# Local env/secrets and Wrangler development state
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+**/.env
+**/.env.*
+**/.dev.vars
+**/.dev.vars.*
+**/.wrangler/
+!.env.example
+!.dev.vars.example
 
 # Symbolication related
 app.*.symbols
