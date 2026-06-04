@@ -4,6 +4,15 @@ class ScheduleHtmlExtractor {
   static const String academicLoginUrl =
       'https://wvpn.ahu.edu.cn/https/77726476706e69737468656265737421fff944d226387d1e7b0c9ce29b5b/tp_up/view;tp_up=R9Xy9pdDvYVBJP--pNSwF-AmpSF6z3Gxc7qJA89AUuLPNvqwHAtk!-642983885?m=up#act=portal/viewhome';
 
+  static const String academicTimetableUrl =
+      'https://jw.ahu.edu.cn/student/for-std/course-table';
+
+  static const String academicExamUrl =
+      'https://jw.ahu.edu.cn/student/for-std/exam-arrange';
+
+  static const String academicCasLoginUrl =
+      'https://one.ahu.edu.cn/cas/login?service=https%3A%2F%2Fjw.ahu.edu.cn%2Fstudent%2Fsso%2Flogin';
+
   static const String extractTimetableHtmlScript = r'''
 (function() {
   try {

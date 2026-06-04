@@ -11,6 +11,7 @@ import '../services/update_download_service.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/update_prompt.dart';
+import 'academic_account_page.dart';
 import 'reminder_settings_page.dart';
 import 'semester_time_settings_page.dart';
 import 'theme_settings_page.dart';
@@ -71,6 +72,9 @@ class _SettingsPageState extends State<SettingsPage> {
             AppSectionTitle(title: provider.t('app_update')),
             _buildUpdateSection(context),
             const SizedBox(height: AppSpacing.xl),
+            AppSectionTitle(title: provider.t('account_settings')),
+            _buildAccountSection(context),
+            const SizedBox(height: AppSpacing.xl),
             AppSectionTitle(title: provider.t('data_storage')),
             _buildDataSection(context),
           ],
@@ -128,6 +132,24 @@ class _SettingsPageState extends State<SettingsPage> {
           Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => const SemesterTimeSettingsPage(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAccountSection(BuildContext context) {
+    final provider = context.watch<SettingsProvider>();
+    return AppSurface(
+      child: AppActionTile(
+        icon: Icons.account_circle_outlined,
+        title: provider.t('academic_account_title'),
+        subtitle: provider.t('academic_account_subtitle'),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const AcademicAccountPage(),
             ),
           );
         },

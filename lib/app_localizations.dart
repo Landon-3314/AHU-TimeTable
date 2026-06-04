@@ -23,6 +23,12 @@ class AppStrings {
     'notifications': {'zh': '提醒设置', 'en': 'Notifications'},
     'app_update': {'zh': '应用更新', 'en': 'App Update'},
     'data_storage': {'zh': '数据管理', 'en': 'Data Management'},
+    'account_settings': {'zh': '账号', 'en': 'Account'},
+    'academic_account_title': {'zh': '教务账号', 'en': 'Academic Account'},
+    'academic_account_subtitle': {
+      'zh': '保存账密，并自动提取课程或考试信息',
+      'en': 'Save credentials and auto import timetable or exams',
+    },
     'check_update': {'zh': '检查更新', 'en': 'Check for Updates'},
     'check_update_subtitle': {
       'zh': '手动检测新版本',
@@ -263,6 +269,111 @@ class AppStrings {
     'sun_short': {'zh': '周日', 'en': 'Sun'},
     'event_marker': {'zh': '日程', 'en': 'Event'},
     'academic_import': {'zh': '教务信息导入', 'en': 'Academic Info Import'},
+    'academic_account_section': {'zh': '账号密码', 'en': 'Credentials'},
+    'academic_student_id': {'zh': '学号', 'en': 'Student ID'},
+    'academic_password': {'zh': '密码', 'en': 'Password'},
+    'academic_auto_login_enabled': {
+      'zh': '保存后启用自动登录',
+      'en': 'Enable auto login',
+    },
+    'academic_credentials_notice': {
+      'zh': '账号密码仅加密保存在本机，用于自动登录教务系统。',
+      'en':
+          'Credentials are encrypted on this device and only used for academic login.',
+    },
+    'save_academic_credentials': {'zh': '保存账密', 'en': 'Save'},
+    'clear_academic_credentials': {'zh': '清除账密', 'en': 'Clear'},
+    'academic_import_actions': {'zh': '教务提取', 'en': 'Academic Import'},
+    'auto_extract_timetable': {'zh': '自动提取课程', 'en': 'Auto Import Timetable'},
+    'auto_extract_timetable_subtitle': {
+      'zh': '后台打开教务课表页，登录后自动解析并导入课程',
+      'en': 'Open the timetable page in the background and import courses',
+    },
+    'auto_extract_exam': {'zh': '自动提取考试', 'en': 'Auto Import Exams'},
+    'auto_extract_exam_subtitle': {
+      'zh': '考试页会等待更久，并尝试点击考试信息查询旁的刷新按钮',
+      'en': 'Wait longer on the exam page and try the refresh button',
+    },
+    'manual_academic_import': {
+      'zh': '手动打开教务页面',
+      'en': 'Open Academic Page Manually',
+    },
+    'manual_academic_import_subtitle': {
+      'zh': '保留浏览器页面，手动登录或导航后点击一键提取',
+      'en': 'Keep the browser visible for manual login and extraction',
+    },
+    'auto_login_extract': {'zh': '自动登录并提取', 'en': 'Auto Login & Extract'},
+    'auto_login_extract_exam': {
+      'zh': '自动登录并提取考试',
+      'en': 'Auto Login & Extract Exams',
+    },
+    'academic_credentials_empty': {
+      'zh': '请先填写学号和密码。',
+      'en': 'Please enter your student ID and password first.',
+    },
+    'academic_credentials_saved': {
+      'zh': '账号密码已安全保存。',
+      'en': 'Credentials saved securely.',
+    },
+    'academic_credentials_cleared': {
+      'zh': '已清除保存的账号密码。',
+      'en': 'Saved credentials cleared.',
+    },
+    'auto_import_opening': {
+      'zh': '正在打开教务课表页面...',
+      'en': 'Opening academic timetable...',
+    },
+    'auto_import_preparing': {
+      'zh': '正在准备自动提取...',
+      'en': 'Preparing auto import...',
+    },
+    'auto_import_hidden_webview_notice': {
+      'zh': '自动流程会在后台完成；失败后可返回使用手动打开教务页面。',
+      'en':
+          'The automatic flow runs in the background. You can fall back to manual import if it fails.',
+    },
+    'auto_import_logging_in': {
+      'zh': '已提交登录，正在等待跳转...',
+      'en': 'Login submitted. Waiting for redirect...',
+    },
+    'auto_import_waiting_table': {
+      'zh': '正在等待课表加载...',
+      'en': 'Waiting for timetable...',
+    },
+    'auto_import_waiting_page': {
+      'zh': '正在等待教务页面响应...',
+      'en': 'Waiting for academic page...',
+    },
+    'auto_import_extracting': {
+      'zh': '已进入课表，正在提取...',
+      'en': 'Timetable ready. Extracting...',
+    },
+    'auto_exam_import_opening': {
+      'zh': '正在打开考试安排页面...',
+      'en': 'Opening exam schedule...',
+    },
+    'auto_exam_import_waiting_table': {
+      'zh': '正在刷新并等待考试信息加载...',
+      'en': 'Refreshing and waiting for exam information...',
+    },
+    'auto_exam_import_extracting': {
+      'zh': '已进入考试页面，正在提取...',
+      'en': 'Exam page ready. Extracting...',
+    },
+    'auto_import_failed': {
+      'zh': '自动登录失败：{reason}。你可以继续手动操作后点击一键提取课表。',
+      'en':
+          'Auto login failed: {reason}. You can continue manually and tap Extract Timetable.',
+    },
+    'auto_import_timeout': {
+      'zh': '等待登录或课表加载超时',
+      'en': 'Timed out waiting for login or timetable loading',
+    },
+    'auto_import_challenge_required': {
+      'zh': '检测到验证码或二次验证，需要手动完成',
+      'en':
+          'Captcha or second verification detected; manual action is required',
+    },
     'extract_timetable': {'zh': '一键提取课表', 'en': 'Extract Timetable'},
     'extracting': {'zh': '正在提取...', 'en': 'Extracting...'},
     'extract_exam': {'zh': '一键提取考试', 'en': 'Extract Exams'},
@@ -279,6 +390,18 @@ class AppStrings {
     'exam_import_duplicated': {
       'zh': '考试信息已存在，未重复导入',
       'en': 'Exam information already exists. Nothing was imported.',
+    },
+    'exam_import_success_format': {
+      'zh': '已导入 {count} 条考试信息',
+      'en': 'Imported {count} exam item(s)',
+    },
+    'timetable_import_success_format': {
+      'zh': '已导入 {count} 门课程',
+      'en': 'Imported {count} course(s)',
+    },
+    'timetable_import_skipped_format': {
+      'zh': '{summary}，跳过 {count} 条：{reasons}',
+      'en': '{summary}; skipped {count}: {reasons}',
     },
     'guide_next': {'zh': '下一步', 'en': 'Next'},
     'guide_done': {'zh': '我知道了', 'en': 'Got it'},
@@ -314,9 +437,9 @@ class AppStrings {
     },
     'guide_import_webview_title': {'zh': '教务系统页面', 'en': 'Academic WebView'},
     'guide_import_webview_body': {
-      'zh': '这里会打开智慧安大。请先登录并进教务系统学生端，点击我的课表或考试信息查询页面。',
+      'zh': '这里会打开教务系统。可保存账密后自动登录提取，也可手动进入课表或考试页面后再提取。',
       'en':
-          'The academic system opens here. Log in and navigate to the timetable or exam page first.',
+          'The academic system opens here. You can save credentials for auto import or navigate manually before extraction.',
     },
     'guide_import_exam_title': {'zh': '解析考试', 'en': 'Extract Exams'},
     'guide_import_exam_body': {
