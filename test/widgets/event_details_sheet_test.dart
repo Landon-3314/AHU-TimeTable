@@ -16,6 +16,7 @@ void main() {
     final storage = StorageService(sharedPreferences: preferences);
     await storage.ensureSemesterMigration();
     final settings = SettingsProvider(storageService: storage);
+    await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
     final courses = CourseProvider(storageService: storage);
     final event = Event(
       id: 'event-to-restore',

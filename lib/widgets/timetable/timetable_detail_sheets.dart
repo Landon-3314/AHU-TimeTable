@@ -15,6 +15,7 @@ import '../../providers/course_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/timetable_view_data_service.dart';
 import '../common/app_ui.dart';
+import '../semester_initialization_guard.dart';
 
 Future<void> showCourseDetailsSheet(
   BuildContext context,
@@ -60,6 +61,12 @@ Future<void> showCourseDetailsSheet(
                 foregroundColor: colorScheme.secondary,
               ),
               onPressed: () async {
+                if (!await ensureCurrentSemesterInitialized(sheetContext)) {
+                  return;
+                }
+                if (!sheetContext.mounted) {
+                  return;
+                }
                 Navigator.of(sheetContext).pop();
                 final didReschedule = await navigator.pushNamed<bool>(
                   AppRoutes.rescheduleCourse,
@@ -90,6 +97,12 @@ Future<void> showCourseDetailsSheet(
               foregroundColor: colorScheme.onPrimary,
             ),
             onPressed: () async {
+              if (!await ensureCurrentSemesterInitialized(sheetContext)) {
+                return;
+              }
+              if (!sheetContext.mounted) {
+                return;
+              }
               Navigator.of(sheetContext).pop();
               await navigator.pushNamed(
                 AppRoutes.addCourse,
@@ -120,6 +133,12 @@ Future<void> showCourseDetailsSheet(
               if (!sheetContext.mounted) {
                 return;
               }
+              if (!await ensureCurrentSemesterInitialized(sheetContext)) {
+                return;
+              }
+              if (!sheetContext.mounted) {
+                return;
+              }
               Navigator.of(sheetContext).pop();
               unawaited(
                 Future<void>.delayed(AppDurations.sheetActionDelay).then((
@@ -135,7 +154,17 @@ Future<void> showCourseDetailsSheet(
                       action: SnackBarAction(
                         label: '撤销',
                         onPressed: () {
-                          unawaited(courseProvider.restoreCourse(removed));
+                          unawaited(() async {
+                            if (!context.mounted) {
+                              return;
+                            }
+                            if (!await ensureCurrentSemesterInitialized(
+                              context,
+                            )) {
+                              return;
+                            }
+                            await courseProvider.restoreCourse(removed);
+                          }());
                         },
                       ),
                     ),
@@ -294,6 +323,14 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
                       if (!sheetContext.mounted) {
                         return;
                       }
+                      if (!await ensureCurrentSemesterInitialized(
+                        sheetContext,
+                      )) {
+                        return;
+                      }
+                      if (!sheetContext.mounted) {
+                        return;
+                      }
                       Navigator.of(sheetContext).pop();
                       unawaited(
                         Future<void>.delayed(
@@ -311,9 +348,17 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
                               action: SnackBarAction(
                                 label: '撤销',
                                 onPressed: () {
-                                  unawaited(
-                                    courseProvider.restoreEvent(removed),
-                                  );
+                                  unawaited(() async {
+                                    if (!context.mounted) {
+                                      return;
+                                    }
+                                    if (!await ensureCurrentSemesterInitialized(
+                                      context,
+                                    )) {
+                                      return;
+                                    }
+                                    await courseProvider.restoreEvent(removed);
+                                  }());
                                 },
                               ),
                             ),

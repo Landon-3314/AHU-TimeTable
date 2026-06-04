@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import '../core/app_routes.dart';
 import '../core/app_theme.dart';
 import '../providers/settings_provider.dart';
+import 'daily_academic_auto_import_host.dart';
 
 class AppScrollBehavior extends MaterialScrollBehavior {
   const AppScrollBehavior();
@@ -34,6 +35,11 @@ class TimetableApp extends StatelessWidget {
       themeMode: settingsProvider.materialThemeMode,
       initialRoute: AppRoutes.home,
       onGenerateRoute: AppRoutes.onGenerateRoute,
+      builder: (context, child) {
+        return DailyAcademicAutoImportHost(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }

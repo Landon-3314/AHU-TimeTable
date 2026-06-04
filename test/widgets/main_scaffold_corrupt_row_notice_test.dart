@@ -44,6 +44,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('已跳过并保留 2 条损坏日程记录'), findsOneWidget);
+    expect(find.text('选择学期开始日期'), findsNothing);
     expect(await storage.consumePendingCorruptRowNoticeCount(), 0);
   });
 }

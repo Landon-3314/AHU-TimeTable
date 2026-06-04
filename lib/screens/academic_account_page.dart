@@ -8,6 +8,7 @@ import '../models/academic_credential.dart';
 import '../providers/settings_provider.dart';
 import '../services/academic_credential_service.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/semester_initialization_guard.dart';
 import 'import_course_page.dart';
 
 typedef AcademicAutoImportLauncher =
@@ -289,6 +290,13 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
       return;
     }
 
+    if (!await ensureCurrentSemesterInitialized(context)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+
     final launcher = widget.autoImportLauncher;
     if (launcher == null) {
       _startSilentAutoImport(action);
@@ -305,6 +313,13 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
   }
 
   Future<void> _runManualImport() async {
+    if (!await ensureCurrentSemesterInitialized(context)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+
     final launcher =
         widget.manualImportLauncher ?? _defaultManualImportLauncher;
     final result = await launcher(context);

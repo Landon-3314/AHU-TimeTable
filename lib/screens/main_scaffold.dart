@@ -5,9 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../core/app_routes.dart';
 import '../providers/settings_provider.dart';
-import '../providers/timetable_view_provider.dart';
 import '../widgets/common/app_ui.dart';
-import '../widgets/semester_start_date_dialog.dart';
 import 'settings_page.dart';
 import 'timetable_page.dart';
 
@@ -25,7 +23,6 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   int _currentIndex = 0;
   int _devTapCount = 0;
-  bool _hasHandledInitialSemesterPrompt = false;
   Timer? _devTapTimer;
 
   static const List<Widget> _pages = [TimetablePage(), SettingsPage()];
@@ -79,7 +76,6 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   Future<void> _runStartupPrompts() async {
     await _showCorruptRowNotice();
-    await _showInitialSemesterStartDatePrompt();
   }
 
   Future<void> _showCorruptRowNotice() async {
@@ -90,38 +86,6 @@ class _MainScaffoldState extends State<MainScaffold> {
       return;
     }
     showAppSnackBar(context, SnackBar(content: Text('已跳过并保留 $count 条损坏日程记录')));
-  }
-
-  Future<void> _showInitialSemesterStartDatePrompt() async {
-    if (_hasHandledInitialSemesterPrompt) {
-      return;
-    }
-
-    final provider = context.read<SettingsProvider>();
-    if (!provider.shouldShowSemesterStartDatePrompt) {
-      return;
-    }
-
-    _hasHandledInitialSemesterPrompt = true;
-    final selectedDate = await showSemesterStartDateDialog(
-      context: context,
-      initialDate: provider.semesterStartDate,
-      canCancel: false,
-    );
-
-    if (!mounted || selectedDate == null) {
-      return;
-    }
-
-    await provider.completeInitialSemesterStartDate(selectedDate);
-    if (!mounted) {
-      return;
-    }
-
-    context.read<TimetableViewProvider>().setCurrentWeekAndWeekday(
-      week: provider.currentRealWeek,
-      weekday: provider.currentRealWeekday,
-    );
   }
 
   void _handleDeveloperTap(int index) {

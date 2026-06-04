@@ -20,6 +20,7 @@ import '../widgets/timetable/course_overview_panel.dart';
 import '../widgets/timetable/timetable_detail_sheets.dart';
 import '../widgets/timetable/timetable_grid.dart';
 import '../widgets/timetable/week_selector.dart';
+import '../widgets/semester_initialization_guard.dart';
 import 'academic_account_page.dart';
 import 'exam_overview_page.dart';
 
@@ -387,6 +388,12 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<void> _openAddCourse(BuildContext context) async {
+    if (!await ensureCurrentSemesterInitialized(context)) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
     await Navigator.of(context).pushNamed(AppRoutes.addCourse);
   }
 
@@ -426,6 +433,12 @@ class _TimetablePageState extends State<TimetablePage> {
               await _openAcademicAccount(pageContext);
             },
             onCourseGroupTap: (group) async {
+              if (!await ensureCurrentSemesterInitialized(pageContext)) {
+                return;
+              }
+              if (!pageContext.mounted) {
+                return;
+              }
               final selectedCourse = await _showCourseGroupRecords(
                 sheetContext,
                 group,

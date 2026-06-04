@@ -7,6 +7,7 @@ import '../core/app_routes.dart';
 import '../models/event.dart';
 import '../providers/course_provider.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/semester_initialization_guard.dart';
 import '../widgets/timetable/timetable_detail_sheets.dart';
 
 class ExamOverviewPage extends StatelessWidget {
@@ -46,8 +47,17 @@ class ExamOverviewPanel extends StatelessWidget {
             action: FilledButton.icon(
               onPressed:
                   onImport ??
-                  () =>
-                      Navigator.of(context).pushNamed(AppRoutes.importCourses),
+                  () async {
+                    if (!await ensureCurrentSemesterInitialized(context)) {
+                      return;
+                    }
+                    if (!context.mounted) {
+                      return;
+                    }
+                    await Navigator.of(
+                      context,
+                    ).pushNamed(AppRoutes.importCourses);
+                  },
               icon: const Icon(Icons.cloud_download_outlined),
               label: const Text('导入考试'),
             ),

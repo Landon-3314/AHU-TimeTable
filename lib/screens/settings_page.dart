@@ -10,6 +10,7 @@ import '../services/update_check_service.dart';
 import '../services/update_download_service.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/common/app_ui.dart';
+import '../widgets/semester_initialization_guard.dart';
 import '../widgets/update_prompt.dart';
 import 'academic_account_page.dart';
 import 'reminder_settings_page.dart';
@@ -373,6 +374,13 @@ class _SettingsPageState extends State<SettingsPage> {
     );
 
     if (!confirmed || !context.mounted) {
+      return;
+    }
+
+    if (!await ensureCurrentSemesterInitialized(context)) {
+      return;
+    }
+    if (!context.mounted) {
       return;
     }
 

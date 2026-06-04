@@ -12,6 +12,7 @@ import '../widgets/common/app_ui.dart';
 import '../widgets/common/app_wheel_pickers.dart';
 import '../widgets/common/capsule_multi_select.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
+import '../widgets/semester_initialization_guard.dart';
 
 class AddCoursePage extends StatefulWidget {
   const AddCoursePage({super.key, this.existingCourse});
@@ -511,6 +512,13 @@ class _CourseFormState extends State<_CourseForm>
       return;
     }
 
+    if (!await ensureCurrentSemesterInitialized(context)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+
     final selectedWeeks = _selectedWeeks.toList()..sort();
     final selectedWeekdays = _selectedWeekdays.toList()..sort();
     Course buildCourse(int weekday, {String? id}) {
@@ -817,6 +825,13 @@ class _EventFormState extends State<_EventForm> {
 
     if (_selectedDateTime == null) {
       _showMessage(provider.t('please_select_date_time'));
+      return;
+    }
+
+    if (!await ensureCurrentSemesterInitialized(context)) {
+      return;
+    }
+    if (!mounted) {
       return;
     }
 

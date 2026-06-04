@@ -19,6 +19,7 @@ import '../services/schedule_html_extractor.dart';
 import '../services/schedule_parser_service.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/guided_tour_overlay.dart';
+import '../widgets/semester_initialization_guard.dart';
 
 enum _ImportAction { timetable, exam }
 
@@ -72,7 +73,12 @@ Future<int?> importTimetableCoursesWithConflictConfirmation({
   required BuildContext context,
   required CourseProvider courseProvider,
   required List<Course> courses,
+  bool confirmConflicts = true,
 }) async {
+  if (!confirmConflicts) {
+    return courseProvider.mergeImportedCourses(courses);
+  }
+
   final conflicts = courseProvider.findImportedCourseConflicts(courses);
   var allowConflicts = false;
   if (conflicts.isNotEmpty) {
@@ -98,6 +104,7 @@ class ImportCoursePage extends StatefulWidget {
     this.showCredentialPanel = false,
     this.onImportResult,
     this.onImportError,
+    this.confirmTimetableConflicts = true,
   });
 
   final AcademicAutoAction? initialAutoAction;
@@ -105,6 +112,7 @@ class ImportCoursePage extends StatefulWidget {
   final bool showCredentialPanel;
   final ValueChanged<AcademicImportResult>? onImportResult;
   final ValueChanged<String>? onImportError;
+  final bool confirmTimetableConflicts;
 
   @override
   State<ImportCoursePage> createState() => _ImportCoursePageState();
@@ -768,27 +776,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   }
 
   Future<bool> _ensureSemesterInitializedForImport() async {
-    final settingsProvider = context.read<SettingsProvider>();
-    if (!settingsProvider.isCurrentSemesterInitialized) {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('当前学期尚未初始化'),
-            content: const Text('当前学期尚未初始化，请先完成学期开始日期设置后再导入课程。'),
-            actions: [
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('知道了'),
-              ),
-            ],
-          );
-        },
-      );
-      return false;
-    }
-
-    return true;
+    return ensureCurrentSemesterInitialized(context);
   }
 
   Future<void> _runTimetableExtractScript() async {
@@ -895,6 +883,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
             context: context,
             courseProvider: context.read<CourseProvider>(),
             courses: parseReport.items,
+            confirmConflicts: widget.confirmTimetableConflicts,
           );
 
       if (!mounted || importedCount == null) {

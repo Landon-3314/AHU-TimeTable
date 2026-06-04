@@ -54,6 +54,30 @@ void main() {
     });
   });
 
+  testWidgets('saving a new course initializes current semester first', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle(initialized: false);
+
+    await tester.pumpWidget(_buildPage(bundle));
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'Math');
+    await tester.enterText(find.byType(TextFormField).at(1), 'Room 101');
+    await tester.enterText(find.byType(TextFormField).at(2), 'Dr. Chen');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择学期开始日期'), findsOneWidget);
+    expect(bundle.courses.courses, isEmpty);
+
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(bundle.settings.isCurrentSemesterInitialized, isTrue);
+    expect(bundle.courses.courses, hasLength(1));
+    expect(bundle.courses.courses.single.name, 'Math');
+  });
+
   testWidgets('saving without selected weekdays shows validation message', (
     tester,
   ) async {
@@ -330,13 +354,17 @@ Widget _buildPage(_ProviderBundle bundle, {Course? existingCourse}) {
   );
 }
 
-Future<_ProviderBundle> _createProviderBundle() async {
+Future<_ProviderBundle> _createProviderBundle({bool initialized = true}) async {
   SharedPreferences.setMockInitialValues({});
   final preferences = await SharedPreferences.getInstance();
   final storage = StorageService(sharedPreferences: preferences);
   await storage.ensureSemesterMigration();
+  final settings = SettingsProvider(storageService: storage);
+  if (initialized) {
+    await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
+  }
   return _ProviderBundle(
-    settings: SettingsProvider(storageService: storage),
+    settings: settings,
     courses: CourseProvider(storageService: storage),
   );
 }

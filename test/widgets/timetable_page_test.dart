@@ -544,6 +544,7 @@ Future<_ProviderBundle> _createProviderBundle() async {
   final storage = StorageService(sharedPreferences: preferences);
   await storage.ensureSemesterMigration();
   final settings = SettingsProvider(storageService: storage);
+  await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
   await settings.confirmTimetableToolbarGuide();
   await settings.confirmTimetableMenuGuide();
   final timetableView = TimetableViewProvider()

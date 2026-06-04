@@ -10,6 +10,7 @@ import '../providers/settings_provider.dart';
 import '../services/timetable_view_data_service.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
+import '../widgets/semester_initialization_guard.dart';
 
 class RescheduleCoursePage extends StatefulWidget {
   const RescheduleCoursePage({
@@ -276,6 +277,13 @@ class _RescheduleCoursePageState extends State<RescheduleCoursePage> {
 
     if (targetStartPeriod < 1 || targetStartPeriod > maxStartPeriod) {
       _showMessage(settingsProvider.t('invalid_reschedule_period_range'));
+      return;
+    }
+
+    if (!await ensureCurrentSemesterInitialized(context)) {
+      return;
+    }
+    if (!mounted) {
       return;
     }
 

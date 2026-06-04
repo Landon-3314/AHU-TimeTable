@@ -65,13 +65,60 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'silent timetable import conflict keeps old batch without dialog',
+    (tester) async {
+      final provider = await _createProvider();
+      final manual = _course(id: 'manual', name: '手工课程');
+      final oldImported = _course(
+        id: 'old-imported',
+        name: '旧教务课程',
+        weekday: DateTime.tuesday,
+      );
+      final incoming = [
+        _course(id: 'incoming-one', name: '高等数学'),
+        _course(id: 'incoming-two', name: '大学英语'),
+      ];
+      await provider.addCourse(manual);
+      await provider.mergeImportedCourses([oldImported]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: _ImportHarness(
+            provider: provider,
+            incoming: incoming,
+            confirmConflicts: false,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('导入'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('发现课程时间冲突'), findsNothing);
+      expect(
+        provider.courses.map((course) => course.id),
+        contains('old-imported'),
+      );
+      expect(
+        provider.courses.map((course) => course.id),
+        isNot(contains('incoming-one')),
+      );
+    },
+  );
 }
 
 class _ImportHarness extends StatelessWidget {
-  const _ImportHarness({required this.provider, required this.incoming});
+  const _ImportHarness({
+    required this.provider,
+    required this.incoming,
+    this.confirmConflicts = true,
+  });
 
   final CourseProvider provider;
   final List<Course> incoming;
+  final bool confirmConflicts;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +129,7 @@ class _ImportHarness extends StatelessWidget {
             context: context,
             courseProvider: provider,
             courses: incoming,
+            confirmConflicts: confirmConflicts,
           ),
           child: const Text('导入'),
         ),

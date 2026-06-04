@@ -51,8 +51,10 @@ Future<_ProviderBundle> _createProviderBundle() async {
   final preferences = await SharedPreferences.getInstance();
   final storage = StorageService(sharedPreferences: preferences);
   await storage.ensureSemesterMigration();
+  final settings = SettingsProvider(storageService: storage);
+  await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
   return _ProviderBundle(
-    settings: SettingsProvider(storageService: storage),
+    settings: settings,
     courses: CourseProvider(storageService: storage),
   );
 }

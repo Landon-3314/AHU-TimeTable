@@ -112,7 +112,9 @@ Future<SettingsProvider> _createSettingsProvider() async {
   final preferences = await SharedPreferences.getInstance();
   final storage = StorageService(sharedPreferences: preferences);
   await storage.ensureSemesterMigration();
-  return SettingsProvider(storageService: storage);
+  final settings = SettingsProvider(storageService: storage);
+  await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
+  return settings;
 }
 
 Finder _textFieldWithLabel(String label) {

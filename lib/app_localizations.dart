@@ -277,9 +277,9 @@ class AppStrings {
       'en': 'Enable auto login',
     },
     'academic_credentials_notice': {
-      'zh': '账号密码仅加密保存在本机，用于自动登录教务系统。',
+      'zh': '账号密码仅加密保存在本机，用于自动登录教务系统；启用后应用每天首次打开或回到前台会静默补拉课表。',
       'en':
-          'Credentials are encrypted on this device and only used for academic login.',
+          'Credentials are encrypted on this device and only used for academic login. When enabled, the app silently refreshes the timetable once per day on launch or resume.',
     },
     'save_academic_credentials': {'zh': '保存账密', 'en': 'Save'},
     'clear_academic_credentials': {'zh': '清除账密', 'en': 'Clear'},
