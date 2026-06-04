@@ -65,6 +65,37 @@ class VerifyReleaseVersionTest(unittest.TestCase):
             with self.assertRaisesRegex(ReleaseVersionError, "must be newer"):
                 verify_release_version(files.pubspec, files.manifests)
 
+    def test_prefers_base_version_code_from_split_apk_manifest(self):
+        with tempfile.TemporaryDirectory() as root:
+            root_path = Path(root)
+            pubspec = root_path / "pubspec.yaml"
+            pubspec.write_text("name: timetable\nversion: 0.3.8+3\n", encoding="utf-8")
+            manifest = root_path / "published.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "versionName": "0.3.8",
+                        "versionCode": 4002,
+                        "baseVersionCode": 2,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = verify_release_version(pubspec, [manifest])
+
+        self.assertEqual(result.highest_published_code, 2)
+        self.assertEqual(result.candidate_code, 3)
+
+    def test_falls_back_to_manifest_version_code_for_legacy_manifests(self):
+        with _release_files(
+            candidate="0.3.8+3",
+            published_versions=[("0.3.8", 2)],
+        ) as files:
+            result = verify_release_version(files.pubspec, files.manifests)
+
+        self.assertEqual(result.highest_published_code, 2)
+
 
 class _ReleaseFiles:
     def __init__(

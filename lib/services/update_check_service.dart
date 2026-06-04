@@ -18,6 +18,8 @@ class AvailableUpdate {
 
   final UpdateManifest manifest;
   final UpdateAsset asset;
+
+  int get effectiveVersionCode => asset.versionCode ?? manifest.versionCode;
 }
 
 enum UpdateCheckStatus {
@@ -142,22 +144,20 @@ class UpdateCheckService {
     }
 
     final manifest = await _manifestLoader();
-    if (manifest.versionCode <= currentVersionCode ||
-        manifest.versionCode == ignoredVersionCode) {
-      return const UpdateCheckResult.noUpdate();
-    }
-
     final asset = manifest.selectAssetForAbis(supportedAbis);
     if (asset == null) {
       return const UpdateCheckResult.unsupportedAbi();
     }
-    return UpdateCheckResult.updateAvailable(
-      AvailableUpdate(manifest: manifest, asset: asset),
-    );
+    final update = AvailableUpdate(manifest: manifest, asset: asset);
+    if (update.effectiveVersionCode <= currentVersionCode ||
+        update.effectiveVersionCode == ignoredVersionCode) {
+      return const UpdateCheckResult.noUpdate();
+    }
+    return UpdateCheckResult.updateAvailable(update);
   }
 
   Future<void> ignoreUpdate(AvailableUpdate update) {
-    return _ignoredVersionCodeWriter(update.manifest.versionCode);
+    return _ignoredVersionCodeWriter(update.effectiveVersionCode);
   }
 
   static Future<UpdateManifest> loadManifestFromUris(

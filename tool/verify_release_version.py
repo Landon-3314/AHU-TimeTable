@@ -96,7 +96,8 @@ def _read_published_version(manifest_path: Path) -> PublishedVersion:
         raise ReleaseVersionError(
             f"Published manifest has invalid versionName: {manifest_path}"
         )
-    code = content.get("versionCode") if isinstance(content, dict) else None
+    base_code = content.get("baseVersionCode") if isinstance(content, dict) else None
+    code = base_code if base_code is not None else content.get("versionCode")
     if not isinstance(code, int) or isinstance(code, bool) or code <= 0:
         raise ReleaseVersionError(
             f"Published manifest has invalid versionCode: {manifest_path}"

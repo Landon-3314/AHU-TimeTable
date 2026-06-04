@@ -48,6 +48,28 @@ void main() {
     expect(asset.url.toString(), contains('arm64-v8a.apk'));
   });
 
+  test('parses split APK version codes from the update manifest', () {
+    final manifest = UpdateManifest.fromJson(const {
+      'versionName': '0.3.8',
+      'versionCode': 4003,
+      'baseVersionCode': 3,
+      'assets': [
+        {
+          'abi': 'arm64-v8a',
+          'url': 'https://example.com/timetable-0.3.8-arm64-v8a.apk',
+          'sha256':
+              'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          'size': 2048,
+          'versionCode': 2003,
+        },
+      ],
+    });
+
+    expect(manifest.versionCode, 4003);
+    expect(manifest.baseVersionCode, 3);
+    expect(manifest.assets.single.versionCode, 2003);
+  });
+
   test('rejects invalid manifests without usable assets', () {
     expect(
       () => UpdateManifest.fromJson(const {
@@ -268,6 +290,126 @@ void main() {
       expect(service.checkForUpdateOrThrow(), throwsA(isA<FormatException>()));
     },
   );
+
+  test('compares the selected split APK asset version code', () async {
+    final manifest = UpdateManifest.fromJson(const {
+      'versionName': '0.3.8',
+      'versionCode': 4003,
+      'baseVersionCode': 3,
+      'assets': [
+        {
+          'abi': 'armeabi-v7a',
+          'url': 'https://example.com/timetable-0.3.8-armeabi-v7a.apk',
+          'sha256':
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          'size': 2048,
+          'versionCode': 1003,
+        },
+        {
+          'abi': 'arm64-v8a',
+          'url': 'https://example.com/timetable-0.3.8-arm64-v8a.apk',
+          'sha256':
+              'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          'size': 2048,
+          'versionCode': 2003,
+        },
+        {
+          'abi': 'x86_64',
+          'url': 'https://example.com/timetable-0.3.8-x86_64.apk',
+          'sha256':
+              'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+          'size': 2048,
+          'versionCode': 4003,
+        },
+      ],
+    });
+
+    final arm64AvailableService = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 2001,
+      supportedAbisLoader: () async => const ['arm64-v8a'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+    final arm64Available = await arm64AvailableService.checkForUpdateDetailed();
+    expect(arm64Available.status, UpdateCheckStatus.updateAvailable);
+    expect(arm64Available.update!.effectiveVersionCode, 2003);
+
+    final arm64CurrentService = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 2003,
+      supportedAbisLoader: () async => const ['arm64-v8a'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+    expect(
+      (await arm64CurrentService.checkForUpdateDetailed()).status,
+      UpdateCheckStatus.noUpdate,
+    );
+
+    final x64AvailableService = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 4002,
+      supportedAbisLoader: () async => const ['x86_64'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+    final x64Available = await x64AvailableService.checkForUpdateDetailed();
+    expect(x64Available.status, UpdateCheckStatus.updateAvailable);
+    expect(x64Available.update!.effectiveVersionCode, 4003);
+  });
+
+  test('falls back to manifest version code for legacy assets', () async {
+    final manifest = UpdateManifest.fromJson(
+      jsonDecode(manifestJson) as Map<String, Object?>,
+    );
+    final service = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 1,
+      supportedAbisLoader: () async => const ['arm64-v8a'],
+      ignoredVersionCodeLoader: () async => null,
+      ignoredVersionCodeWriter: (_) async {},
+    );
+
+    final result = await service.checkForUpdateDetailed();
+
+    expect(result.status, UpdateCheckStatus.updateAvailable);
+    expect(result.update!.effectiveVersionCode, 2);
+  });
+
+  test('writes ignored version code for the selected split APK asset', () async {
+    int? ignoredVersionCode;
+    final manifest = UpdateManifest.fromJson(const {
+      'versionName': '0.3.8',
+      'versionCode': 4003,
+      'baseVersionCode': 3,
+      'assets': [
+        {
+          'abi': 'arm64-v8a',
+          'url': 'https://example.com/timetable-0.3.8-arm64-v8a.apk',
+          'sha256':
+              'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          'size': 2048,
+          'versionCode': 2003,
+        },
+      ],
+    });
+    final service = UpdateCheckService(
+      manifestLoader: () async => manifest,
+      currentVersionCodeLoader: () async => 2001,
+      supportedAbisLoader: () async => const ['arm64-v8a'],
+      ignoredVersionCodeLoader: () async => ignoredVersionCode,
+      ignoredVersionCodeWriter: (value) async {
+        ignoredVersionCode = value;
+      },
+    );
+
+    final update = await service.checkForUpdate();
+    await service.ignoreUpdate(update!);
+
+    expect(ignoredVersionCode, 2003);
+    expect(await service.checkForUpdate(), isNull);
+  });
 
   test(
     'loads update manifest from fallback URI when the primary fails',

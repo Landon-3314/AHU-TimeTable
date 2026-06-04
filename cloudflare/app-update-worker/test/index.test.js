@@ -5,7 +5,8 @@ import worker from '../src/index.js';
 
 const validManifest = {
   versionName: '0.3.6',
-  versionCode: 4,
+  versionCode: 2004,
+  baseVersionCode: 4,
   releaseNotes: '安课 0.3.6 更新。',
   assets: [
     {
@@ -13,6 +14,7 @@ const validManifest = {
       url: 'https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.6%2B4/timetable-0.3.6%2B4-arm64-v8a.apk',
       sha256: 'b'.repeat(64),
       size: 2048,
+      versionCode: 2004,
     },
   ],
 };
@@ -42,7 +44,10 @@ test('GET /update.json is an alias for the latest manifest', async () => {
   );
 
   assert.equal(response.status, 200);
-  assert.equal((await response.json()).versionCode, 4);
+  const manifest = await response.json();
+  assert.equal(manifest.versionCode, 2004);
+  assert.equal(manifest.baseVersionCode, 4);
+  assert.equal(manifest.assets[0].versionCode, 2004);
 });
 
 test('returns 502 when latest release manifest download fails', async () => {
@@ -65,6 +70,25 @@ test('returns 502 when update manifest is invalid', async () => {
 
   assert.equal(response.status, 502);
   assert.equal((await response.json()).error, 'Unable to load update manifest');
+});
+
+test('returns 502 when split APK version metadata is invalid', async () => {
+  for (const manifest of [
+    { ...validManifest, baseVersionCode: 0 },
+    {
+      ...validManifest,
+      assets: [{ ...validManifest.assets[0], versionCode: 0 }],
+    },
+  ]) {
+    const response = await withMockedFetch(
+      [jsonResponse(manifest)],
+      [],
+      () => worker.fetch(new Request('https://update.277620035.xyz/latest')),
+    );
+
+    assert.equal(response.status, 502);
+    assert.equal((await response.json()).error, 'Unable to load update manifest');
+  }
 });
 
 test('returns 405 for non-GET requests', async () => {

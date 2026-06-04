@@ -4,17 +4,21 @@ class UpdateManifest {
     required this.versionCode,
     required this.releaseNotes,
     required this.assets,
+    this.baseVersionCode,
   });
 
   factory UpdateManifest.fromJson(Map<String, Object?> json) {
     final versionName = json['versionName'];
     final versionCode = json['versionCode'];
+    final baseVersionCode = json['baseVersionCode'];
     final releaseNotes = json['releaseNotes'];
     final rawAssets = json['assets'];
     if (versionName is! String ||
         versionName.trim().isEmpty ||
         versionCode is! int ||
         versionCode <= 0 ||
+        (baseVersionCode != null &&
+            (baseVersionCode is! int || baseVersionCode <= 0)) ||
         rawAssets is! List) {
       throw const FormatException('Invalid update manifest');
     }
@@ -30,6 +34,7 @@ class UpdateManifest {
     return UpdateManifest(
       versionName: versionName.trim(),
       versionCode: versionCode,
+      baseVersionCode: baseVersionCode is int ? baseVersionCode : null,
       releaseNotes: releaseNotes is String ? releaseNotes.trim() : '',
       assets: assets,
     );
@@ -37,6 +42,7 @@ class UpdateManifest {
 
   final String versionName;
   final int versionCode;
+  final int? baseVersionCode;
   final String releaseNotes;
   final List<UpdateAsset> assets;
 
@@ -58,6 +64,7 @@ class UpdateAsset {
     required this.url,
     required this.sha256,
     required this.size,
+    this.versionCode,
     this.mirrorUrls = const [],
   });
 
@@ -67,6 +74,7 @@ class UpdateAsset {
     final rawMirrorUrls = json['mirrorUrls'];
     final sha256 = json['sha256'];
     final size = json['size'];
+    final versionCode = json['versionCode'];
     final parsedUrl = url is String ? Uri.tryParse(url) : null;
     final mirrorUrls = _parseMirrorUrls(rawMirrorUrls);
     if (abi is! String ||
@@ -79,7 +87,8 @@ class UpdateAsset {
         sha256 is! String ||
         !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(sha256.trim()) ||
         size is! int ||
-        size <= 0) {
+        size <= 0 ||
+        (versionCode != null && (versionCode is! int || versionCode <= 0))) {
       throw const FormatException('Invalid update asset');
     }
 
@@ -88,6 +97,7 @@ class UpdateAsset {
       url: parsedUrl,
       sha256: sha256.trim().toLowerCase(),
       size: size,
+      versionCode: versionCode is int ? versionCode : null,
       mirrorUrls: mirrorUrls,
     );
   }
@@ -96,6 +106,7 @@ class UpdateAsset {
   final Uri url;
   final String sha256;
   final int size;
+  final int? versionCode;
   final List<Uri> mirrorUrls;
 
   static List<Uri>? _parseMirrorUrls(Object? value) {

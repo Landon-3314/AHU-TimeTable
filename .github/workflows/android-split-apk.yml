@@ -273,10 +273,29 @@ jobs:
               f"https://github.com/{repository}/releases/download/"
               f"{urllib.parse.quote(tag, safe='')}"
           )
+          metadata_path = os.path.join(
+              "build", "app", "outputs", "apk", "release", "output-metadata.json"
+          )
+          with open(metadata_path, "r", encoding="utf-8") as handle:
+              metadata = json.load(handle)
+          asset_version_codes = {}
+          for element in metadata.get("elements", []):
+              abi = None
+              for item in element.get("filters", []):
+                  if item.get("filterType") == "ABI":
+                      abi = item.get("value")
+                      break
+              version_code = element.get("versionCode")
+              if abi and isinstance(version_code, int) and version_code > 0:
+                  asset_version_codes[abi] = version_code
+
           assets = []
           for abi in ["armeabi-v7a", "arm64-v8a", "x86_64"]:
               name = f"timetable-{version}-{abi}.apk"
               path = os.path.join("release", name)
+              version_code = asset_version_codes.get(abi)
+              if version_code is None:
+                  raise RuntimeError(f"Missing split APK versionCode for {abi}")
               with open(path, "rb") as handle:
                   digest = hashlib.sha256(handle.read()).hexdigest()
               assets.append({
@@ -284,10 +303,13 @@ jobs:
                   "url": f"{release_base}/{urllib.parse.quote(name, safe='')}",
                   "sha256": digest,
                   "size": os.path.getsize(path),
+                  "versionCode": version_code,
               })
+          base_version_code = int(version.split("+", 1)[1])
           manifest = {
               "versionName": version.split("+", 1)[0],
-              "versionCode": int(version.split("+", 1)[1]),
+              "versionCode": max(asset["versionCode"] for asset in assets),
+              "baseVersionCode": base_version_code,
               "releaseNotes": f"安课 {version} 更新。",
               "assets": assets,
           }

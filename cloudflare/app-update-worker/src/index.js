@@ -54,6 +54,7 @@ function validateManifest(manifest) {
     manifest.versionName.trim() === '' ||
     !Number.isInteger(manifest.versionCode) ||
     manifest.versionCode <= 0 ||
+    !validOptionalPositiveInteger(manifest.baseVersionCode) ||
     !Array.isArray(manifest.assets) ||
     manifest.assets.length === 0
   ) {
@@ -76,10 +77,15 @@ function validateAsset(asset) {
     !/^[a-fA-F0-9]{64}$/.test(asset.sha256.trim()) ||
     !Number.isInteger(asset.size) ||
     asset.size <= 0 ||
+    !validOptionalPositiveInteger(asset.versionCode) ||
     !validMirrorUrls(asset.mirrorUrls)
   ) {
     throw new Error('Invalid update asset');
   }
+}
+
+function validOptionalPositiveInteger(value) {
+  return value === undefined || (Number.isInteger(value) && value > 0);
 }
 
 function validMirrorUrls(mirrorUrls) {
