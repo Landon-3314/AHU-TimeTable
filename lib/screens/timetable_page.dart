@@ -13,7 +13,6 @@ import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/timetable_navigation_controller.dart';
 import '../services/timetable_view_data_service.dart';
-import '../widgets/semester_start_date_dialog.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/guided_tour_overlay.dart';
 import '../widgets/timetable/holiday_list_view.dart';
@@ -21,10 +20,10 @@ import '../widgets/timetable/course_overview_panel.dart';
 import '../widgets/timetable/timetable_detail_sheets.dart';
 import '../widgets/timetable/timetable_grid.dart';
 import '../widgets/timetable/week_selector.dart';
+import 'academic_account_page.dart';
 import 'exam_overview_page.dart';
-import 'import_course_page.dart';
 
-enum _TimetableToolbarAction { overview, academicImport, addCourse }
+enum _TimetableToolbarAction { overview, addCourse }
 
 class TimetablePage extends StatefulWidget {
   const TimetablePage({super.key});
@@ -44,11 +43,9 @@ class _TimetablePageState extends State<TimetablePage> {
   final GlobalKey _weekSelectorGuideKey = GlobalKey();
   final GlobalKey _todayGuideKey = GlobalKey();
   final GlobalKey _overviewGuideKey = GlobalKey();
-  final GlobalKey _importGuideKey = GlobalKey();
   final GlobalKey _addCourseGuideKey = GlobalKey();
   // 折叠菜单内引导使用的 GlobalKey
   final GlobalKey _menuOverviewGuideKey = GlobalKey();
-  final GlobalKey _menuImportGuideKey = GlobalKey();
   final GlobalKey _menuAddCourseGuideKey = GlobalKey();
   bool _isToolbarGuideShowing = false;
   bool _isMenuGuideShowing = false;
@@ -275,12 +272,6 @@ class _TimetablePageState extends State<TimetablePage> {
           ? [_buildNarrowToolbarMenu(context)]
           : [
               IconButton(
-                key: _importGuideKey,
-                onPressed: () => _openAcademicImport(context),
-                icon: const Icon(Icons.cloud_download_outlined),
-                tooltip: settingsProvider.t('import_from_system'),
-              ),
-              IconButton(
                 key: _addCourseGuideKey,
                 onPressed: () => _openAddCourse(context),
                 icon: const Icon(Icons.add),
@@ -355,7 +346,6 @@ class _TimetablePageState extends State<TimetablePage> {
         ).modalBarrierDismissLabel,
         // 需要引导时传入 GlobalKey，让菜单项绑定 key
         overviewGuideKey: needMenuGuide ? _menuOverviewGuideKey : null,
-        importGuideKey: needMenuGuide ? _menuImportGuideKey : null,
         addCourseGuideKey: needMenuGuide ? _menuAddCourseGuideKey : null,
         onMenuReady: needMenuGuide ? _showMenuGuideIfNeeded : null,
       ),
@@ -373,8 +363,6 @@ class _TimetablePageState extends State<TimetablePage> {
     switch (action) {
       case _TimetableToolbarAction.overview:
         _showCourseOverview(context);
-      case _TimetableToolbarAction.academicImport:
-        _openAcademicImport(context);
       case _TimetableToolbarAction.addCourse:
         _openAddCourse(context);
     }
@@ -394,7 +382,7 @@ class _TimetablePageState extends State<TimetablePage> {
       importCoursesLabel: settingsProvider.t('import_from_system'),
       showImportCourses: showImportCourses,
       onAddCourse: () => _openAddCourse(context),
-      onImportCourses: () => _openAcademicImport(context),
+      onImportCourses: () => _openAcademicAccount(context),
     );
   }
 
@@ -402,27 +390,10 @@ class _TimetablePageState extends State<TimetablePage> {
     await Navigator.of(context).pushNamed(AppRoutes.addCourse);
   }
 
-  Future<void> _openAcademicImport(BuildContext context) async {
-    final canImport = await _ensureSemesterInitializedBeforeImport(context);
-    if (!canImport || !mounted || !context.mounted) {
-      return;
-    }
-
-    final importResult = await Navigator.of(
-      context,
-    ).pushNamed<AcademicImportResult>(AppRoutes.importCourses);
-    if (!mounted || !context.mounted || importResult == null) {
-      return;
-    }
-
-    final settingsProvider = context.read<SettingsProvider>();
-    final summaryMessage = _buildImportSummaryMessage(
-      settingsProvider,
-      importResult,
+  Future<void> _openAcademicAccount(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const AcademicAccountPage()),
     );
-    ScaffoldMessenger.of(context)
-      ..removeCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(summaryMessage)));
   }
 
   String _buildCoursePeriodTextFor(
@@ -433,23 +404,6 @@ class _TimetablePageState extends State<TimetablePage> {
         .t('period_range_format')
         .replaceAll('{start}', course.startPeriod.toString())
         .replaceAll('{end}', course.endPeriod.toString());
-  }
-
-  String _buildImportSummaryMessage(
-    SettingsProvider settingsProvider,
-    AcademicImportResult result,
-  ) {
-    if (result.kind == AcademicImportKind.exam) {
-      return '成功导入 ${result.importedCount} 场考试';
-    }
-
-    final summary = '总共添加了 ${result.importedCount} 门课';
-    if (result.skippedCount == 0) {
-      return summary;
-    }
-
-    final reasons = result.skippedReasons.join('；');
-    return '$summary；跳过 ${result.skippedCount} 条：$reasons';
   }
 
   Future<void> _showCourseOverview(BuildContext context) async {
@@ -469,7 +423,7 @@ class _TimetablePageState extends State<TimetablePage> {
             },
             onImportCourses: () async {
               Navigator.of(sheetContext).pop();
-              await _openAcademicImport(pageContext);
+              await _openAcademicAccount(pageContext);
             },
             onCourseGroupTap: (group) async {
               final selectedCourse = await _showCourseGroupRecords(
@@ -574,57 +528,6 @@ class _TimetablePageState extends State<TimetablePage> {
     return '$hour:$minute';
   }
 
-  Future<bool> _ensureSemesterInitializedBeforeImport(
-    BuildContext context,
-  ) async {
-    final settingsProvider = context.read<SettingsProvider>();
-    if (settingsProvider.isCurrentSemesterInitialized) {
-      return true;
-    }
-
-    final shouldInitialize = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('当前学期尚未初始化'),
-          content: const Text('当前学期尚未初始化，请先完成学期开始日期设置后再导入课程。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('去初始化'),
-            ),
-          ],
-        );
-      },
-    );
-    if (shouldInitialize != true || !context.mounted) {
-      return false;
-    }
-
-    final selectedDate = await showSemesterStartDateDialog(
-      context: context,
-      initialDate: settingsProvider.semesterStartDate,
-      canCancel: settingsProvider.semesters.length > 1,
-    );
-    if (selectedDate == null || !context.mounted) {
-      return false;
-    }
-
-    if (settingsProvider.currentSemesterId == null) {
-      await settingsProvider.createSemesterWithInitialData(
-        startDate: selectedDate,
-      );
-    } else {
-      await settingsProvider.completeInitialSemesterStartDate(selectedDate);
-    }
-
-    return settingsProvider.isCurrentSemesterInitialized;
-  }
-
   Future<void> _showTimetableToolbarGuideIfNeeded() async {
     if (_isToolbarGuideShowing || !mounted) {
       return;
@@ -639,7 +542,7 @@ class _TimetablePageState extends State<TimetablePage> {
     _isToolbarGuideShowing = true;
 
     // 窄屏模式：只展示可见按钮的引导（周次选择器 + 今日按钮）
-    // 宽屏模式：展示全部5步引导
+    // 宽屏模式：展示可见工具栏按钮引导
     final steps = _isNarrowMode
         ? [
             GuidedTourStep(
@@ -668,11 +571,6 @@ class _TimetablePageState extends State<TimetablePage> {
               targetKey: _overviewGuideKey,
               title: settingsProvider.t('guide_timetable_overview_title'),
               body: settingsProvider.t('guide_timetable_overview_body'),
-            ),
-            GuidedTourStep(
-              targetKey: _importGuideKey,
-              title: settingsProvider.t('guide_timetable_import_title'),
-              body: settingsProvider.t('guide_timetable_import_body'),
             ),
             GuidedTourStep(
               targetKey: _addCourseGuideKey,
@@ -734,11 +632,6 @@ class _TimetablePageState extends State<TimetablePage> {
           targetKey: _menuOverviewGuideKey,
           title: settingsProvider.t('guide_timetable_overview_title'),
           body: settingsProvider.t('guide_timetable_overview_body'),
-        ),
-        GuidedTourStep(
-          targetKey: _menuImportGuideKey,
-          title: settingsProvider.t('guide_timetable_import_title'),
-          body: settingsProvider.t('guide_timetable_import_body'),
         ),
         GuidedTourStep(
           targetKey: _menuAddCourseGuideKey,
@@ -1062,7 +955,6 @@ class _TimetableToolbarMenuRoute extends PopupRoute<_TimetableToolbarAction> {
     required this.anchorRect,
     required String barrierLabel,
     this.overviewGuideKey,
-    this.importGuideKey,
     this.addCourseGuideKey,
     this.onMenuReady,
   }) : _barrierLabel = barrierLabel;
@@ -1070,7 +962,6 @@ class _TimetableToolbarMenuRoute extends PopupRoute<_TimetableToolbarAction> {
   final Rect anchorRect;
   final String _barrierLabel;
   final GlobalKey? overviewGuideKey;
-  final GlobalKey? importGuideKey;
   final GlobalKey? addCourseGuideKey;
   final VoidCallback? onMenuReady;
 
@@ -1100,7 +991,6 @@ class _TimetableToolbarMenuRoute extends PopupRoute<_TimetableToolbarAction> {
       child: _TimetableToolbarMenu(
         animation: animation,
         overviewGuideKey: overviewGuideKey,
-        importGuideKey: importGuideKey,
         addCourseGuideKey: addCourseGuideKey,
         onMenuReady: onMenuReady,
       ),
@@ -1152,7 +1042,6 @@ class _TimetableToolbarMenu extends StatefulWidget {
   const _TimetableToolbarMenu({
     required this.animation,
     this.overviewGuideKey,
-    this.importGuideKey,
     this.addCourseGuideKey,
     this.onMenuReady,
   });
@@ -1170,7 +1059,6 @@ class _TimetableToolbarMenu extends StatefulWidget {
 
   final Animation<double> animation;
   final GlobalKey? overviewGuideKey;
-  final GlobalKey? importGuideKey;
   final GlobalKey? addCourseGuideKey;
   final VoidCallback? onMenuReady;
 
@@ -1190,7 +1078,6 @@ class _TimetableToolbarMenuState extends State<_TimetableToolbarMenu> {
       child: _TimetableToolbarMenuItems(
         onSelected: (action) => Navigator.of(context).pop(action),
         overviewGuideKey: widget.overviewGuideKey,
-        importGuideKey: widget.importGuideKey,
         addCourseGuideKey: widget.addCourseGuideKey,
       ),
       builder: (context, child) {
@@ -1272,13 +1159,11 @@ class _TimetableToolbarMenuItems extends StatelessWidget {
   const _TimetableToolbarMenuItems({
     required this.onSelected,
     this.overviewGuideKey,
-    this.importGuideKey,
     this.addCourseGuideKey,
   });
 
   final ValueChanged<_TimetableToolbarAction> onSelected;
   final GlobalKey? overviewGuideKey;
-  final GlobalKey? importGuideKey;
   final GlobalKey? addCourseGuideKey;
 
   @override
@@ -1295,16 +1180,6 @@ class _TimetableToolbarMenuItems extends StatelessWidget {
             icon: Icons.dashboard_outlined,
             label: '总览',
             onTap: () => onSelected(_TimetableToolbarAction.overview),
-          ),
-        ),
-        KeyedSubtree(
-          key:
-              importGuideKey ??
-              const ValueKey('narrow-toolbar-menu-action-academic-import'),
-          child: _TimetableToolbarMenuItem(
-            icon: Icons.cloud_download_outlined,
-            label: '导入教务课表',
-            onTap: () => onSelected(_TimetableToolbarAction.academicImport),
           ),
         ),
         KeyedSubtree(

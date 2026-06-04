@@ -29,6 +29,17 @@ void main() {
         ),
       );
 
+      expect(find.text('账号'), findsOneWidget);
+      expect(find.text('教务账号'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('账号')).dy,
+        lessThan(tester.getTopLeft(find.text('外观')).dy),
+      );
+      await tester.scrollUntilVisible(
+        find.text('应用更新'),
+        200,
+        scrollable: find.byType(Scrollable),
+      );
       expect(find.text('应用更新'), findsOneWidget);
       expect(find.text('检查更新'), findsOneWidget);
       expect(find.text('手动检测新版本'), findsOneWidget);
@@ -275,7 +286,11 @@ Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
 }
 
 Future<void> _scrollToUpdateEntry(WidgetTester tester) async {
-  await tester.ensureVisible(find.text('检查更新'));
+  await tester.scrollUntilVisible(
+    find.text('检查更新'),
+    200,
+    scrollable: find.byType(Scrollable),
+  );
   await tester.pumpAndSettle();
 }
 

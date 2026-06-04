@@ -12,6 +12,7 @@ import 'package:timetable/models/event.dart';
 import 'package:timetable/providers/course_provider.dart';
 import 'package:timetable/providers/settings_provider.dart';
 import 'package:timetable/providers/timetable_view_provider.dart';
+import 'package:timetable/screens/academic_account_page.dart';
 import 'package:timetable/screens/add_course_page.dart';
 import 'package:timetable/screens/exam_overview_page.dart';
 import 'package:timetable/screens/timetable_page.dart';
@@ -212,7 +213,9 @@ void main() {
     },
   );
 
-  testWidgets('empty timetable exposes add and import actions', (tester) async {
+  testWidgets('empty timetable import action opens academic account page', (
+    tester,
+  ) async {
     final bundle = await _createProviderBundle();
 
     await tester.pumpWidget(_buildPage(bundle));
@@ -224,6 +227,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AddCoursePage), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, '导入教务课表'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AcademicAccountPage), findsOneWidget);
   });
 
   testWidgets('empty day after timetable import exposes only add action', (
@@ -295,6 +305,16 @@ void main() {
     expect(find.byTooltip('教务考试'), findsNothing);
   });
 
+  testWidgets('toolbar no longer exposes academic import action', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(_buildPage(bundle));
+
+    expect(find.byTooltip('导入教务课表'), findsNothing);
+  });
+
   testWidgets('narrow toolbar uses themed anchored action menu', (
     tester,
   ) async {
@@ -333,7 +353,7 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('narrow-toolbar-menu-action-academic-import')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('narrow-toolbar-menu-action-add-course')),
@@ -349,11 +369,15 @@ void main() {
     expect(find.text('教务考试'), findsNothing);
     expect(find.byIcon(Icons.assignment_outlined), findsNothing);
     expect(
+      find.descendant(of: menuCard, matching: find.text('导入教务课表')),
+      findsNothing,
+    );
+    expect(
       find.descendant(
         of: menuCard,
         matching: find.byIcon(Icons.cloud_download_outlined),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.descendant(of: menuCard, matching: find.byIcon(Icons.add)),
