@@ -258,6 +258,7 @@ jobs:
       - name: Prepare update manifest
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
         shell: bash
         run: |
           python3 - <<'PY'
@@ -268,10 +269,18 @@ jobs:
 
           version = os.environ["VERSION"]
           repository = os.environ["GITHUB_REPOSITORY"]
+          r2_public_base_url = (
+              os.environ.get("R2_PUBLIC_BASE_URL", "").strip().rstrip("/")
+              or "https://download.277620035.xyz"
+          )
           tag = f"v{version}"
           release_base = (
               f"https://github.com/{repository}/releases/download/"
               f"{urllib.parse.quote(tag, safe='')}"
+          )
+          r2_release_base = (
+              f"{r2_public_base_url}/releases/"
+              f"{urllib.parse.quote(version, safe='')}"
           )
           metadata_path = os.path.join(
               "build", "app", "outputs", "apk", "release", "output-metadata.json"
@@ -298,9 +307,12 @@ jobs:
                   raise RuntimeError(f"Missing split APK versionCode for {abi}")
               with open(path, "rb") as handle:
                   digest = hashlib.sha256(handle.read()).hexdigest()
+              r2_url = f"{r2_release_base}/{urllib.parse.quote(name, safe='')}"
+              github_url = f"{release_base}/{urllib.parse.quote(name, safe='')}"
               assets.append({
                   "abi": abi,
-                  "url": f"{release_base}/{urllib.parse.quote(name, safe='')}",
+                  "url": r2_url,
+                  "mirrorUrls": [github_url],
                   "sha256": digest,
                   "size": os.path.getsize(path),
                   "versionCode": version_code,
@@ -317,6 +329,36 @@ jobs:
               json.dump(manifest, handle, ensure_ascii=False, indent=2)
               handle.write("\n")
           PY
+
+      - name: Upload APKs to Cloudflare R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "Missing required secret: CLOUDFLARE_API_TOKEN" >&2
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "Missing required secret: CLOUDFLARE_ACCOUNT_ID" >&2
+            exit 1
+          fi
+
+          bucket="${R2_BUCKET:-app-downloads}"
+          version="${{ steps.version.outputs.version }}"
+
+          for apk in release/*.apk; do
+            key="releases/${version}/$(basename "$apk")"
+            npx --yes wrangler@latest r2 object put "${bucket}/${key}" \
+              --remote \
+              --file "$apk" \
+              --content-type "application/vnd.android.package-archive" \
+              --cache-control "public, max-age=31536000, immutable"
+          done
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4

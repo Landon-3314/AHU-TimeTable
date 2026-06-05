@@ -121,6 +121,59 @@ void main() {
       expect(await file.readAsBytes(), apkBytes);
     },
   );
+
+  test('retries GitHub Release mirror when the R2 URL fails', () async {
+    final directory = await Directory.systemTemp.createTemp('update-test-');
+    addTearDown(() => directory.delete(recursive: true));
+
+    final apkBytes = utf8.encode('apk-bytes');
+    final expectedHash = sha256.convert(apkBytes).toString();
+    final r2Uri = Uri.parse(
+      'https://download.277620035.xyz/releases/0.3.10+2/timetable-0.3.10+2-arm64-v8a.apk',
+    );
+    final githubUri = Uri.parse(
+      'https://github.com/owner/repo/releases/download/v0.3.10%2B2/timetable-0.3.10%2B2-arm64-v8a.apk',
+    );
+    final githubMirrorUri = Uri.parse('https://gh-proxy.example/$githubUri');
+    final client = _FakeUpdateHttpClient([
+      _FakeHttpFailure(const SocketException('r2 unavailable')),
+      _FakeHttpSuccess(apkBytes),
+    ]);
+    final update = AvailableUpdate(
+      manifest: UpdateManifest(
+        versionName: '0.3.10',
+        versionCode: 2002,
+        releaseNotes: '',
+        assets: [
+          UpdateAsset(
+            abi: 'arm64-v8a',
+            url: r2Uri,
+            mirrorUrls: [githubUri],
+            sha256: expectedHash,
+            size: apkBytes.length,
+          ),
+        ],
+      ),
+      asset: UpdateAsset(
+        abi: 'arm64-v8a',
+        url: r2Uri,
+        mirrorUrls: [githubUri],
+        sha256: expectedHash,
+        size: apkBytes.length,
+      ),
+    );
+    final service = UpdateDownloadService(
+      platform: _FakeAppUpdatePlatform(directory),
+      httpClientFactory: () => client,
+      githubMirrorPrefixes: const ['https://gh-proxy.example/'],
+    );
+
+    final file = await service.downloadApk(update);
+
+    expect(client.requestedUris, [r2Uri, githubUri]);
+    expect(client.requestedUris, isNot(contains(githubMirrorUri)));
+    expect(await file.readAsBytes(), apkBytes);
+  });
 }
 
 class _FakeAppUpdatePlatform extends AppUpdatePlatform {
