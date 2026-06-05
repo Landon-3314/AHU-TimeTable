@@ -54,7 +54,7 @@ void main() {
         isTrue,
       );
 
-      await service.markDailyTimetableImportAttempted(
+      await service.markDailyTimetableImportCompleted(
         now: DateTime(2026, 6, 4, 0, 1),
       );
 

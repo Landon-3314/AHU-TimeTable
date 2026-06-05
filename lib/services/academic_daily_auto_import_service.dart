@@ -48,11 +48,15 @@ class AcademicDailyAutoImportService {
     return lastAttemptDate != today;
   }
 
-  Future<void> markDailyTimetableImportAttempted({DateTime? now}) {
+  Future<void> markDailyTimetableImportCompleted({DateTime? now}) {
     return store.write(
       key: lastTimetableAttemptDateKey,
       value: _localDateKey(now ?? DateTime.now()),
     );
+  }
+
+  Future<void> markDailyTimetableImportAttempted({DateTime? now}) {
+    return markDailyTimetableImportCompleted(now: now);
   }
 
   String _localDateKey(DateTime value) {

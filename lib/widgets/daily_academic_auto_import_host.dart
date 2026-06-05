@@ -21,11 +21,18 @@ class DailyAcademicAutoImportHost extends StatefulWidget {
     required this.child,
     this.dailyAutoImportService = const AcademicDailyAutoImportService(),
     this.silentAutoImportBuilder,
+    this.retryDelays = _defaultRetryDelays,
   });
+
+  static const List<Duration> _defaultRetryDelays = <Duration>[
+    Duration(minutes: 10),
+    Duration(minutes: 30),
+  ];
 
   final Widget child;
   final AcademicDailyAutoImportService dailyAutoImportService;
   final DailyAcademicSilentAutoImportBuilder? silentAutoImportBuilder;
+  final List<Duration> retryDelays;
 
   @override
   State<DailyAcademicAutoImportHost> createState() =>
@@ -36,7 +43,9 @@ class _DailyAcademicAutoImportHostState
     extends State<DailyAcademicAutoImportHost>
     with WidgetsBindingObserver {
   AcademicAutoAction? _runningAction;
+  Timer? _retryTimer;
   bool _isChecking = false;
+  int _retryDelayIndex = 0;
   int _runId = 0;
 
   @override
@@ -51,6 +60,7 @@ class _DailyAcademicAutoImportHostState
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _retryTimer?.cancel();
     super.dispose();
   }
 
@@ -88,7 +98,10 @@ class _DailyAcademicAutoImportHostState
   }
 
   Future<void> _checkAndRunDailyTimetableImport() async {
-    if (!mounted || _isChecking || _runningAction != null) {
+    if (!mounted ||
+        _isChecking ||
+        _runningAction != null ||
+        _retryTimer != null) {
       return;
     }
 
@@ -101,11 +114,6 @@ class _DailyAcademicAutoImportHostState
       final shouldRun = await widget.dailyAutoImportService
           .shouldRunDailyTimetableImport();
       if (!mounted || !shouldRun) {
-        return;
-      }
-
-      await widget.dailyAutoImportService.markDailyTimetableImportAttempted();
-      if (!mounted) {
         return;
       }
 
@@ -145,16 +153,46 @@ class _DailyAcademicAutoImportHostState
   }
 
   void _handleSilentAutoImportResult(AcademicImportResult result) {
-    _finishRunSilently();
+    unawaited(_finishSuccessfulRunSilently());
   }
 
   void _handleSilentAutoImportError(String message) {
-    _finishRunSilently();
+    final retryDelay = _nextRetryDelay();
+    _finishRunSilently(resetRetryState: retryDelay == null);
+    if (retryDelay != null) {
+      _scheduleRetry(retryDelay);
+    }
   }
 
-  void _finishRunSilently() {
+  Future<void> _finishSuccessfulRunSilently() async {
+    try {
+      await widget.dailyAutoImportService.markDailyTimetableImportCompleted();
+    } finally {
+      _finishRunSilently(resetRetryState: true);
+    }
+  }
+
+  Duration? _nextRetryDelay() {
+    if (_retryDelayIndex >= widget.retryDelays.length) {
+      return null;
+    }
+    return widget.retryDelays[_retryDelayIndex++];
+  }
+
+  void _scheduleRetry(Duration delay) {
+    _retryTimer?.cancel();
+    _retryTimer = Timer(delay, () {
+      _retryTimer = null;
+      unawaited(_checkAndRunDailyTimetableImport());
+    });
+  }
+
+  void _finishRunSilently({required bool resetRetryState}) {
     if (!mounted) {
       return;
+    }
+    if (resetRetryState) {
+      _retryDelayIndex = 0;
     }
     setState(() {
       _runningAction = null;

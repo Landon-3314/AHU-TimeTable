@@ -27,6 +27,22 @@ enum AcademicImportKind { timetable, exam }
 
 enum AcademicAutoAction { timetable, exam }
 
+class AcademicImportPopGuard extends StatelessWidget {
+  const AcademicImportPopGuard({
+    super.key,
+    required this.canLeave,
+    required this.child,
+  });
+
+  final bool canLeave;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(canPop: canLeave, child: child);
+  }
+}
+
 class AcademicImportResult {
   const AcademicImportResult({
     required this.kind,
@@ -177,51 +193,57 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     final settingsProvider = context.watch<SettingsProvider>();
     final activeAction = _activeAction;
     final isExtracting = activeAction != null || _autoImportStatus != null;
-    return Scaffold(
-      appBar: AppBar(title: Text(settingsProvider.t('academic_import'))),
-      body: Column(
-        children: [
-          _buildPageLoadProgress(),
-          if (widget.showCredentialPanel)
-            _buildCredentialPanel(settingsProvider, isExtracting),
-          Expanded(
-            child: widget.showWebView
-                ? KeyedSubtree(key: _webViewGuideKey, child: _buildWebView())
-                : _buildHiddenAutoImportBody(settingsProvider),
-          ),
-        ],
+    return AcademicImportPopGuard(
+      canLeave: !isExtracting,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(settingsProvider.t('academic_import')),
+          automaticallyImplyLeading: !isExtracting,
+        ),
+        body: Column(
+          children: [
+            _buildPageLoadProgress(),
+            if (widget.showCredentialPanel)
+              _buildCredentialPanel(settingsProvider, isExtracting),
+            Expanded(
+              child: widget.showWebView
+                  ? KeyedSubtree(key: _webViewGuideKey, child: _buildWebView())
+                  : _buildHiddenAutoImportBody(settingsProvider),
+            ),
+          ],
+        ),
+        floatingActionButton: widget.showWebView
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FloatingActionButton.extended(
+                    key: _examGuideKey,
+                    heroTag: 'extract_exam',
+                    onPressed: isExtracting ? null : _runExamExtractScript,
+                    icon: const Icon(Icons.assignment_outlined),
+                    label: Text(
+                      activeAction == _ImportAction.exam
+                          ? settingsProvider.t('extracting_exam')
+                          : settingsProvider.t('extract_exam'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FloatingActionButton.extended(
+                    key: _timetableGuideKey,
+                    heroTag: 'extract_timetable',
+                    onPressed: isExtracting ? null : _runTimetableExtractScript,
+                    icon: const Icon(Icons.download_for_offline_outlined),
+                    label: Text(
+                      activeAction == _ImportAction.timetable
+                          ? settingsProvider.t('extracting')
+                          : settingsProvider.t('extract_timetable'),
+                    ),
+                  ),
+                ],
+              )
+            : null,
       ),
-      floatingActionButton: widget.showWebView
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                FloatingActionButton.extended(
-                  key: _examGuideKey,
-                  heroTag: 'extract_exam',
-                  onPressed: isExtracting ? null : _runExamExtractScript,
-                  icon: const Icon(Icons.assignment_outlined),
-                  label: Text(
-                    activeAction == _ImportAction.exam
-                        ? settingsProvider.t('extracting_exam')
-                        : settingsProvider.t('extract_exam'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FloatingActionButton.extended(
-                  key: _timetableGuideKey,
-                  heroTag: 'extract_timetable',
-                  onPressed: isExtracting ? null : _runTimetableExtractScript,
-                  icon: const Icon(Icons.download_for_offline_outlined),
-                  label: Text(
-                    activeAction == _ImportAction.timetable
-                        ? settingsProvider.t('extracting')
-                        : settingsProvider.t('extract_timetable'),
-                  ),
-                ),
-              ],
-            )
-          : null,
     );
   }
 

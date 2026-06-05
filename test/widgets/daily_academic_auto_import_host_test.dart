@@ -38,7 +38,7 @@ void main() {
 
       expect(find.text('home'), findsOneWidget);
       expect(launchedActions, [AcademicAutoAction.timetable]);
-      expect(dailyService.markAttemptedCount, 1);
+      expect(dailyService.markCompletedCount, 1);
       expect(find.text('课表导入完成，已导入 3 门课程。'), findsNothing);
     },
   );
@@ -71,7 +71,48 @@ void main() {
 
     expect(find.text('home'), findsOneWidget);
     expect(launchedActions, isEmpty);
-    expect(dailyService.markAttemptedCount, 0);
+    expect(dailyService.markCompletedCount, 0);
+  });
+
+  testWidgets('daily auto import host retries after a silent failure', (
+    tester,
+  ) async {
+    final settings = await _createSettingsProvider();
+    final dailyService = _FakeDailyAutoImportService(shouldRun: true);
+    final launchedActions = <AcademicAutoAction>[];
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<SettingsProvider>.value(
+        value: settings,
+        child: MaterialApp(
+          home: Scaffold(
+            body: DailyAcademicAutoImportHost(
+              dailyAutoImportService: dailyService,
+              retryDelays: const [Duration.zero],
+              silentAutoImportBuilder: (context, action, onResult, onError) {
+                launchedActions.add(action);
+                if (launchedActions.length == 1) {
+                  return _SilentAutoImportFailureProbe(onError: onError);
+                }
+                return _SilentAutoImportProbe(onResult: onResult);
+              },
+              child: const Text('home'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    await tester.pump();
+
+    expect(launchedActions, [
+      AcademicAutoAction.timetable,
+      AcademicAutoAction.timetable,
+    ]);
+    expect(dailyService.markCompletedCount, 1);
   });
 }
 
@@ -79,21 +120,25 @@ Future<SettingsProvider> _createSettingsProvider() async {
   SharedPreferences.setMockInitialValues({});
   final preferences = await SharedPreferences.getInstance();
   final storage = StorageService(sharedPreferences: preferences);
-  await storage.ensureSemesterMigration();
-  final settings = SettingsProvider(storageService: storage);
-  await settings.createSemesterWithInitialData(startDate: DateTime(2026, 3, 2));
-  return settings;
+  return _InitializedSettingsProvider(storageService: storage);
+}
+
+class _InitializedSettingsProvider extends SettingsProvider {
+  _InitializedSettingsProvider({required super.storageService});
+
+  @override
+  bool get isCurrentSemesterInitialized => true;
 }
 
 class _FakeDailyAutoImportService implements AcademicDailyAutoImportService {
   _FakeDailyAutoImportService({required this.shouldRun});
 
   final bool shouldRun;
-  int markAttemptedCount = 0;
+  int markCompletedCount = 0;
 
   @override
-  Future<void> markDailyTimetableImportAttempted({DateTime? now}) async {
-    markAttemptedCount += 1;
+  Future<void> markDailyTimetableImportCompleted({DateTime? now}) async {
+    markCompletedCount += 1;
   }
 
   @override
@@ -131,5 +176,31 @@ class _SilentAutoImportProbeState extends State<_SilentAutoImportProbe> {
   @override
   Widget build(BuildContext context) {
     return const Text('daily auto import probe');
+  }
+}
+
+class _SilentAutoImportFailureProbe extends StatefulWidget {
+  const _SilentAutoImportFailureProbe({required this.onError});
+
+  final ValueChanged<String> onError;
+
+  @override
+  State<_SilentAutoImportFailureProbe> createState() =>
+      _SilentAutoImportFailureProbeState();
+}
+
+class _SilentAutoImportFailureProbeState
+    extends State<_SilentAutoImportFailureProbe> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onError('failed');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('daily auto import failure probe');
   }
 }
