@@ -1,36 +1,36 @@
 {
-  "versionName": "0.3.11",
+  "versionName": "0.3.12",
   "versionCode": 4003,
   "baseVersionCode": 3,
-  "releaseNotes": "安课 0.3.11+3 更新。",
+  "releaseNotes": "安课 0.3.12+3 更新。",
   "assets": [
     {
       "abi": "armeabi-v7a",
-      "url": "https://download.277620035.xyz/releases/0.3.11%2B3/timetable-0.3.11%2B3-armeabi-v7a.apk",
+      "url": "https://download.277620035.xyz/releases/0.3.12%2B3/timetable-0.3.12%2B3-armeabi-v7a.apk",
       "mirrorUrls": [
-        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.11%2B3/timetable-0.3.11%2B3-armeabi-v7a.apk"
+        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.12%2B3/timetable-0.3.12%2B3-armeabi-v7a.apk"
       ],
-      "sha256": "9115181c956c652d192d32e86e29d34eff68bfe83ea045650671d316ab891bf9",
-      "size": 19803180,
+      "sha256": "1261c2c4ccd01c97b8c29f022d4fe1916c49a8cead68698bc86fe5ecf8e0e5f1",
+      "size": 19819564,
       "versionCode": 1003
     },
     {
       "abi": "arm64-v8a",
-      "url": "https://download.277620035.xyz/releases/0.3.11%2B3/timetable-0.3.11%2B3-arm64-v8a.apk",
+      "url": "https://download.277620035.xyz/releases/0.3.12%2B3/timetable-0.3.12%2B3-arm64-v8a.apk",
       "mirrorUrls": [
-        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.11%2B3/timetable-0.3.11%2B3-arm64-v8a.apk"
+        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.12%2B3/timetable-0.3.12%2B3-arm64-v8a.apk"
       ],
-      "sha256": "05c696372e6dd4cdda6225cb6b68b7b0dfc1e49ca4066b25dd98940d0698bfb6",
+      "sha256": "5a8c2bd8d6d9c0a71b5ff2e6dac1e5d1d39ba9b2551247edcbcf2278ab1c4386",
       "size": 21998628,
       "versionCode": 2003
     },
     {
       "abi": "x86_64",
-      "url": "https://download.277620035.xyz/releases/0.3.11%2B3/timetable-0.3.11%2B3-x86_64.apk",
+      "url": "https://download.277620035.xyz/releases/0.3.12%2B3/timetable-0.3.12%2B3-x86_64.apk",
       "mirrorUrls": [
-        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.11%2B3/timetable-0.3.11%2B3-x86_64.apk"
+        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.12%2B3/timetable-0.3.12%2B3-x86_64.apk"
       ],
-      "sha256": "7bafcd0d4002824e0d816c5aaba58c94cfdba8d4f23cb1a6ea9975eef3033493",
+      "sha256": "f8ce1fa286613a710f931e93fd7190360d74aa6eddcc051e3f30cecab1b38090",
       "size": 23522328,
       "versionCode": 4003
     }
