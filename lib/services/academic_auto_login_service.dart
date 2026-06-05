@@ -26,13 +26,14 @@ class AcademicAutoLoginService {
     if (host == 'jw.ahu.edu.cn' && path == '/student/for-std/course-table') {
       return AcademicPageKind.timetable;
     }
-    if (host == 'jw.ahu.edu.cn' && path == '/student/for-std/exam-arrange') {
+    if (host == 'jw.ahu.edu.cn' &&
+        path.startsWith('/student/for-std/exam-arrange')) {
       return AcademicPageKind.exam;
     }
     return AcademicPageKind.other;
   }
 
-  static String buildLoginScript(AcademicCredential credential) {
+  static String buildUnifiedPortalLoginScript(AcademicCredential credential) {
     final studentId = jsonEncode(credential.studentId);
     final password = jsonEncode(credential.password);
     return '''
@@ -41,22 +42,27 @@ class AcademicAutoLoginService {
     const studentId = $studentId;
     const password = $password;
     const usernameSelectors = [
+      '#un',
       '#username',
       'input[name="username"]',
       'input[name="userName"]',
       'input[name="loginName"]',
+      'input[name="account"]',
       'input[placeholder="用户名"]',
       'input[placeholder*="账号"]',
       'input[placeholder*="学号"]',
       'input[type="text"]'
     ];
     const passwordSelectors = [
+      '#pd',
       '#password',
       'input[name="password"]',
       'input[placeholder="密码"]',
       'input[type="password"]'
     ];
     const submitSelectors = [
+      '#index_login_btn',
+      '.login_box_landing_btn',
       'button[type="submit"]',
       'input[type="submit"]',
       '.login-btn',
@@ -109,19 +115,6 @@ class AcademicAutoLoginService {
       }) || null;
     }
 
-    function firstVisibleTextTarget(labels) {
-      const nodes = Array.from(document.querySelectorAll('button,a,[role="menuitem"],.el-menu-item,li,span,div'));
-      return nodes.find(function(node) {
-        if (!isVisible(node)) {
-          return false;
-        }
-        const text = (node.innerText || node.value || node.textContent || '').trim();
-        return labels.some(function(label) {
-          return text === label;
-        });
-      }) || null;
-    }
-
     if (firstVisible(challengeSelectors)) {
       return 'CHALLENGE_REQUIRED';
     }
@@ -129,11 +122,6 @@ class AcademicAutoLoginService {
     const username = firstVisible(usernameSelectors);
     const passwordInput = firstVisible(passwordSelectors);
     if (!username || !passwordInput) {
-      const accountLoginTab = firstVisibleTextTarget(['账号登录']);
-      if (accountLoginTab) {
-        accountLoginTab.click();
-        return 'SWITCHED_LOGIN_TAB';
-      }
       return 'MISSING_FORM';
     }
 
@@ -141,15 +129,26 @@ class AcademicAutoLoginService {
     username.value = studentId;
     username.dispatchEvent(new Event('input', { bubbles: true }));
     username.dispatchEvent(new Event('change', { bubbles: true }));
+    if (window.jQuery) {
+      window.jQuery(username).val(studentId).trigger('input').trigger('change');
+    }
 
     passwordInput.focus();
     passwordInput.value = password;
     passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
     passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
+    if (window.jQuery) {
+      window.jQuery(passwordInput).val(password).trigger('input').trigger('change');
+    }
+
+    if (typeof window.login === 'function') {
+      window.login();
+      return 'SUBMITTED';
+    }
 
     const submit =
       firstVisible(submitSelectors) ||
-      firstVisibleButtonByText(['登录']);
+      firstVisibleButtonByText(['立即登录']);
     if (!submit) {
       return 'MISSING_SUBMIT';
     }

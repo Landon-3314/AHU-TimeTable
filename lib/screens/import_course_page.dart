@@ -643,6 +643,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     final deadline = DateTime.now().add(timeout);
     var redirectedFromHome = false;
     var refreshAttempted = false;
+    var portalLoginSubmitted = false;
 
     while (DateTime.now().isBefore(deadline)) {
       final currentUrl = await _controller.currentUrl();
@@ -658,14 +659,18 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         continue;
       }
 
-      if (await _isPageReady(readyScript)) {
+      final pageReady = await _isPageReady(readyScript);
+      if (pageReady) {
         return;
       }
 
       switch (pageKind) {
         case AcademicPageKind.casLogin:
-        case AcademicPageKind.jwLogin:
-          final loginResult = await _runAutoLoginScript(credential);
+          if (portalLoginSubmitted) {
+            _setAutoImportStatus(settingsProvider.t('auto_import_logging_in'));
+            break;
+          }
+          final loginResult = await _runUnifiedPortalLoginScript(credential);
           if (loginResult == 'CHALLENGE_REQUIRED') {
             throw settingsProvider.t('auto_import_challenge_required');
           }
@@ -673,8 +678,22 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
             throw loginResult.replaceFirst('JS_ERROR:', '').trim();
           }
           if (loginResult == 'SUBMITTED') {
+            portalLoginSubmitted = true;
             _setAutoImportStatus(settingsProvider.t('auto_import_logging_in'));
+          } else if (loginResult == 'MISSING_FORM') {
+            _setAutoImportStatus(
+              settingsProvider.t('auto_import_waiting_unified_login'),
+            );
+          } else if (loginResult == 'MISSING_SUBMIT') {
+            throw settingsProvider.t('auto_import_submit_missing');
           }
+        case AcademicPageKind.jwLogin:
+          _setAutoImportStatus(
+            settingsProvider.t('auto_import_redirecting_portal'),
+          );
+          await _controller.loadRequest(
+            Uri.parse(ScheduleHtmlExtractor.academicCasLoginUrl),
+          );
         case AcademicPageKind.studentHome:
           if (!redirectedFromHome) {
             redirectedFromHome = true;
@@ -694,9 +713,11 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     throw settingsProvider.t('auto_import_timeout');
   }
 
-  Future<String> _runAutoLoginScript(AcademicCredential credential) async {
+  Future<String> _runUnifiedPortalLoginScript(
+    AcademicCredential credential,
+  ) async {
     final rawResult = await _controller.runJavaScriptReturningResult(
-      AcademicAutoLoginService.buildLoginScript(credential),
+      AcademicAutoLoginService.buildUnifiedPortalLoginScript(credential),
     );
     return _normalizeJavaScriptResult(rawResult);
   }

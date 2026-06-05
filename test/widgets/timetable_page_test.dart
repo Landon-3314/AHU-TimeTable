@@ -100,6 +100,27 @@ void main() {
     expect(find.text('切换周次'), findsOneWidget);
   });
 
+  testWidgets('narrow toolbar guide only covers visible actions', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 720));
+    final bundle = await _createProviderBundle(confirmGuides: false);
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.pumpAndSettle();
+
+    expect(find.text('切换周次'), findsOneWidget);
+    expect(find.text('第 1/2 步'), findsOneWidget);
+    expect(find.text('第 1/4 步'), findsNothing);
+
+    await tester.tap(find.text('下一步'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('回到今天'), findsOneWidget);
+    expect(find.text('第 2/2 步'), findsOneWidget);
+  });
+
   testWidgets(
     'overview groups courses by name and opens a single record edit',
     (tester) async {

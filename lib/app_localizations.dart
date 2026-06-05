@@ -291,8 +291,9 @@ class AppStrings {
     'academic_import_actions': {'zh': '教务提取', 'en': 'Academic Import'},
     'auto_extract_timetable': {'zh': '自动提取课程', 'en': 'Auto Import Timetable'},
     'auto_extract_timetable_subtitle': {
-      'zh': '后台打开教务课表页，登录后自动解析并导入课程',
-      'en': 'Open the timetable page in the background and import courses',
+      'zh': '后台打开教务课表页，经统一门户自动登录后导入课程',
+      'en':
+          'Open the timetable page in the background, sign in through the unified portal, and import courses',
     },
     'auto_extract_exam': {'zh': '自动提取考试', 'en': 'Auto Import Exams'},
     'auto_extract_exam_subtitle': {
@@ -333,13 +334,26 @@ class AppStrings {
       'en': 'Preparing auto import...',
     },
     'auto_import_hidden_webview_notice': {
-      'zh': '自动流程会在后台完成；失败后可返回使用手动打开教务页面。',
+      'zh': '自动流程会先进入统一登录门户，再使用保存的账密登录；失败后可手动打开教务页面。',
       'en':
-          'The automatic flow runs in the background. You can fall back to manual import if it fails.',
+          'The flow enters the unified portal and signs in with saved credentials. Use manual import if it fails.',
     },
     'auto_import_logging_in': {
       'zh': '已提交登录，正在等待跳转...',
       'en': 'Login submitted. Waiting for redirect...',
+    },
+    'auto_import_redirecting_portal': {
+      'zh': '正在跳转统一登录门户...',
+      'en': 'Redirecting to the unified login portal...',
+    },
+    'auto_import_waiting_unified_login': {
+      'zh': '正在等待统一登录门户表单加载...',
+      'en': 'Waiting for the unified portal login form...',
+    },
+    'auto_import_submit_missing': {
+      'zh': '统一登录门户未找到登录按钮，请手动打开教务页面登录后重试。',
+      'en':
+          'The unified portal login button was not found. Open the academic page manually, sign in, and try again.',
     },
     'auto_import_waiting_table': {
       'zh': '正在等待课表加载...',
@@ -366,13 +380,13 @@ class AppStrings {
       'en': 'Exam page ready. Extracting...',
     },
     'auto_import_failed': {
-      'zh': '自动登录失败：{reason}。你可以继续手动操作后点击一键提取课表。',
+      'zh': '教务导入失败：{reason}。你可以继续手动操作后点击一键提取课表。',
       'en':
-          'Auto login failed: {reason}. You can continue manually and tap Extract Timetable.',
+          'Academic import failed: {reason}. You can continue manually and tap Extract Timetable.',
     },
     'auto_import_timeout': {
-      'zh': '等待登录或课表加载超时',
-      'en': 'Timed out waiting for login or timetable loading',
+      'zh': '等待统一门户登录或教务页面加载超时',
+      'en': 'Timed out waiting for unified login or academic page loading',
     },
     'auto_import_challenge_required': {
       'zh': '检测到验证码或二次验证，需要手动完成',

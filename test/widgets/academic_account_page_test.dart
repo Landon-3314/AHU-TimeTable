@@ -39,18 +39,6 @@ void main() {
 
       await tester.enterText(_textFieldWithLabel('学号'), 'G12345678');
       await tester.enterText(_textFieldWithLabel('密码'), 'secret');
-      await tester.tap(find.text('保存账密'));
-      await tester.pumpAndSettle();
-
-      expect(
-        await AcademicCredentialService(store: store).load(),
-        const AcademicCredential(
-          studentId: 'G12345678',
-          password: 'secret',
-          autoLoginEnabled: true,
-        ),
-      );
-
       await tester.ensureVisible(find.text('自动提取课程'));
       await tester.tap(find.text('自动提取课程'));
       await tester.pumpAndSettle();
@@ -66,6 +54,14 @@ void main() {
         AcademicAutoAction.exam,
         null,
       ]);
+      expect(
+        await AcademicCredentialService(store: store).load(),
+        const AcademicCredential(
+          studentId: 'G12345678',
+          password: 'secret',
+          autoLoginEnabled: true,
+        ),
+      );
     },
   );
 

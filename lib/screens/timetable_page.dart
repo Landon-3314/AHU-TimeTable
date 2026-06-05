@@ -107,13 +107,8 @@ class _TimetablePageState extends State<TimetablePage> {
         return LayoutBuilder(
           builder: (context, constraints) {
             final isNarrow = constraints.maxWidth < 420;
-            // 在 build 期间不能 setState，用 postFrameCallback 延迟更新
             if (_isNarrowMode != isNarrow) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  _isNarrowMode = isNarrow;
-                }
-              });
+              _isNarrowMode = isNarrow;
             }
             return Scaffold(
               appBar: _buildAppBar(
@@ -609,7 +604,7 @@ class _TimetablePageState extends State<TimetablePage> {
     }
 
     await context.read<SettingsProvider>().confirmTimetableToolbarGuide();
-    // 宽屏模式已展示全部5步引导，菜单引导也视为已完成
+    // 宽屏模式已展示全部4步引导，菜单引导也视为已完成
     if (!_isNarrowMode) {
       if (!mounted) return;
       await context.read<SettingsProvider>().confirmTimetableMenuGuide();

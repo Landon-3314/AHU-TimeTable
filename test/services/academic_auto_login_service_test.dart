@@ -6,26 +6,29 @@ import 'package:timetable/services/academic_auto_login_service.dart';
 import 'package:timetable/services/schedule_html_extractor.dart';
 
 void main() {
-  test('builds login script with json escaped credentials and selectors', () {
+  test('builds unified portal login script with escaped credentials', () {
     const credential = AcademicCredential(
       studentId: "G12'34\\56\n78",
       password: "pa'ss\\word\n!",
       autoLoginEnabled: true,
     );
 
-    final script = AcademicAutoLoginService.buildLoginScript(credential);
+    final script = AcademicAutoLoginService.buildUnifiedPortalLoginScript(
+      credential,
+    );
 
     expect(script, contains(jsonEncode(credential.studentId)));
     expect(script, contains(jsonEncode(credential.password)));
+    expect(script, contains('#un'));
+    expect(script, contains('#pd'));
     expect(script, contains('#username'));
     expect(script, contains('input[name="username"]'));
-    expect(script, contains('用户名'));
-    expect(script, contains('密码'));
-    expect(script, contains('账号登录'));
-    expect(script, contains('登录'));
-    expect(script, contains('SWITCHED_LOGIN_TAB'));
     expect(script, contains('input[type="password"]'));
+    expect(script, contains('#index_login_btn'));
     expect(script, contains('button[type="submit"]'));
+    expect(script, contains('window.login()'));
+    expect(script, contains('SUBMITTED'));
+    expect(script, contains('CHALLENGE_REQUIRED'));
     expect(script, isNot(contains("studentId = '${credential.studentId}'")));
     expect(script, isNot(contains("password = '${credential.password}'")));
   });
@@ -70,6 +73,12 @@ void main() {
     expect(
       AcademicAutoLoginService.classifyUrl(
         Uri.parse(ScheduleHtmlExtractor.academicExamUrl),
+      ),
+      AcademicPageKind.exam,
+    );
+    expect(
+      AcademicAutoLoginService.classifyUrl(
+        Uri.parse('${ScheduleHtmlExtractor.academicExamUrl}/info/99358'),
       ),
       AcademicPageKind.exam,
     );
