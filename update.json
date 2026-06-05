@@ -1,29 +1,38 @@
 {
-  "versionName": "0.3.10",
-  "versionCode": 4002,
-  "baseVersionCode": 2,
-  "releaseNotes": "安课 0.3.10+2 更新。",
+  "versionName": "0.3.11",
+  "versionCode": 4003,
+  "baseVersionCode": 3,
+  "releaseNotes": "安课 0.3.11+3 更新。",
   "assets": [
     {
       "abi": "armeabi-v7a",
-      "url": "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.10%2B2/timetable-0.3.10%2B2-armeabi-v7a.apk",
-      "sha256": "5304ae40d4068951341a6d5f96b47b09215361dc2cb7c33904ae96fd3496c006",
+      "url": "https://download.277620035.xyz/releases/0.3.11%2B3/timetable-0.3.11%2B3-armeabi-v7a.apk",
+      "mirrorUrls": [
+        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.11%2B3/timetable-0.3.11%2B3-armeabi-v7a.apk"
+      ],
+      "sha256": "9115181c956c652d192d32e86e29d34eff68bfe83ea045650671d316ab891bf9",
       "size": 19803180,
-      "versionCode": 1002
+      "versionCode": 1003
     },
     {
       "abi": "arm64-v8a",
-      "url": "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.10%2B2/timetable-0.3.10%2B2-arm64-v8a.apk",
-      "sha256": "16f5f33f6947ff0eda890aaf1c6e6d9ceaedd9514fa3273d34b551da6fc370f6",
+      "url": "https://download.277620035.xyz/releases/0.3.11%2B3/timetable-0.3.11%2B3-arm64-v8a.apk",
+      "mirrorUrls": [
+        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.11%2B3/timetable-0.3.11%2B3-arm64-v8a.apk"
+      ],
+      "sha256": "05c696372e6dd4cdda6225cb6b68b7b0dfc1e49ca4066b25dd98940d0698bfb6",
       "size": 21998628,
-      "versionCode": 2002
+      "versionCode": 2003
     },
     {
       "abi": "x86_64",
-      "url": "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.10%2B2/timetable-0.3.10%2B2-x86_64.apk",
-      "sha256": "7c22b257d09843806f0abfb756a784952249e21ad2d83f48d840a2673e54137e",
+      "url": "https://download.277620035.xyz/releases/0.3.11%2B3/timetable-0.3.11%2B3-x86_64.apk",
+      "mirrorUrls": [
+        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.3.11%2B3/timetable-0.3.11%2B3-x86_64.apk"
+      ],
+      "sha256": "7bafcd0d4002824e0d816c5aaba58c94cfdba8d4f23cb1a6ea9975eef3033493",
       "size": 23522328,
-      "versionCode": 4002
+      "versionCode": 4003
     }
   ]
 }
