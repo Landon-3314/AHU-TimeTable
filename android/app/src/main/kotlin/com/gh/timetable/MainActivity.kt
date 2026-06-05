@@ -53,6 +53,7 @@ private const val NOTIFICATION_DIAG_TAG = "NotificationDiag"
 private const val REMINDER_CHANNEL_ID = "timetable_reminders"
 private const val UPDATER_PREFS = "app_updater"
 private const val LAST_DOWNLOADED_APK_PATH = "lastDownloadedApkPath"
+private const val PENDING_INSTALL_APK_PATH = "pendingInstallApkPath"
 private const val ENABLE_SCROLL_CAPTURE_OVERLAY_DIAGNOSTICS = false
 
 class MainActivity : FlutterActivity() {
@@ -254,6 +255,7 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         mainHandler.post { installScrollCaptureCallbackIfNeeded() }
+        retryPendingInstallAfterPermission()
         if (ENABLE_SCROLL_CAPTURE_OVERLAY_DIAGNOSTICS) {
             setupScrollOverlayIfNeeded()
             refreshOverlayScrollable()
@@ -505,21 +507,45 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !packageManager.canRequestPackageInstalls()
-        ) {
-            val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                data = Uri.parse("package:$packageName")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (!canRequestApkInstalls()) {
+            val settingsOpened = openUnknownAppSourcesSettings()
+            if (settingsOpened) {
+                rememberPendingInstall(apkFile)
             }
-            try {
-                startActivity(settingsIntent)
-            } catch (_: ActivityNotFoundException) {}
-            result.success(false)
+            result.success(if (settingsOpened) "permissionSettingsOpened" else "failed")
             return
         }
 
+        return if (openApkInstaller(apkFile)) {
+            getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
+                .edit()
+                .putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
+                .apply()
+            result.success("installerOpened")
+        } else {
+            result.success("failed")
+        }
+    }
+
+    private fun canRequestApkInstalls(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            packageManager.canRequestPackageInstalls()
+    }
+
+    private fun openUnknownAppSourcesSettings(): Boolean {
+        val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+            data = Uri.parse("package:$packageName")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            startActivity(settingsIntent)
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    private fun openApkInstaller(apkFile: File): Boolean {
         val uri = FileProvider.getUriForFile(
             this,
             "$packageName.fileprovider",
@@ -530,17 +556,40 @@ class MainActivity : FlutterActivity() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-
         return try {
-            getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
-                .edit()
-                .putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
-                .apply()
             startActivity(installIntent)
-            result.success(true)
+            true
         } catch (_: ActivityNotFoundException) {
-            result.success(false)
+            false
         }
+    }
+
+    private fun rememberPendingInstall(apkFile: File) {
+        getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
+            .edit()
+            .putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
+            .putString(PENDING_INSTALL_APK_PATH, apkFile.absolutePath)
+            .apply()
+    }
+
+    private fun retryPendingInstallAfterPermission() {
+        if (!canRequestApkInstalls()) {
+            return
+        }
+        val prefs = getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
+        val path = prefs.getString(PENDING_INSTALL_APK_PATH, null) ?: return
+        val apkFile = File(path)
+        if (!isAllowedDownloadedApk(apkFile) || !apkFile.exists()) {
+            prefs.edit().remove(PENDING_INSTALL_APK_PATH).apply()
+            return
+        }
+        val installerOpened = openApkInstaller(apkFile)
+        val editor = prefs.edit().remove(PENDING_INSTALL_APK_PATH)
+        if (installerOpened) {
+            editor
+                .putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
+        }
+        editor.apply()
     }
 
     private fun cleanupDownloadedApk() {
@@ -550,7 +599,10 @@ class MainActivity : FlutterActivity() {
         if (isAllowedDownloadedApk(apkFile) && apkFile.exists()) {
             apkFile.delete()
         }
-        prefs.edit().remove(LAST_DOWNLOADED_APK_PATH).apply()
+        prefs.edit()
+            .remove(LAST_DOWNLOADED_APK_PATH)
+            .remove(PENDING_INSTALL_APK_PATH)
+            .apply()
     }
 
     private fun isAllowedDownloadedApk(file: File): Boolean {

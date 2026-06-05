@@ -3,6 +3,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+enum AppUpdateInstallResult {
+  installerOpened,
+  permissionSettingsOpened,
+  failed,
+}
+
 class AppUpdatePlatform {
   const AppUpdatePlatform({MethodChannel channel = _defaultChannel})
     : _channel = channel;
@@ -55,17 +61,17 @@ class AppUpdatePlatform {
     }
   }
 
-  Future<bool> installApk(File apkFile) async {
+  Future<AppUpdateInstallResult> installApk(File apkFile) async {
     try {
-      final result = await _channel.invokeMethod<bool>(
+      final result = await _channel.invokeMethod<Object?>(
         'installApk',
         <String, Object?>{'path': apkFile.path},
       );
-      return result ?? false;
+      return _parseInstallResult(result);
     } on MissingPluginException {
-      return false;
+      return AppUpdateInstallResult.failed;
     } catch (_) {
-      return false;
+      return AppUpdateInstallResult.failed;
     }
   }
 
@@ -77,5 +83,22 @@ class AppUpdatePlatform {
     } catch (_) {
       return;
     }
+  }
+
+  static AppUpdateInstallResult _parseInstallResult(Object? result) {
+    if (result == true) {
+      return AppUpdateInstallResult.installerOpened;
+    }
+    if (result is String) {
+      switch (result) {
+        case 'installerOpened':
+          return AppUpdateInstallResult.installerOpened;
+        case 'permissionSettingsOpened':
+          return AppUpdateInstallResult.permissionSettingsOpened;
+        case 'failed':
+          return AppUpdateInstallResult.failed;
+      }
+    }
+    return AppUpdateInstallResult.failed;
   }
 }

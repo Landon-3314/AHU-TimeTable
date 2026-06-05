@@ -91,7 +91,7 @@ class UpdateDownloadService {
     }
   }
 
-  Future<bool> install(File apkFile) {
+  Future<AppUpdateInstallResult> install(File apkFile) {
     return _platform.installApk(apkFile);
   }
 

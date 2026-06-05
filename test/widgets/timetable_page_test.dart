@@ -85,6 +85,21 @@ void main() {
     expect(find.byIcon(Icons.done), findsNothing);
   });
 
+  testWidgets('toolbar guide appears before semester initialization', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle(
+      initialized: false,
+      confirmGuides: false,
+    );
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.pumpAndSettle();
+
+    expect(bundle.settings.shouldShowSemesterStartDatePrompt, isTrue);
+    expect(find.text('切换周次'), findsOneWidget);
+  });
+
   testWidgets(
     'overview groups courses by name and opens a single record edit',
     (tester) async {
@@ -538,15 +553,22 @@ Widget _buildPage(_ProviderBundle bundle) {
   );
 }
 
-Future<_ProviderBundle> _createProviderBundle() async {
+Future<_ProviderBundle> _createProviderBundle({
+  bool initialized = true,
+  bool confirmGuides = true,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final preferences = await SharedPreferences.getInstance();
   final storage = StorageService(sharedPreferences: preferences);
   await storage.ensureSemesterMigration();
   final settings = SettingsProvider(storageService: storage);
-  await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
-  await settings.confirmTimetableToolbarGuide();
-  await settings.confirmTimetableMenuGuide();
+  if (initialized) {
+    await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
+  }
+  if (confirmGuides) {
+    await settings.confirmTimetableToolbarGuide();
+    await settings.confirmTimetableMenuGuide();
+  }
   final timetableView = TimetableViewProvider()
     ..initializeRealDate(
       week: settings.currentRealWeek,

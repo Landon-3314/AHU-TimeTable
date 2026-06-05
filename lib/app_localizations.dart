@@ -64,6 +64,11 @@ class AppStrings {
       'zh': '已打开系统安装器，请确认安装',
       'en': 'System installer opened. Please confirm installation.',
     },
+    'update_install_permission_opened': {
+      'zh': '请允许安装未知应用，返回后将自动继续安装',
+      'en':
+          'Allow installing unknown apps. Installation will resume when you return.',
+    },
     'update_install_failed': {
       'zh': '无法打开安装器，请允许安装未知应用后重试',
       'en':

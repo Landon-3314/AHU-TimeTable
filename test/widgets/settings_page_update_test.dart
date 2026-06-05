@@ -130,6 +130,40 @@ void main() {
     expect(find.text('已打开系统安装器，请确认安装'), findsOneWidget);
   });
 
+  testWidgets(
+    'manual update reports permission flow will retry automatically',
+    (tester) async {
+      final bundle = await _createProviderBundle(
+        externalDataBackupStore: _RecordingBackupStore(),
+      );
+      final downloadService = _RecordingUpdateDownloadService(
+        installResult: AppUpdateInstallResult.permissionSettingsOpened,
+      );
+      final updateService = _availableUpdateService(versionCode: 3);
+
+      await tester.pumpWidget(
+        _SettingsHost(
+          settings: bundle.settings,
+          courses: bundle.courses,
+          child: SettingsPage(
+            updatePlatform: const _SupportedUpdatePlatform(),
+            updateCheckService: updateService,
+            updateDownloadService: downloadService,
+          ),
+        ),
+      );
+
+      await _scrollToUpdateEntry(tester);
+      await tester.tap(find.text('检查更新'));
+      await _pumpUntilFound(tester, find.text('立即更新'));
+      await tester.tap(find.text('立即更新'));
+      await _pumpUntilFound(tester, find.text('请允许安装未知应用，返回后将自动继续安装'));
+
+      expect(downloadService.installCallCount, 1);
+      expect(find.text('无法打开安装器，请允许安装未知应用后重试'), findsNothing);
+    },
+  );
+
   testWidgets('manual update cancels install when backup fails', (
     tester,
   ) async {
@@ -330,9 +364,13 @@ class _ProviderBundle {
 }
 
 class _RecordingUpdateDownloadService extends UpdateDownloadService {
-  _RecordingUpdateDownloadService({this.backupReadyAtInstall});
+  _RecordingUpdateDownloadService({
+    this.backupReadyAtInstall,
+    this.installResult = AppUpdateInstallResult.installerOpened,
+  });
 
   final bool Function()? backupReadyAtInstall;
+  final AppUpdateInstallResult installResult;
   int downloadCallCount = 0;
   int installCallCount = 0;
   bool backupExistedAtInstall = false;
@@ -347,10 +385,10 @@ class _RecordingUpdateDownloadService extends UpdateDownloadService {
   }
 
   @override
-  Future<bool> install(File apkFile) async {
+  Future<AppUpdateInstallResult> install(File apkFile) async {
     installCallCount += 1;
     backupExistedAtInstall = backupReadyAtInstall?.call() ?? true;
-    return true;
+    return installResult;
   }
 }
 

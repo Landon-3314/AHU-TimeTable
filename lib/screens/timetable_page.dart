@@ -547,8 +547,7 @@ class _TimetablePageState extends State<TimetablePage> {
     }
 
     final settingsProvider = context.read<SettingsProvider>();
-    if (!settingsProvider.shouldShowTimetableToolbarGuide ||
-        settingsProvider.shouldShowSemesterStartDatePrompt) {
+    if (!settingsProvider.shouldShowTimetableToolbarGuide) {
       return;
     }
 

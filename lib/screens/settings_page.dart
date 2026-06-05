@@ -319,17 +319,19 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    final installStarted = await widget.updateDownloadService.install(
+    final installResult = await widget.updateDownloadService.install(
       result.file!,
     );
     if (!mounted) {
       return;
     }
-    _showSnackBar(
-      installStarted
-          ? provider.t('update_install_opened')
-          : provider.t('update_install_failed'),
-    );
+    final messageKey = switch (installResult) {
+      AppUpdateInstallResult.installerOpened => 'update_install_opened',
+      AppUpdateInstallResult.permissionSettingsOpened =>
+        'update_install_permission_opened',
+      AppUpdateInstallResult.failed => 'update_install_failed',
+    };
+    _showSnackBar(provider.t(messageKey));
   }
 
   void _showSnackBar(String message) {
