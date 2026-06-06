@@ -85,6 +85,68 @@ void main() {
     expect(find.byIcon(Icons.done), findsNothing);
   });
 
+  testWidgets(
+    'today button from holiday week opens the real current week day',
+    (tester) async {
+      final bundle = await _createProviderBundle(totalWeeks: 2);
+      final todayWeek = bundle.settings.currentRealWeek;
+      final todayWeekday = bundle.settings.currentRealWeekday;
+      expect(todayWeek, greaterThan(1));
+      await bundle.courses.addCourses([
+        Course(
+          name: 'Wrong first-week course',
+          location: 'Room 101',
+          teacher: 'Dr. Old',
+          weekday: todayWeekday,
+          weeks: const [1],
+          startPeriod: 1,
+          endPeriod: 2,
+          colorValue: 0xFF7C9AF2,
+        ),
+        Course(
+          name: 'Correct today course',
+          location: 'Room 202',
+          teacher: 'Dr. Today',
+          weekday: todayWeekday,
+          weeks: [todayWeek],
+          startPeriod: 3,
+          endPeriod: 4,
+          colorValue: 0xFF7C9AF2,
+        ),
+      ]);
+
+      await tester.pumpWidget(_buildPage(bundle));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(AppPickerPill));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('第 1 周'));
+      await tester.pumpAndSettle();
+      expect(find.text('Wrong first-week course'), findsOneWidget);
+      expect(find.text('Correct today course'), findsNothing);
+
+      await tester.tap(find.text('周视图'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(AppPickerPill));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('假期中'),
+        120,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.text('假期中'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('假期中'), findsWidgets);
+
+      await tester.tap(find.byTooltip('回到今日'));
+      await tester.pump();
+
+      expect(find.text('Correct today course'), findsOneWidget);
+      expect(find.text('Wrong first-week course'), findsNothing);
+    },
+  );
+
   testWidgets('toolbar guide appears before semester initialization', (
     tester,
   ) async {
@@ -577,6 +639,7 @@ Widget _buildPage(_ProviderBundle bundle) {
 Future<_ProviderBundle> _createProviderBundle({
   bool initialized = true,
   bool confirmGuides = true,
+  int? totalWeeks,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final preferences = await SharedPreferences.getInstance();
@@ -585,6 +648,9 @@ Future<_ProviderBundle> _createProviderBundle({
   final settings = SettingsProvider(storageService: storage);
   if (initialized) {
     await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
+  }
+  if (totalWeeks != null) {
+    await settings.updateTotalWeeks(totalWeeks);
   }
   if (confirmGuides) {
     await settings.confirmTimetableToolbarGuide();

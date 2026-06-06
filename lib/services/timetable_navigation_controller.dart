@@ -140,6 +140,7 @@ class TimetableNavigationController extends ChangeNotifier {
     } finally {
       _isSyncingControllers = false;
     }
+    _scheduleControllerAlignment();
   }
 
   Future<void> jumpToToday() async {
@@ -154,6 +155,7 @@ class TimetableNavigationController extends ChangeNotifier {
     _selectedWeekForWeekView = targetWeek;
     _setCurrentWeekAndWeekday(week: targetWeek, weekday: targetWeekday);
     notifyListeners();
+    _scheduleControllerAlignment();
 
     _isSyncingControllers = true;
     try {
