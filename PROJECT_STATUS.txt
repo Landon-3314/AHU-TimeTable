@@ -1,357 +1,79 @@
-﻿==================================================
-2026-04-27 当前项目状态（扫描后更新）
+==================================================
+当前项目状态 (详细全景报告)
+最后扫描更新: 2026-06-06
 ==================================================
 
 Project: Local-first Flutter Timetable & Schedule App
 Workspace: D:\zzzzz\timetable
-Last updated: 2026-04-27
+目标定位: 多平台本地优先课表，以 Android 系统底层自动化（如自动静音、原生闹钟）为核心体验，同时提供应用内自更新和教务无感化接入的现代化产品。
 
-一、当前定位
-- 项目已升级为 Flutter 多端 scaffold 的本地优先课程表应用。
-- Android 仍是系统级能力最完整的平台。
-- iOS/macOS 已补齐原生 MethodChannel，支持课程/日程提醒调度与通知权限请求。
-- Linux/Windows/Web 当前保留 Flutter scaffold 与基础 UI/本地数据能力；系统级提醒、自动静音、后台保活尚未实现原生适配。
+--------------------------------------------------
+一、核心领域模型 (Core Domain Models)
+--------------------------------------------------
+1. Course (课程)
+   - 包含名称、地点、教师、星期、周次数组、开始/结束节次以及颜色配置。
+   - 实现了双 ID 机制：`id` 用于唯一追溯，`legacyId` 基于属性生成的 32位 稳定 Hash 码，用于处理早期数据的迁移和防止导入去重错乱。
+   - 支持调课追踪 (`rescheduledFromSessionKey`, `rescheduledFromWeek`)。
+2. Event (单次日程)
+   - 支持在日视图和周视图中与 Course 混合渲染，具备独立的 `dateTime` 和 `enableAlarm` 开关。
+3. Semester (学期) & TimeSlot (时间段)
+   - `Semester` 控制课表的生命周期、起止日期、周数。
+   - `TimeSlot` 抽象了每节课的物理开始/结束时间 (`ClockTime` 24小时制)。
+4. UpdateManifest (OTA 清单)
+   - 具备 `versionName`, `versionCode`, `baseVersionCode` 等校验维度。
+   - 内置 `UpdateAsset` 根据设备的 CPU ABI 进行智能匹配分发，支持主备多个分发镜像 (`mirrorUrls`) 及 `sha256` 完整性校验。
 
-二、当前核心功能（按扫描结果）
-- 课表视图：日视图、周视图、课程/日程混合展示、学期周选择、“假期中”模式、日/周导航同步、Android 长截图滚动捕获辅助。
-- 课程与日程管理：手动新增/编辑/删除课程，新增/编辑/删除单次日程，课程详情单次调课，导入/手动添加/编辑重复判断与导入覆盖策略。
-- 教务导入：WebView 登录教务系统后抓取 HTML，ScheduleHtmlExtractor 抽取页面/iframe 课表源码，ScheduleParserService 解析 HTML、周次、节次、地点、教师并去重。
-- 学期与时间配置：多学期创建/初始化/切换/重命名/删除，学期起始日期与总周数，上午/下午/晚上课程时间结构，小课间/大课间/课程时长配置。
-- 提醒与自动化：课程提醒、单次日程提醒；Android 额外支持 AlarmManager 精确触发、前台服务、上课自动静音与下课恢复；iOS/macOS 本次同步为 UserNotifications 本地通知。
-- 设置与数据：中英文切换，删除 WebView Cookies，删除全部课程/日程数据，开发者诊断页。
+--------------------------------------------------
+二、教务账号与全自动化集成
+--------------------------------------------------
+摒弃了仅依赖手动 WebView 注入的半自动方案，已全面升级为包含静默账号体系的全自动引擎：
+1. AcademicCredentialService
+   - 使用 `flutter_secure_storage` 安全保存教务系统登录凭据，防止账号泄漏。
+2. AcademicAutoLoginService
+   - 接管并重放用户的登录会话，在需要拉取新数据或 Cookie 失效时自动重登。
+3. AcademicDailyAutoImportService
+   - 后台自动执行每日课表快照获取与比对，通过特定的覆盖策略将教务系统新变更的课程无缝覆盖到本地。
+4. ScheduleParserService / ScheduleHtmlExtractor
+   - 在 WebView 和后台网络请求间共享解析能力，抽离 HTML 表格为结构化的 Course 数据，具备对教务系统脏数据的强大容错性。
+5. Exam Overview
+   - 新增独立页面 `exam_overview_page.dart` 处理考试时间/地点查询，与常规课表系统并行解耦。
 
-三、关键架构（当前）
-- UI: Material + Provider + PageView/ListView/Grid widgets。
-- State: CourseProvider / SettingsProvider / TimetableViewProvider。
-- Storage: SharedPreferences，支持多学期 key 命名空间与旧数据迁移。
-- Import: webview_flutter + JS/HTML 抽取 + html parser。
-- Scheduling: Flutter 层统一通过 AppServices.refreshSchedules(...) 生成调度 payload。
-- Android 原生：com.timetable/native_alarm -> AlarmManager + BroadcastReceiver + ForegroundService。
-- iOS 原生：com.timetable/native_alarm -> UNUserNotificationCenter。
-- macOS 原生：com.timetable/native_alarm -> UNUserNotificationCenter。
-- Permissions: app.permissions 负责通知权限；Android DND 使用 sound_mode PermissionHandler。
-- Platform channels: app.timezone、app.permissions、app.scroll_capture（Android）、com.timetable/native_alarm。
+--------------------------------------------------
+三、超低功耗的原生调度引擎 (Scheduling & Alarms)
+--------------------------------------------------
+已完全删除轮询式的 `flutter_background_service`，使用原生推入式队列接管应用级自动化：
+1. SchedulePlan / SchedulePlanBuilder
+   - App 层级的唯一计算源头：结合课程表、当前日历时间、节次配置、提醒提前时间等，计算出未来 N 天（Android 默认整个学期，其他 14 天）的：
+     * `ManagedNotification` (课前提醒 / 日程提醒)
+     * `AutoMuteWindow` (自动静音生效区间)
+     * `CourseStatusWindow` (用于长截图或桌面小组件的数据源)
+2. NativeAlarmService (核心层 - Android)
+   - Android 独占功能：利用系统的 `AlarmManager` 设置精确闹钟 (Exact Alarms)。
+   - 配合 `PermissionService` 的 DND（勿扰模式）权限，系统会自动在课程开始前推送通知，在上课瞬间将设备静音，并在下课瞬间恢复设备原有铃声状态。
+   - 新增 `PersistentCourseReminderManager` 维护安卓通知栏的“常驻今日课表”。
+3. LocalNotificationService (回退层)
+   - 对于 iOS、macOS 以及未授予高阶权限的 Android，接管 `ManagedNotification` 的基础通知唤醒。不支持自动静音的系统会收到特殊的“请手动静音”的提醒。
 
-四、本次跨端同步变更（2026-04-27）
-- iOS: 在 ios/Runner/AppDelegate.swift 注册 app.timezone、app.permissions、com.timetable/native_alarm；支持通知权限查询/请求；支持 scheduleAllClasses/cancelAllClasses，将课程/日程 reminderAtMillis 调度为本地通知；Android 专属能力返回安全 no-op。
-- macOS: 在 macos/Runner/MainFlutterWindow.swift 注册同等平台通道；支持通知权限查询/请求与课程/日程本地通知调度；Android 专属能力返回安全 no-op。
-- Flutter UI: reminder_settings_page.dart 在非 Android 平台隐藏“前台保活服务”和“上课自动静音”入口；非 Android 平台不再要求精确闹钟/DND 权限，不再弹出前台保活建议。
-- NativeAlarmService: Android/iOS/macOS 走原生调度通道；Windows/Linux/Web 当前直接 no-op 降级，避免未实现平台反复 MissingPlugin。
-- Course/Event legacy id 哈希改为 JS 安全的 32 位稳定哈希，修复 Web dart2js 无法表示 64 位整数字面量的问题。
-- PermissionService: 移除 dart:io Platform 依赖，改用 kIsWeb/defaultTargetPlatform 判断 Android，降低非移动平台编译风险。
+--------------------------------------------------
+四、存储与自诊断体系
+--------------------------------------------------
+1. StorageService & Provider
+   - 以 `CourseProvider`, `SettingsProvider`, `TimetableViewProvider` 三足鼎立管理 UI 层。
+   - 数据全量本地化于 `SharedPreferences`。
+2. 灾备与迁移
+   - `ExternalDataBackupStore`: 支持将完整的应用状态 (包括配置、课表) 导出为统一格式 JSON 便于跨设备迁移。
+   - `CorruptRowDiagnosticStore`: 解析到异常的教务数据或坏数据行时记录诊断日志，方便开发者 (通过 `developer_diagnostics_page.dart`) 排查线上异常。
 
-五、当前平台能力矩阵
-- Android: 课表/日程/导入/多学期/时间配置、课程提醒、日程提醒、自动静音/恢复、前台保活服务、长截图滚动捕获均已支持。
-- iOS: Flutter 基础业务已支持；课程提醒/日程提醒本次已同步到 UserNotifications；自动静音/前台保活/ROM 权限不适用，已 no-op 与 UI 隐藏；长截图滚动捕获未实现原生适配。
-- macOS: Flutter 基础业务已支持；课程提醒/日程提醒本次已同步到 UserNotifications；自动静音/前台保活/ROM 权限不适用，已 no-op 与 UI 隐藏；长截图滚动捕获未实现原生适配。
-- Linux/Windows/Web: 保留 scaffold 与 Flutter 基础能力；系统级提醒、后台自动化、长截图原生捕获未实现；Web 编译层已清除 64 位整数阻塞，WebView 与插件运行兼容性仍需实测。
+--------------------------------------------------
+五、应用内自更新 (OTA Updater)
+--------------------------------------------------
+1. 采用 `http` / `cronet_http` 进行高性能、防劫持的下载连接。
+2. `UpdateCheckService` 抓取远程 `UpdateManifest`。
+3. `UpdateDownloadService` 支持断点、多镜像 (`UpdateMirrorUrls`) 后台下载 APK 产物，并在校验 `sha256` 通过后调用底层包管理服务拉起安装。
 
-六、待验证
-- 在 macOS/Xcode 环境执行 flutter build ios --debug 或真机/模拟器运行，并执行 flutter build macos。
-- 验证 iOS/macOS 首次开启提醒时系统通知授权弹窗是否出现。
-- 验证 iOS/macOS 课程提醒与日程提醒是否按 reminderAtMillis 触发。
-- Android 真机回归精确闹钟、DND、通知权限、前台服务、自动静音/恢复和长截图滚动捕获。
-- Windows debug 构建已在当前机器通过，产物为 build\windows\x64\runner\Debug\timetable.exe。
-- Web release 构建已通过，产物为 build\web；WebView 与插件运行兼容性仍需浏览器实测。
-- Linux 后续仍需在 Linux 环境做基础 Flutter 编译与插件兼容性验证。
-
-七、已知限制 / 后续建议
-- iOS/macOS 的本地通知调度没有实现系统级“静音/恢复”，这是平台限制，不应在 UI 中暴露为可启用能力。
-- iOS/macOS 通知调度当前只消费 reminderAtMillis，忽略 silentAtMillis/restoreAtMillis。
-- Linux/Windows/Web 若要支持系统提醒，建议抽象 SystemNotificationScheduler，再分别实现桌面通知或降级为应用内提醒。
-- 开发者诊断页仍直接依赖 sound_mode，若未来开放给非 Android 平台，需要做平台保护或拆分 Android-only 页面。
-
-
-==================================================
-以下为历史归档（2026-03-25 旧状态，保留用于追溯）
-==================================================
-
-Project: Local-first Flutter Timetable & Schedule App
-Workspace: D:\zzzzz\timetable
-Last updated: 2026-03-25
-
-Overview
-该项目已从“课程展示”演进为“本地优先的课程 + 日程管理应用”，核心能力包括：
-- 课程（Course）与单次日程（Event）混合管理
-- 教务系统 WebView 抓取导入（含异常结构兼容）
-- 多语言（中文/英文）
-- Android 自动静音（前台常驻后台服务）
-- 课前提醒迁移至后台轮询触发（不再依赖 zonedSchedule）
-- 周视图支持“假期中”模式
-
-Current Architecture (Active)
-- UI: PageView + ListView + Provider
-- Local storage: SharedPreferences
-- Import: WebView + JS 注入 DOM 抓取
-- Background runtime: flutter_background_service (Android foreground service)
-- Notifications: flutter_local_notifications（即时 show；不再注册未来闹钟）
-
-Core Tech Stack
-- Flutter
-- provider
-- shared_preferences
-- webview_flutter
-- intl
-- flutter_local_notifications
-- flutter_background_service
-- app_settings
-- sound_mode
-
-Main Modules (Current)
-- lib/main.dart
-- lib/background_service.dart
-- lib/providers/course_provider.dart
-- lib/providers/settings_provider.dart
-- lib/services/notification_service.dart
-- lib/services/auto_mute_service.dart
-- lib/screens/timetable_page.dart
-- lib/screens/add_course_page.dart
-- lib/screens/import_course_page.dart
-- lib/screens/settings_page.dart
-- lib/screens/schedule_settings_page.dart
-- android/app/src/main/AndroidManifest.xml
-
-Data Models
-1) Course (lib/models/course.dart)
-- name, location, teacher
-- weekday, weeks, startPeriod, endPeriod
-- colorValue
-
-2) Event (lib/models/event.dart)
-- id, name, location, dateTime, enableAlarm
-
-Implemented Features (Confirmed)
-1. Day View（按天）
-- 课程+日程混合时间线展示
-- 按实际时间排序
-
-2. Week View（按周）
-- 正常周：按 weekday 混合展示 Course + Event（样式区分）
-- HOLIDAY_WEEK_INDEX=999（“假期中”）
-- 假期模式：非学期区间 Event 按时间升序 ListView 展示
-
-3. 周选择器与滑动联动
-- 周选择器末尾固定“假期中”
-- Week PageView 已扩展为 totalWeeks + 1
-- 可从最后一周继续右滑进入“假期中”
-- 滑到最后一页会同步顶部状态为“假期中”
-- 点击顶部“假期中”会跳转到最后一页
-
-4. 自动静音开关分层重构
-- UI 层：onChanged 仅调用 provider.toggleAutoMuteWithCheck
-- 业务层：权限检查、异常保护、持久化收拢到 SettingsProvider
-
-5. 后台服务（Android）
-- onServiceStart 使用 WidgetsFlutterBinding.ensureInitialized + DartPluginRegistrant.ensureInitialized
-- 每分钟 Timer.periodic 轮询
-- 支持 sync_now / stop_service 指令
-- 使用 silent_bg_channel 低感知前台服务通道
-
-6. 课前提醒架构迁移
-- notification_service.dart 中旧 zonedSchedule 路径已废弃（保留兼容壳）
-- 改为 background_service 每分钟匹配后即时 localNotifications.show
-- 去重机制：Set<String> notifiedCourseIds（按天重置）
-
-7. 通知通道重构
-- silent_bg_channel：Importance.min，无声无振动
-- course_reminder_channel：Importance.max + Priority.high
-- Android 通道名中文化：
-  - silent_bg_channel -> “后台静音服务”
-  - course_reminder_channel -> “课程提醒”
-
-8. 前台常驻通知文案修复（关键）
-- 根因修复：onServiceStart 内此前 setForegroundNotificationInfo(title:'', content:'') 会覆盖初始文案
-- 现已统一常量文案并在运行中刷新保持一致：
-  - 标题：自动静音服务运行中
-  - 内容：正在保障上下课自动静音。如需隐藏，请在系统通知设置中关闭此类别。
-- foregroundServiceNotificationId 已统一为 9527，避免双通知/空通知分裂
-- 启动后台服务前补充 Android 通知权限请求（requestNotificationsPermission）
-
-9. 设置页清理
-- 已删除“模拟上课(后台执行)”/“模拟下课(后台执行)”调试入口及回调绑定
-- 保留电池优化跳转入口（app_settings）
-
-10. 导入抓取脚本增强（import_course_page.dart）
-- 保留原结构解析
-- 新增降维解析：tdHtml.innerHtml -> 纯文本
-- 全局正则 allMatches 提取多段“周次/节次/校区/地点/老师”
-- 兼容周次分隔符：, - ~
-- 兼容“同一 tdHtml 内 div + 游离 TextNode”混合结构
-
-11. 首装空数据修复（移除默认测试课程）
-- 已删除 CourseProvider 中 _mockCourses（两节默认测试课）
-- _loadInitialCourses 现为“本地无数据即返回空列表 []”
-- 全新安装后课表默认为空，不再注入占位数据
-
-Known Issues / Verification Pending
-1) 导入特例回归
-- courseStructure.txt 对应特例已加兼容路径
-- 需继续用真实页面回放验证“多时间段同名课”是否 100% 入库
-
-2) 后台服务机型差异
-- 历史问题包含 startForeground Bad notification / isolate 插件限制
-- 关键链路已修复，但仍需真机长时回归（含省电策略）
-
-3) 分钟级轮询边界
-- 当前提醒采用 _isSameMinute
-- 极端省电/调度抖动场景仍有边界漏触发概率
-
-High Coupling / Low Robustness Areas (Rewrite Backlog)
-[Priority P0]
-A) Import JS Parser（lib/screens/import_course_page.dart）
-- 单文件脚本过大，DOM/正则分支耦合高
-- 建议拆分：清洗/分段/字段抽取/周次解析/去重，并建立 HTML 夹具回归测试
-
-B) Background Service Monolith（lib/background_service.dart）
-- 静音、提醒、通知、去重、课表时间计算耦合在单文件
-- 建议拆分为 coordinator + mute engine + reminder engine + schedule matcher
-
-[Priority P1]
-C) TimetablePage 状态耦合（lib/screens/timetable_page.dart）
-- Day/Week/Holiday 与控制器同步逻辑偏重
-- 建议抽离统一 WeekSelectionState（含普通周/假期周状态机）
-
-D) NotificationService 兼容壳
-- 已迁移后台轮询，但仍保留历史 schedule API
-- 建议加 deprecate 标记并收敛职责为 channel/permission manager
-
-[Priority P2]
-E) Course 唯一标识
-- 当前缺 stable id，结构相同课程存在误判风险
-- 建议为 Course 增加 stable id 并改造导入/编辑/删除全链路
-
-F) 日志治理
-- Main/Provider/BackgroundService 日志噪音偏高
-- 建议引入日志级别与开关
-
-Recommended Next Steps
-1. 真机回归：自动静音开启后，观察前台通知文案是否持续正确显示
-2. 真机回归：周视图从最后一周右滑进入“假期中”，及顶部选择器状态联动
-3. 真机回归：全新安装后，课程列表与课表页应为空（无默认测试课程）
-4. 导入回归：用 courseStructure 特例页面再次验证多段课程解析入库
-5. 分阶段拆分 background_service 与 import parser，降低耦合
-
-Quick Resume Notes
-- 自动静音与课前提醒均由 background_service 常驻服务驱动
-- WeekView 已支持右滑进入“假期中”并双向同步顶部周选择
-- 设置页调试按钮已移除
-- 前台通知空文案覆盖问题已修复
-- 默认 mock 课程注入已移除（首装空数据）
-
-==================================================
-2026-03-25 重构闭环与 Bug 修复归档（同步 reconstruction_progress.txt）
-==================================================
-
-一、重构主线结果（Task Pipeline 状态）
-- 已完成：
-  - [x] 1. 基础模型层与持久化重构（StorageService 落地，模型纯净化）
-  - [x] 2. Provider 拆分与解耦（状态持有与业务计算分离）
-  - [x] 3. 后台服务与系统通道封装（AppServices/BackgroundServiceCoordinator/BackgroundRuntimeService）
-  - [x] 4. UI 纯净化与组件拆分（Timetable 组件树落地）
-  - [x] 5. 导航状态机解耦（TimetableNavigationController 单向流）
-  - [x] 6. 教务解析引擎剥离（ScheduleHtmlExtractor + ScheduleParserService）
-  - [x] 7. 路由/主题/常量统一（core/app_routes.dart + app_theme.dart + app_constants.dart）
-  - [x] 8. 通知子系统拆分（Permission/Channel/Notifier）
-  - [x] 9. Event 提醒链路补全（后台并行扫描 + 去重）
-- 待后续专项治理（非阻塞发布）：
-  - [ ] 10. 表单层纯净化
-  - [ ] 11. 设置页动作控制器拆分
-  - [ ] 12. 国际化资源治理
-  - [ ] 13. 自动化回归测试补齐
-
-二、关键 Bug 闭环与具体修复代码逻辑
-1) 教务导入“识别为空”
-- 根因：教务页面常位于 iframe，且旧链路把 JS 诊断字符串直接透传给 UI。
-- 修复：
-  - `lib/services/schedule_html_extractor.dart`
-    - JS 递归遍历 `window.frames`，收集 `table.Wjkc/table.courseTable/.tdHtml` 候选片段。
-    - 跨域/抓取异常统一返回 `JS_ERROR:` 前缀字符串。
-  - `lib/screens/import_course_page.dart`
-    - `runJavaScriptReturningResult` 结果经 `_normalizeJavaScriptResult(...)` 标准化后再处理。
-    - `JS_ERROR:` 分支统一抛 `ScheduleParseException('教务系统连接失败，请检查网络或重新登录后重试。')`，
-      UI 仅以 SnackBar 友好提示，不再展示原始 JS 报错细节。
-
-2) Event 后台提醒未触发
-- 根因：旧方案使用“绝对时刻命中”，系统调度抖动会错过分钟边界。
-- 修复：
-  - `lib/services/background_runtime_service.dart`
-    - 在 `_runEventReminderTick(...)` 中改为“时间窗口 + 去重”策略：
-      - 窗口命中：`now >= reminderTime && now < eventEndTime`
-      - 去重：`_notifiedEventIds` 按事件 id 去重
-      - 过期清理：`_pruneExpiredEventNotifications(...)` 动态移除已失效 id
-    - 命中后调用 `NotificationService.showEventReminder(...)`，并加入去重集合。
-
-3) 后台 IPC 断联 / Isolate 启动失败
-- 根因：后台入口与监听时序不稳，异常缺少统一兜底。
-- 修复：
-  - `lib/services/background_service_coordinator.dart`
-    - 顶层入口 `@pragma('vm:entry-point') onServiceStart(ServiceInstance service)`。
-    - `runZonedGuarded(...)` 包裹隔离区主流程，保留 `debugPrint('Background Error: $error')` 安全网。
-    - `AndroidConfiguration.onStart` 明确绑定顶层函数。
-  - `lib/services/background_runtime_service.dart`
-    - `start(...)` 最先注册 `test_mute/test_unmute/sync_now/stop_service` 监听，再执行后续初始化。
-
-4) DND 权限通过但静音未生效
-- 根因：静音执行层缺少紧凑的权限-模式-设置闭环。
-- 修复：
-  - `lib/services/audio_mode_service.dart`
-    - 新增 `executeMute()`：
-      - 权限检查（优先动态兼容 `SoundMode.isPermissionGranted`，回退 `PermissionHandler.permissionsGranted`）
-      - 仅在当前不是 `vibrate/silent` 时才调用 `SoundMode.setSoundMode(RingerModeStatus.vibrate)`
-      - 异常仅 `debugPrint('Mute execution failed: ...')`，避免崩溃。
-    - `muteDevice()/muteDeviceSafely()` 统一委托到 `executeMute()`。
-
-5) 生产收尾（日志与诊断探针清理）
-- `background_runtime_service.dart` / `audio_mode_service.dart` / `import_course_page.dart`
-  - 删除调试期 Emoji/`====` 打印与原始 HTML 打印，保留必要异常捕获。
-- `developer_diagnostics_page.dart`
-  - 保留页面与入口机制。
-  - 移除“强制唤醒等待”与“读取后台崩溃日志”临时能力，恢复为纯指令发送器。
-- 通知汉化统一：
-  - 常驻通知标题：`课程表守护服务`
-  - 常驻通知内容：`正在后台保障自动静音与课前提醒`
-  - 配置与运行时刷新文案已在 coordinator/runtime 两侧对齐。
-
-三、reconstruction_progress.txt 同步记录（关键条目）
-- 已存在并持续更新的补丁记录：
-  - `[Bugfix Patch 1 applied]`
-  - `[Developer Diagnostics Patch applied]`
-  - `[Deep Logging And Background Recovery Patch applied]`
-  - `[Bugfix Patch 2 applied]`
-  - `[Bugfix Patch 4 applied]`
-  - `[Bugfix Patch 5 courseStructure adaptation applied]`
-  - `[Bugfix Patch 7 IPC lifecycle recovery applied]`
-  - `[Bugfix Patch 8 isolate entrypoint hardening applied]`
-  - `[Bugfix Patch 10 DND permission probe and safe mute path applied]`
-  - `[Final Cleanup Patch applied: Ready for Production]`
-  - `[x] 终极重构闭环 (Production-Ready Polish)：完成了全局日志静音、通知汉化、静音执行层精简与诊断页降级。项目当前处于 Release 就绪状态。`
-
-四、当前发布结论
-- 项目核心链路（导入解析、后台 IPC、自动静音、课程/Event 提醒）均已完成真机闭环验证。
-- 代码分层与职责边界已显著收敛，当前状态可进入 Release 发布流程。
-
-五、增量修复：Bugfix Patch 11（导航状态机页码同步与跳转对称性）
-- 问题 1：日视图通过周选择器切到“假期中”时，UI 显示假期但底层页码可能回退到第一周（控制器挂载时序导致未命中目标页）。
-- 问题 2：周视图“普通周 -> 假期”与“假期 -> 普通周”跳转表现不对称，一侧动画、一侧闪切。
-
-修复文件
-- `lib/services/timetable_navigation_controller.dart`
-
-核心修复逻辑
-1) 假期跳转挂载后对齐
-- `jumpToWeek(holidayWeekIndex)` 中先更新状态并 `notifyListeners()`，再调用 `_scheduleControllerAlignment()`。
-- `_scheduleControllerAlignment()` 在下一帧触发 `_alignControllersToCurrentState()`，确保 `PageController` 已挂载时也能正确对齐到假期页索引。
-
-2) 页码跳转策略统一（对称）
-- 新增 `_moveToPageSmart(PageController, targetPage, ...)`：
-  - 计算 `delta = (target - current).abs()`
-  - `delta == 1` 使用 `animateToPage`
-  - `delta > 1` 使用 `jumpToPage`
-- `jumpToWeek`、`jumpToToday`、`jumpToDay`、日/周联动同步与内部对齐均统一走该策略，消除双向不一致。
-
-验证结果
-- 本地静态分析通过：
-  - `dart analyze lib/services/timetable_navigation_controller.dart`
-  - `No issues found!`
-- 已同步进度追踪：
-  - `reconstruction_progress.txt` 追加 `[Bugfix Patch 11 navigation state page-sync symmetry applied]`
+--------------------------------------------------
+六、当前平台架构能力矩阵
+--------------------------------------------------
+- Android: 能力释放级别最高。支持教务全自动导入、系统级上课自动静音、AlarmManager 精确触发、长截图滚动捕获 (`LongScreenshotService`)、常驻前台服务、OTA 更新下载。
+- iOS / macOS: 业务流程完全可用，支持基础的系统通知提醒。系统权限差异导致的长截图、后台静音和 OTA 安装能力皆安全降级 (no-op)，UI 入口自动隐藏。
+- 桌面平台 (Windows / Linux) / Web: 现保留了 Flutter Scaffold 与基本 UI 数据读写，依赖平台专属通道的插件已做环境隔离，不会触发运行时崩溃。
