@@ -31,6 +31,17 @@ class AppUpdatePlatform {
     }
   }
 
+  Future<String> currentVersionName() async {
+    try {
+      final result = await _channel.invokeMethod<String>('getVersionName');
+      return result?.trim() ?? '';
+    } on MissingPluginException {
+      return '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   Future<List<String>> supportedAbis() async {
     try {
       final result = await _channel.invokeListMethod<String>(

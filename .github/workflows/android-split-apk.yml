@@ -61,9 +61,10 @@ jobs:
             exit 1
           fi
 
+          VERSION_NAME="${VERSION%%+*}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_name=Timetable v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_name=Timetable v$VERSION_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Verify monotonically increasing version code
         env:

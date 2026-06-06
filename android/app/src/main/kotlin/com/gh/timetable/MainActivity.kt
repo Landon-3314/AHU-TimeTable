@@ -214,6 +214,7 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
+                    "getVersionName" -> result.success(currentVersionName())
                     "getVersionCode" -> result.success(currentVersionCode())
                     "getSupportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
                     "getDownloadDirectory" -> result.success(downloadDirectory().absolutePath)
@@ -231,6 +232,7 @@ class MainActivity : FlutterActivity() {
                     error,
                 )
                 when (call.method) {
+                    "getVersionName" -> result.success("")
                     "getVersionCode" -> result.success(0)
                     "getSupportedAbis" -> result.success(emptyList<String>())
                     "getDownloadDirectory" -> result.success(null)
@@ -485,6 +487,11 @@ class MainActivity : FlutterActivity() {
             @Suppress("DEPRECATION")
             packageInfo.versionCode.toLong()
         }
+    }
+
+    private fun currentVersionName(): String {
+        val packageInfo = packageManager.getPackageInfo(packageName, 0)
+        return packageInfo.versionName ?: ""
     }
 
     private fun downloadDirectory(): File {

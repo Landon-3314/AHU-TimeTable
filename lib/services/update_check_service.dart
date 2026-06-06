@@ -12,6 +12,7 @@ typedef UpdateManifestUriLoader = Future<UpdateManifest> Function(Uri uri);
 typedef IntLoader = Future<int?> Function();
 typedef IntWriter = Future<void> Function(int value);
 typedef AbiLoader = Future<List<String>> Function();
+typedef StringLoader = Future<String> Function();
 
 class AvailableUpdate {
   const AvailableUpdate({required this.manifest, required this.asset});
@@ -52,11 +53,13 @@ class UpdateCheckResult {
 class UpdateCheckService {
   UpdateCheckService({
     required UpdateManifestLoader manifestLoader,
+    StringLoader? currentVersionNameLoader,
     required Future<int> Function() currentVersionCodeLoader,
     required AbiLoader supportedAbisLoader,
     required IntLoader ignoredVersionCodeLoader,
     required IntWriter ignoredVersionCodeWriter,
   }) : _manifestLoader = manifestLoader,
+       _currentVersionNameLoader = currentVersionNameLoader ?? _emptyString,
        _currentVersionCodeLoader = currentVersionCodeLoader,
        _supportedAbisLoader = supportedAbisLoader,
        _ignoredVersionCodeLoader = ignoredVersionCodeLoader,
@@ -83,6 +86,7 @@ class UpdateCheckService {
         effectiveManifestUris,
         loader: manifestUriLoader ?? _loadManifestFromUri,
       ),
+      currentVersionNameLoader: platform.currentVersionName,
       currentVersionCodeLoader: platform.currentVersionCode,
       supportedAbisLoader: platform.supportedAbis,
       ignoredVersionCodeLoader: _loadIgnoredVersionCode,
@@ -97,6 +101,7 @@ class UpdateCheckService {
   static const String _ignoredVersionCodeKey = 'updates.ignoredVersionCode.v1';
 
   final UpdateManifestLoader _manifestLoader;
+  final StringLoader _currentVersionNameLoader;
   final Future<int> Function() _currentVersionCodeLoader;
   final AbiLoader _supportedAbisLoader;
   final IntLoader _ignoredVersionCodeLoader;
@@ -134,6 +139,7 @@ class UpdateCheckService {
   Future<UpdateCheckResult> _checkForUpdateDetailedOrThrow({
     required bool respectIgnoredVersion,
   }) async {
+    final currentVersionName = (await _currentVersionNameLoader()).trim();
     final currentVersionCode = await _currentVersionCodeLoader();
     final ignoredVersionCode = respectIgnoredVersion
         ? await _ignoredVersionCodeLoader()
@@ -149,7 +155,7 @@ class UpdateCheckService {
       return const UpdateCheckResult.unsupportedAbi();
     }
     final update = AvailableUpdate(manifest: manifest, asset: asset);
-    if (update.effectiveVersionCode <= currentVersionCode ||
+    if (!_isNewerVersion(update, currentVersionName, currentVersionCode) ||
         update.effectiveVersionCode == ignoredVersionCode) {
       return const UpdateCheckResult.noUpdate();
     }
@@ -210,5 +216,54 @@ class UpdateCheckService {
   static Future<void> _writeIgnoredVersionCode(int value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_ignoredVersionCodeKey, value);
+  }
+
+  static Future<String> _emptyString() async => '';
+
+  static bool _isNewerVersion(
+    AvailableUpdate update,
+    String currentVersionName,
+    int currentVersionCode,
+  ) {
+    final versionNameComparison = _compareVersionNames(
+      update.manifest.versionName,
+      currentVersionName,
+    );
+    if (versionNameComparison != null) {
+      if (versionNameComparison != 0) {
+        return versionNameComparison > 0;
+      }
+    }
+    return update.effectiveVersionCode > currentVersionCode;
+  }
+
+  static int? _compareVersionNames(
+    String remoteVersionName,
+    String currentVersionName,
+  ) {
+    final remoteKey = _versionNameKey(remoteVersionName);
+    final currentKey = _versionNameKey(currentVersionName);
+    if (remoteKey == null || currentKey == null) {
+      return null;
+    }
+    final maxLength = remoteKey.length > currentKey.length
+        ? remoteKey.length
+        : currentKey.length;
+    for (var index = 0; index < maxLength; index += 1) {
+      final remotePart = index < remoteKey.length ? remoteKey[index] : 0;
+      final currentPart = index < currentKey.length ? currentKey[index] : 0;
+      if (remotePart != currentPart) {
+        return remotePart.compareTo(currentPart);
+      }
+    }
+    return 0;
+  }
+
+  static List<int>? _versionNameKey(String versionName) {
+    final trimmed = versionName.trim();
+    if (!RegExp(r'^\d+(?:\.\d+)*$').hasMatch(trimmed)) {
+      return null;
+    }
+    return trimmed.split('.').map(int.parse).toList(growable: false);
   }
 }

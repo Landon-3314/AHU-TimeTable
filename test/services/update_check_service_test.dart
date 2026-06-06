@@ -359,6 +359,39 @@ void main() {
     expect(x64Available.update!.effectiveVersionCode, 4003);
   });
 
+  test(
+    'checks version name before the selected split APK version code',
+    () async {
+      final manifest = UpdateManifest.fromJson(const {
+        'versionName': '0.3.12',
+        'versionCode': 4003,
+        'baseVersionCode': 3,
+        'assets': [
+          {
+            'abi': 'arm64-v8a',
+            'url': 'https://example.com/timetable-0.3.12-arm64-v8a.apk',
+            'sha256':
+                'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            'size': 2048,
+            'versionCode': 2003,
+          },
+        ],
+      });
+      final service = UpdateCheckService(
+        manifestLoader: () async => manifest,
+        currentVersionNameLoader: () async => '0.3.11',
+        currentVersionCodeLoader: () async => 2003,
+        supportedAbisLoader: () async => const ['arm64-v8a'],
+        ignoredVersionCodeLoader: () async => null,
+        ignoredVersionCodeWriter: (_) async {},
+      );
+
+      final result = await service.checkForUpdateDetailed();
+
+      expect(result.status, UpdateCheckStatus.updateAvailable);
+    },
+  );
+
   test('falls back to manifest version code for legacy assets', () async {
     final manifest = UpdateManifest.fromJson(
       jsonDecode(manifestJson) as Map<String, Object?>,
