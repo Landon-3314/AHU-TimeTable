@@ -191,7 +191,11 @@ class _TimetablePageState extends State<TimetablePage> {
                               emptyAction: _buildEmptyStateActions(
                                 context,
                                 settingsProvider,
-                                showImportCourses: true,
+                                addCourseLabel: settingsProvider.t(
+                                  'add_schedule',
+                                ),
+                                showImportCourses: false,
+                                onAddCourse: () => _openAddEvent(context),
                               ),
                             );
                           }
@@ -371,13 +375,15 @@ class _TimetablePageState extends State<TimetablePage> {
   Widget _buildEmptyStateActions(
     BuildContext context,
     SettingsProvider settingsProvider, {
+    String? addCourseLabel,
     required bool showImportCourses,
+    VoidCallback? onAddCourse,
   }) {
     return _EmptyStateActions(
-      addCourseLabel: settingsProvider.t('add_course'),
+      addCourseLabel: addCourseLabel ?? settingsProvider.t('add_course'),
       importCoursesLabel: settingsProvider.t('import_from_system'),
       showImportCourses: showImportCourses,
-      onAddCourse: () => _openAddCourse(context),
+      onAddCourse: onAddCourse ?? () => _openAddCourse(context),
       onImportCourses: () => _openAcademicAccount(context),
     );
   }
@@ -390,6 +396,19 @@ class _TimetablePageState extends State<TimetablePage> {
       return;
     }
     await Navigator.of(context).pushNamed(AppRoutes.addCourse);
+  }
+
+  Future<void> _openAddEvent(BuildContext context) async {
+    if (!await ensureCurrentSemesterInitialized(context)) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    await Navigator.of(context).pushNamed(
+      AppRoutes.addCourse,
+      arguments: const AddCourseRouteArgs.addEvent(),
+    );
   }
 
   Future<void> _openAcademicAccount(BuildContext context) async {

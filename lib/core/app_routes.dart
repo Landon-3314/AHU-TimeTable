@@ -32,8 +32,14 @@ class AppRoutes {
         final existingCourse = arguments is AddCourseRouteArgs
             ? arguments.existingCourse
             : null;
+        final initialTab = arguments is AddCourseRouteArgs
+            ? arguments.initialTab
+            : AddCoursePageInitialTab.course;
         return MaterialPageRoute<void>(
-          builder: (_) => AddCoursePage(existingCourse: existingCourse),
+          builder: (_) => AddCoursePage(
+            existingCourse: existingCourse,
+            initialTab: initialTab,
+          ),
           settings: settings,
         );
       case rescheduleCourse:
@@ -84,9 +90,17 @@ class AppRoutes {
 }
 
 class AddCourseRouteArgs {
-  const AddCourseRouteArgs({this.existingCourse});
+  const AddCourseRouteArgs({
+    this.existingCourse,
+    this.initialTab = AddCoursePageInitialTab.course,
+  });
+
+  const AddCourseRouteArgs.addEvent()
+    : existingCourse = null,
+      initialTab = AddCoursePageInitialTab.event;
 
   final Course? existingCourse;
+  final AddCoursePageInitialTab initialTab;
 }
 
 class RescheduleCourseRouteArgs {

@@ -14,10 +14,19 @@ import '../widgets/common/capsule_multi_select.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/semester_initialization_guard.dart';
 
+enum AddCoursePageInitialTab { course, event }
+
 class AddCoursePage extends StatefulWidget {
-  const AddCoursePage({super.key, this.existingCourse});
+  const AddCoursePage({
+    super.key,
+    this.existingCourse,
+    this.initialTab = AddCoursePageInitialTab.course,
+  }) : assert(
+         existingCourse == null || initialTab == AddCoursePageInitialTab.course,
+       );
 
   final Course? existingCourse;
+  final AddCoursePageInitialTab initialTab;
 
   @override
   State<AddCoursePage> createState() => _AddCoursePageState();
@@ -41,6 +50,7 @@ class _AddCoursePageState extends State<AddCoursePage> {
 
     return DefaultTabController(
       length: 2,
+      initialIndex: widget.initialTab.index,
       child: Scaffold(
         appBar: AppBar(
           bottom: TabBar(

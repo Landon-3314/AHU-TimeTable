@@ -369,6 +369,37 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, '导入教务课表'), findsOneWidget);
   });
 
+  testWidgets('empty holiday view exposes only add event action', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle(totalWeeks: 2);
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('周视图'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(AppPickerPill));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('假期中'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('假期中'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(FilledButton, '添加日程'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '添加课程/日程'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, '导入教务课表'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilledButton, '添加日程'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AddCoursePage), findsOneWidget);
+    expect(find.text('日程名称'), findsOneWidget);
+    expect(find.text('课程名称'), findsNothing);
+  });
+
   testWidgets('empty overview exposes add and import actions', (tester) async {
     final bundle = await _createProviderBundle();
 
@@ -627,8 +658,14 @@ Widget _buildPage(_ProviderBundle bundle) {
         final existingCourse = arguments is AddCourseRouteArgs
             ? arguments.existingCourse
             : null;
+        final initialTab = arguments is AddCourseRouteArgs
+            ? arguments.initialTab
+            : AddCoursePageInitialTab.course;
         return MaterialPageRoute<void>(
-          builder: (_) => AddCoursePage(existingCourse: existingCourse),
+          builder: (_) => AddCoursePage(
+            existingCourse: existingCourse,
+            initialTab: initialTab,
+          ),
           settings: settings,
         );
       },
