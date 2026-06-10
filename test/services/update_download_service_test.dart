@@ -174,6 +174,92 @@ void main() {
     expect(client.requestedUris, isNot(contains(githubMirrorUri)));
     expect(await file.readAsBytes(), apkBytes);
   });
+
+  test('reuses a verified downloaded APK for the same update', () async {
+    final directory = await Directory.systemTemp.createTemp('update-test-');
+    addTearDown(() => directory.delete(recursive: true));
+
+    final apkBytes = utf8.encode('apk-bytes');
+    final expectedHash = sha256.convert(apkBytes).toString();
+    final update = _availableUpdate(expectedHash: expectedHash);
+    final existingFile = UpdateDownloadService.buildApkFile(directory, update);
+    await directory.create(recursive: true);
+    await existingFile.writeAsBytes(apkBytes);
+    await UpdateDownloadService.writeDownloadedApkMarker(
+      directory,
+      update,
+      existingFile,
+    );
+    final client = _FakeUpdateHttpClient([
+      _FakeHttpFailure(StateError('network should not be used')),
+    ]);
+    final service = UpdateDownloadService(
+      platform: _FakeAppUpdatePlatform(directory),
+      httpClientFactory: () => client,
+    );
+
+    final file = await service.downloadApk(update);
+
+    expect(file.path, existingFile.path);
+    expect(client.requestedUris, isEmpty);
+  });
+
+  test('ignores a downloaded APK marker for an older update version', () async {
+    final directory = await Directory.systemTemp.createTemp('update-test-');
+    addTearDown(() => directory.delete(recursive: true));
+
+    final oldBytes = utf8.encode('old-apk-bytes');
+    final newBytes = utf8.encode('new-apk-bytes');
+    final oldUpdate = _availableUpdate(
+      versionCode: 3,
+      expectedHash: sha256.convert(oldBytes).toString(),
+    );
+    final newUpdate = _availableUpdate(
+      versionCode: 4,
+      expectedHash: sha256.convert(newBytes).toString(),
+    );
+    final oldFile = UpdateDownloadService.buildApkFile(directory, oldUpdate);
+    await directory.create(recursive: true);
+    await oldFile.writeAsBytes(oldBytes);
+    await UpdateDownloadService.writeDownloadedApkMarker(
+      directory,
+      oldUpdate,
+      oldFile,
+    );
+    final client = _FakeUpdateHttpClient([_FakeHttpSuccess(newBytes)]);
+    final service = UpdateDownloadService(
+      platform: _FakeAppUpdatePlatform(directory),
+      httpClientFactory: () => client,
+    );
+
+    final file = await service.downloadApk(newUpdate);
+
+    expect(client.requestedUris, [newUpdate.asset.url]);
+    expect(await file.readAsBytes(), newBytes);
+  });
+}
+
+AvailableUpdate _availableUpdate({
+  int versionCode = 3,
+  required String expectedHash,
+}) {
+  final uri = Uri.parse('https://example.com/app.apk');
+  final asset = UpdateAsset(
+    abi: 'arm64-v8a',
+    url: uri,
+    sha256: expectedHash,
+    size: 2048,
+    versionCode: versionCode,
+  );
+  return AvailableUpdate(
+    manifest: UpdateManifest(
+      versionName: '0.3.5',
+      versionCode: versionCode,
+      releaseNotes: '',
+      assets: [asset],
+    ),
+    asset: asset,
+  );
 }
 
 class _FakeAppUpdatePlatform extends AppUpdatePlatform {

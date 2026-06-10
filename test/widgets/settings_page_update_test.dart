@@ -131,6 +131,40 @@ void main() {
   });
 
   testWidgets(
+    'manual update check does not clear downloaded APK before reuse',
+    (tester) async {
+      final platform = _RecordingSupportedUpdatePlatform();
+      final bundle = await _createProviderBundle(
+        externalDataBackupStore: _RecordingBackupStore(),
+      );
+      final downloadService = _RecordingUpdateDownloadService();
+      final updateService = _availableUpdateService(versionCode: 3);
+
+      await tester.pumpWidget(
+        _SettingsHost(
+          settings: bundle.settings,
+          courses: bundle.courses,
+          child: SettingsPage(
+            updatePlatform: platform,
+            updateCheckService: updateService,
+            updateDownloadService: downloadService,
+          ),
+        ),
+      );
+
+      await _scrollToUpdateEntry(tester);
+      await tester.tap(find.text('检查更新'));
+      await _pumpUntilFound(tester, find.text('立即更新'));
+      await tester.tap(find.text('立即更新'));
+      await _pumpUntilFound(tester, find.text('已打开系统安装器，请确认安装'));
+
+      expect(platform.cleanupCallCount, 0);
+      expect(downloadService.downloadCallCount, 1);
+      expect(downloadService.installCallCount, 1);
+    },
+  );
+
+  testWidgets(
     'manual update reports permission flow will retry automatically',
     (tester) async {
       final bundle = await _createProviderBundle(
@@ -270,6 +304,18 @@ class _SupportedUpdatePlatform extends AppUpdatePlatform {
   Future<void> cleanupDownloadedApks() async {}
 }
 
+class _RecordingSupportedUpdatePlatform extends AppUpdatePlatform {
+  int cleanupCallCount = 0;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<void> cleanupDownloadedApks() async {
+    cleanupCallCount += 1;
+  }
+}
+
 class _SettingsHost extends StatelessWidget {
   const _SettingsHost({
     required this.settings,
@@ -385,7 +431,10 @@ class _RecordingUpdateDownloadService extends UpdateDownloadService {
   }
 
   @override
-  Future<AppUpdateInstallResult> install(File apkFile) async {
+  Future<AppUpdateInstallResult> install(
+    File apkFile, {
+    AvailableUpdate? update,
+  }) async {
     installCallCount += 1;
     backupExistedAtInstall = backupReadyAtInstall?.call() ?? true;
     return installResult;

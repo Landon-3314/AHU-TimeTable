@@ -512,6 +512,10 @@ void main() {
       find.descendant(of: menuCard, matching: find.byIcon(Icons.add)),
       findsOneWidget,
     );
+    expect(
+      find.descendant(of: menuCard, matching: find.text('添加课程/日程')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('narrow toolbar menu reveals container before content', (

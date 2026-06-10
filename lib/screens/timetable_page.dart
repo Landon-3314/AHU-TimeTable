@@ -275,7 +275,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 key: _addCourseGuideKey,
                 onPressed: () => _openAddCourse(context),
                 icon: const Icon(Icons.add),
-                tooltip: settingsProvider.t('add_course'),
+                tooltip: settingsProvider.t('add_course_or_event'),
               ),
             ],
       bottom: PreferredSize(
@@ -333,17 +333,16 @@ class _TimetablePageState extends State<TimetablePage> {
       ancestor: overlayRenderObject,
     );
 
+    final settingsProvider = context.read<SettingsProvider>();
     // 检查是否需要在菜单弹出后展示引导
-    final needMenuGuide = context
-        .read<SettingsProvider>()
-        .shouldShowTimetableMenuGuide;
-
+    final needMenuGuide = settingsProvider.shouldShowTimetableMenuGuide;
     final action = await navigator.push<_TimetableToolbarAction>(
       _TimetableToolbarMenuRoute(
         anchorRect: topLeft & buttonRenderObject.size,
         barrierLabel: MaterialLocalizations.of(
           context,
         ).modalBarrierDismissLabel,
+        addCourseLabel: settingsProvider.t('add_course_or_event'),
         // 需要引导时传入 GlobalKey，让菜单项绑定 key
         overviewGuideKey: needMenuGuide ? _menuOverviewGuideKey : null,
         addCourseGuideKey: needMenuGuide ? _menuAddCourseGuideKey : null,
@@ -380,7 +379,8 @@ class _TimetablePageState extends State<TimetablePage> {
     VoidCallback? onAddCourse,
   }) {
     return _EmptyStateActions(
-      addCourseLabel: addCourseLabel ?? settingsProvider.t('add_course'),
+      addCourseLabel:
+          addCourseLabel ?? settingsProvider.t('add_course_or_event'),
       importCoursesLabel: settingsProvider.t('import_from_system'),
       showImportCourses: showImportCourses,
       onAddCourse: onAddCourse ?? () => _openAddCourse(context),
@@ -794,7 +794,7 @@ class _TimetableOverviewSheetState extends State<_TimetableOverviewSheet> {
                 groupCountLabelBuilder: (group) =>
                     widget.groupCountLabelBuilder(settingsProvider, group),
                 emptyAction: _EmptyStateActions(
-                  addCourseLabel: settingsProvider.t('add_course'),
+                  addCourseLabel: settingsProvider.t('add_course_or_event'),
                   importCoursesLabel: settingsProvider.t('import_from_system'),
                   showImportCourses: true,
                   onAddCourse: widget.onAddCourse,
@@ -980,6 +980,7 @@ class _TimetableToolbarMenuRoute extends PopupRoute<_TimetableToolbarAction> {
   _TimetableToolbarMenuRoute({
     required this.anchorRect,
     required String barrierLabel,
+    required this.addCourseLabel,
     this.overviewGuideKey,
     this.addCourseGuideKey,
     this.onMenuReady,
@@ -987,6 +988,7 @@ class _TimetableToolbarMenuRoute extends PopupRoute<_TimetableToolbarAction> {
 
   final Rect anchorRect;
   final String _barrierLabel;
+  final String addCourseLabel;
   final GlobalKey? overviewGuideKey;
   final GlobalKey? addCourseGuideKey;
   final VoidCallback? onMenuReady;
@@ -1016,6 +1018,7 @@ class _TimetableToolbarMenuRoute extends PopupRoute<_TimetableToolbarAction> {
       delegate: _TimetableToolbarMenuLayout(anchorRect: anchorRect),
       child: _TimetableToolbarMenu(
         animation: animation,
+        addCourseLabel: addCourseLabel,
         overviewGuideKey: overviewGuideKey,
         addCourseGuideKey: addCourseGuideKey,
         onMenuReady: onMenuReady,
@@ -1067,6 +1070,7 @@ class _TimetableToolbarMenuLayout extends SingleChildLayoutDelegate {
 class _TimetableToolbarMenu extends StatefulWidget {
   const _TimetableToolbarMenu({
     required this.animation,
+    required this.addCourseLabel,
     this.overviewGuideKey,
     this.addCourseGuideKey,
     this.onMenuReady,
@@ -1084,6 +1088,7 @@ class _TimetableToolbarMenu extends StatefulWidget {
   );
 
   final Animation<double> animation;
+  final String addCourseLabel;
   final GlobalKey? overviewGuideKey;
   final GlobalKey? addCourseGuideKey;
   final VoidCallback? onMenuReady;
@@ -1103,6 +1108,7 @@ class _TimetableToolbarMenuState extends State<_TimetableToolbarMenu> {
       animation: widget.animation,
       child: _TimetableToolbarMenuItems(
         onSelected: (action) => Navigator.of(context).pop(action),
+        addCourseLabel: widget.addCourseLabel,
         overviewGuideKey: widget.overviewGuideKey,
         addCourseGuideKey: widget.addCourseGuideKey,
       ),
@@ -1184,11 +1190,13 @@ class _TimetableToolbarMenuState extends State<_TimetableToolbarMenu> {
 class _TimetableToolbarMenuItems extends StatelessWidget {
   const _TimetableToolbarMenuItems({
     required this.onSelected,
+    required this.addCourseLabel,
     this.overviewGuideKey,
     this.addCourseGuideKey,
   });
 
   final ValueChanged<_TimetableToolbarAction> onSelected;
+  final String addCourseLabel;
   final GlobalKey? overviewGuideKey;
   final GlobalKey? addCourseGuideKey;
 
@@ -1214,7 +1222,7 @@ class _TimetableToolbarMenuItems extends StatelessWidget {
               const ValueKey('narrow-toolbar-menu-action-add-course'),
           child: _TimetableToolbarMenuItem(
             icon: Icons.add,
-            label: '添加课程/日程',
+            label: addCourseLabel,
             onTap: () => onSelected(_TimetableToolbarAction.addCourse),
           ),
         ),

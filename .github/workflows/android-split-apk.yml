@@ -361,6 +361,68 @@ jobs:
               --cache-control "public, max-age=31536000, immutable"
           done
 
+      - name: Delete stale Cloudflare R2 APKs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "Missing required secret: CLOUDFLARE_API_TOKEN" >&2
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "Missing required secret: CLOUDFLARE_ACCOUNT_ID" >&2
+            exit 1
+          fi
+
+          bucket="${R2_BUCKET:-app-downloads}"
+          r2_public_base_url="${R2_PUBLIC_BASE_URL:-https://download.277620035.xyz}"
+          manifest_dir="$RUNNER_TEMP/published-release-manifests"
+          stale_keys_path="$RUNNER_TEMP/stale-r2-keys.txt"
+          mkdir -p "$manifest_dir"
+
+          mapfile -t release_tags < <(
+            gh release list --limit 1000 --json tagName --jq '.[].tagName'
+          )
+
+          for tag in "${release_tags[@]}"; do
+            tag_dir="$manifest_dir/${tag//\//_}"
+            mkdir -p "$tag_dir"
+            if ! gh release download "$tag" \
+              --pattern update.json \
+              --dir "$tag_dir" >/dev/null 2>&1; then
+              echo "::warning title=R2 cleanup::Unable to download update.json for release ${tag}; skipping"
+            fi
+          done
+
+          python3 tool/collect_stale_r2_keys.py \
+            --current-manifest update.json \
+            --manifest-dir "$manifest_dir" \
+            --r2-public-base-url "$r2_public_base_url" \
+            --output "$stale_keys_path"
+
+          if [ ! -s "$stale_keys_path" ]; then
+            echo "No stale Cloudflare R2 APK objects to delete."
+            exit 0
+          fi
+
+          while IFS= read -r key; do
+            if [ -z "$key" ]; then
+              continue
+            fi
+            if npx --yes wrangler@latest r2 object delete "${bucket}/${key}" --remote --force; then
+              echo "Deleted stale Cloudflare R2 object: ${key}"
+            else
+              echo "::warning title=R2 cleanup::Failed to delete stale R2 object: ${key}"
+            fi
+          done < "$stale_keys_path"
+
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:

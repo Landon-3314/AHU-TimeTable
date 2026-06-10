@@ -25,6 +25,9 @@ class UpdateDownloadService {
   final UpdateHttpClientFactory _httpClientFactory;
   final List<String> _githubMirrorPrefixes;
 
+  static const String _downloadMarkerFileName =
+      'timetable-update-download.json';
+
   Future<File> downloadApk(
     AvailableUpdate update, {
     UpdateDownloadProgress? onProgress,
@@ -38,6 +41,15 @@ class UpdateDownloadService {
     }
 
     final targetFile = buildApkFile(directory, update);
+    final reusableFile = await _findReusableDownloadedApk(
+      directory,
+      targetFile,
+      update,
+    );
+    if (reusableFile != null) {
+      return reusableFile;
+    }
+
     Object? lastError;
     StackTrace? lastStackTrace;
     for (final uri in candidateDownloadUris(
@@ -59,6 +71,7 @@ class UpdateDownloadService {
             await targetFile.delete();
           } catch (_) {}
         }
+        await _deleteDownloadedApkMarker(directory);
       }
     }
     Error.throwWithStackTrace(lastError!, lastStackTrace!);
@@ -83,16 +96,24 @@ class UpdateDownloadService {
         try {
           await file.delete();
         } catch (_) {}
+        await _deleteDownloadedApkMarker(file.parent);
         throw const FormatException('APK sha256 mismatch');
       }
+      await writeDownloadedApkMarker(file.parent, update, file);
       return file;
     } finally {
       client.close();
     }
   }
 
-  Future<AppUpdateInstallResult> install(File apkFile) {
-    return _platform.installApk(apkFile);
+  Future<AppUpdateInstallResult> install(
+    File apkFile, {
+    AvailableUpdate? update,
+  }) {
+    return _platform.installApk(
+      apkFile,
+      versionCode: update?.effectiveVersionCode,
+    );
   }
 
   static File buildApkFile(Directory directory, AvailableUpdate update) {
@@ -101,6 +122,22 @@ class UpdateDownloadService {
       'timetable-${_sanitizeFilePart(update.manifest.versionName)}-'
       '${_sanitizeFilePart(update.asset.abi)}.apk',
     );
+  }
+
+  static Future<void> writeDownloadedApkMarker(
+    Directory directory,
+    AvailableUpdate update,
+    File apkFile,
+  ) async {
+    final markerFile = _downloadMarkerFile(directory);
+    final marker = <String, Object?>{
+      'versionName': update.manifest.versionName,
+      'versionCode': update.effectiveVersionCode,
+      'abi': update.asset.abi,
+      'sha256': update.asset.sha256.trim().toLowerCase(),
+      'fileName': _fileName(apkFile),
+    };
+    await markerFile.writeAsString(jsonEncode(marker), flush: true);
   }
 
   static List<Uri> candidateDownloadUris(
@@ -143,6 +180,77 @@ class UpdateDownloadService {
     }
     final digest = await sha256.bind(file.openRead()).first;
     return const HexEncoder().convert(digest.bytes) == normalized;
+  }
+
+  static Future<File?> _findReusableDownloadedApk(
+    Directory directory,
+    File targetFile,
+    AvailableUpdate update,
+  ) async {
+    final markerFile = _downloadMarkerFile(directory);
+    if (!await markerFile.exists() || !await targetFile.exists()) {
+      return null;
+    }
+
+    final marker = await _readDownloadedApkMarker(markerFile);
+    if (!_markerMatchesUpdate(marker, update, targetFile)) {
+      return null;
+    }
+
+    final verified = await verifySha256(targetFile, update.asset.sha256);
+    return verified ? targetFile : null;
+  }
+
+  static Future<Map<String, Object?>?> _readDownloadedApkMarker(
+    File markerFile,
+  ) async {
+    try {
+      final decoded = jsonDecode(await markerFile.readAsString());
+      if (decoded is Map<String, Object?>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return Map<String, Object?>.from(decoded);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static bool _markerMatchesUpdate(
+    Map<String, Object?>? marker,
+    AvailableUpdate update,
+    File targetFile,
+  ) {
+    if (marker == null) {
+      return false;
+    }
+    return marker['versionName'] == update.manifest.versionName &&
+        marker['versionCode'] == update.effectiveVersionCode &&
+        marker['abi'] == update.asset.abi &&
+        marker['sha256'] == update.asset.sha256.trim().toLowerCase() &&
+        marker['fileName'] == _fileName(targetFile);
+  }
+
+  static File _downloadMarkerFile(Directory directory) {
+    return File(
+      '${directory.path}${Platform.pathSeparator}$_downloadMarkerFileName',
+    );
+  }
+
+  static Future<void> _deleteDownloadedApkMarker(Directory directory) async {
+    final markerFile = _downloadMarkerFile(directory);
+    if (!await markerFile.exists()) {
+      return;
+    }
+    try {
+      await markerFile.delete();
+    } catch (_) {}
+  }
+
+  static String _fileName(File file) {
+    return file.uri.pathSegments.isEmpty
+        ? file.path
+        : file.uri.pathSegments.last;
   }
 
   static String _sanitizeFilePart(String value) {

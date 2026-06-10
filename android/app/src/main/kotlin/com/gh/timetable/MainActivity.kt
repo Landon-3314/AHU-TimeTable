@@ -53,6 +53,7 @@ private const val NOTIFICATION_DIAG_TAG = "NotificationDiag"
 private const val REMINDER_CHANNEL_ID = "timetable_reminders"
 private const val UPDATER_PREFS = "app_updater"
 private const val LAST_DOWNLOADED_APK_PATH = "lastDownloadedApkPath"
+private const val LAST_DOWNLOADED_APK_VERSION_CODE = "lastDownloadedApkVersionCode"
 private const val PENDING_INSTALL_APK_PATH = "pendingInstallApkPath"
 private const val ENABLE_SCROLL_CAPTURE_OVERLAY_DIAGNOSTICS = false
 
@@ -218,7 +219,11 @@ class MainActivity : FlutterActivity() {
                     "getVersionCode" -> result.success(currentVersionCode())
                     "getSupportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
                     "getDownloadDirectory" -> result.success(downloadDirectory().absolutePath)
-                    "installApk" -> installApk(call.argument<String>("path"), result)
+                    "installApk" -> installApk(
+                        call.argument<String>("path"),
+                        call.argument<Number>("versionCode")?.toLong(),
+                        result,
+                    )
                     "cleanupDownloadedApks" -> {
                         cleanupDownloadedApk()
                         result.success(null)
@@ -257,6 +262,7 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         mainHandler.post { installScrollCaptureCallbackIfNeeded() }
+        cleanupInstalledDownloadedApk()
         retryPendingInstallAfterPermission()
         if (ENABLE_SCROLL_CAPTURE_OVERLAY_DIAGNOSTICS) {
             setupScrollOverlayIfNeeded()
@@ -503,7 +509,11 @@ class MainActivity : FlutterActivity() {
             ?: throw IllegalStateException("External files directory is unavailable")
     }
 
-    private fun installApk(path: String?, result: MethodChannel.Result) {
+    private fun installApk(
+        path: String?,
+        targetVersionCode: Long?,
+        result: MethodChannel.Result,
+    ) {
         if (path.isNullOrBlank()) {
             result.success(false)
             return
@@ -517,17 +527,14 @@ class MainActivity : FlutterActivity() {
         if (!canRequestApkInstalls()) {
             val settingsOpened = openUnknownAppSourcesSettings()
             if (settingsOpened) {
-                rememberPendingInstall(apkFile)
+                rememberPendingInstall(apkFile, targetVersionCode)
             }
             result.success(if (settingsOpened) "permissionSettingsOpened" else "failed")
             return
         }
 
         return if (openApkInstaller(apkFile)) {
-            getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
-                .edit()
-                .putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
-                .apply()
+            rememberDownloadedApk(apkFile, targetVersionCode)
             result.success("installerOpened")
         } else {
             result.success("failed")
@@ -571,12 +578,26 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun rememberPendingInstall(apkFile: File) {
-        getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
+    private fun rememberDownloadedApk(apkFile: File, targetVersionCode: Long?) {
+        val editor = getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
             .edit()
             .putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
+        if (targetVersionCode != null && targetVersionCode > 0L) {
+            editor.putLong(LAST_DOWNLOADED_APK_VERSION_CODE, targetVersionCode)
+        } else {
+            editor.remove(LAST_DOWNLOADED_APK_VERSION_CODE)
+        }
+        editor.apply()
+    }
+
+    private fun rememberPendingInstall(apkFile: File, targetVersionCode: Long?) {
+        val editor = getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
+            .edit()
             .putString(PENDING_INSTALL_APK_PATH, apkFile.absolutePath)
-            .apply()
+        if (targetVersionCode != null && targetVersionCode > 0L) {
+            editor.putLong(LAST_DOWNLOADED_APK_VERSION_CODE, targetVersionCode)
+        }
+        editor.apply()
     }
 
     private fun retryPendingInstallAfterPermission() {
@@ -587,27 +608,41 @@ class MainActivity : FlutterActivity() {
         val path = prefs.getString(PENDING_INSTALL_APK_PATH, null) ?: return
         val apkFile = File(path)
         if (!isAllowedDownloadedApk(apkFile) || !apkFile.exists()) {
-            prefs.edit().remove(PENDING_INSTALL_APK_PATH).apply()
+            prefs.edit()
+                .remove(PENDING_INSTALL_APK_PATH)
+                .remove(LAST_DOWNLOADED_APK_VERSION_CODE)
+                .apply()
             return
         }
         val installerOpened = openApkInstaller(apkFile)
         val editor = prefs.edit().remove(PENDING_INSTALL_APK_PATH)
         if (installerOpened) {
-            editor
-                .putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
+            editor.putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
         }
         editor.apply()
     }
 
+    private fun cleanupInstalledDownloadedApk() {
+        val prefs = getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
+        val targetVersionCode = prefs.getLong(LAST_DOWNLOADED_APK_VERSION_CODE, -1L)
+        if (targetVersionCode <= 0L || currentVersionCode() < targetVersionCode) {
+            return
+        }
+        cleanupDownloadedApk()
+    }
+
     private fun cleanupDownloadedApk() {
         val prefs = getSharedPreferences(UPDATER_PREFS, MODE_PRIVATE)
-        val path = prefs.getString(LAST_DOWNLOADED_APK_PATH, null) ?: return
-        val apkFile = File(path)
-        if (isAllowedDownloadedApk(apkFile) && apkFile.exists()) {
-            apkFile.delete()
+        val path = prefs.getString(LAST_DOWNLOADED_APK_PATH, null)
+        if (!path.isNullOrBlank()) {
+            val apkFile = File(path)
+            if (isAllowedDownloadedApk(apkFile) && apkFile.exists()) {
+                apkFile.delete()
+            }
         }
         prefs.edit()
             .remove(LAST_DOWNLOADED_APK_PATH)
+            .remove(LAST_DOWNLOADED_APK_VERSION_CODE)
             .remove(PENDING_INSTALL_APK_PATH)
             .apply()
     }

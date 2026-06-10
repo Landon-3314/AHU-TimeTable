@@ -150,7 +150,8 @@ class AppStrings {
     'week_view': {'zh': '周视图', 'en': 'Week View'},
     'import_from_system': {'zh': '导入教务课表', 'en': 'Import from Academic System'},
     'today': {'zh': '回到今日', 'en': 'Today'},
-    'add_course': {'zh': '添加课程/日程', 'en': 'Add Course/Event'},
+    'add_course': {'zh': '添加课程', 'en': 'Add Course'},
+    'add_course_or_event': {'zh': '添加课程/日程', 'en': 'Add Course/Event'},
     'jump_to_week': {'zh': '跳转周次', 'en': 'Jump to Week'},
     'week_label_format': {'zh': '第 {week} 周', 'en': 'Week {week}'},
     'period_range_format': {

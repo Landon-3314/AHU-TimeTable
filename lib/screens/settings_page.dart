@@ -225,7 +225,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _showSnackBar(provider.t('checking_update'));
 
     try {
-      await platform.cleanupDownloadedApks();
       final service =
           widget.updateCheckService ??
           UpdateCheckService.githubManifest(platform: platform);
@@ -321,6 +320,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final installResult = await widget.updateDownloadService.install(
       result.file!,
+      update: update,
     );
     if (!mounted) {
       return;

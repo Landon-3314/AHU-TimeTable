@@ -72,11 +72,18 @@ class AppUpdatePlatform {
     }
   }
 
-  Future<AppUpdateInstallResult> installApk(File apkFile) async {
+  Future<AppUpdateInstallResult> installApk(
+    File apkFile, {
+    int? versionCode,
+  }) async {
     try {
+      final arguments = <String, Object?>{'path': apkFile.path};
+      if (versionCode != null) {
+        arguments['versionCode'] = versionCode;
+      }
       final result = await _channel.invokeMethod<Object?>(
         'installApk',
-        <String, Object?>{'path': apkFile.path},
+        arguments,
       );
       return _parseInstallResult(result);
     } on MissingPluginException {
