@@ -101,6 +101,57 @@ void main() {
       expect(find.text('当前页面没有未结束考试安排'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'academic account page retries a recoverable silent import failure once',
+    (tester) async {
+      final settings = await _createSettingsProvider();
+      final store = _MemoryCredentialStore();
+      var launchCount = 0;
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<SettingsProvider>.value(
+          value: settings,
+          child: MaterialApp(
+            home: AcademicAccountPage(
+              credentialService: AcademicCredentialService(store: store),
+              silentAutoImportBuilder: (context, action, onResult, onError) {
+                launchCount += 1;
+                if (launchCount == 1) {
+                  return _SilentAutoImportFailureProbe(
+                    onError: onError,
+                    message: '等待统一门户登录或教务页面加载超时',
+                  );
+                }
+                return _SilentAutoImportProbe(
+                  action: action,
+                  onResult: onResult,
+                  result: const AcademicImportResult(
+                    kind: AcademicImportKind.timetable,
+                    importedCount: 2,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(_textFieldWithLabel('学号'), 'G12345678');
+      await tester.enterText(_textFieldWithLabel('密码'), 'secret');
+      await tester.ensureVisible(find.text('自动提取课程'));
+      await tester.tap(find.text('自动提取课程'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      expect(launchCount, 2);
+      expect(find.text('等待统一门户登录或教务页面加载超时'), findsNothing);
+      expect(find.text('已导入 2 门课程'), findsOneWidget);
+    },
+  );
 }
 
 Future<SettingsProvider> _createSettingsProvider() async {
@@ -139,10 +190,19 @@ class _MemoryCredentialStore implements AcademicCredentialStore {
 }
 
 class _SilentAutoImportProbe extends StatefulWidget {
-  const _SilentAutoImportProbe({required this.action, required this.onResult});
+  const _SilentAutoImportProbe({
+    required this.action,
+    required this.onResult,
+    this.result = const AcademicImportResult(
+      kind: AcademicImportKind.exam,
+      importedCount: 0,
+      skippedReasons: ['当前页面没有未结束考试安排'],
+    ),
+  });
 
   final AcademicAutoAction action;
   final ValueChanged<AcademicImportResult> onResult;
+  final AcademicImportResult result;
 
   @override
   State<_SilentAutoImportProbe> createState() => _SilentAutoImportProbeState();
@@ -153,18 +213,42 @@ class _SilentAutoImportProbeState extends State<_SilentAutoImportProbe> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onResult(
-        const AcademicImportResult(
-          kind: AcademicImportKind.exam,
-          importedCount: 0,
-          skippedReasons: ['当前页面没有未结束考试安排'],
-        ),
-      );
+      widget.onResult(widget.result);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Text('silent auto import ${widget.action.name}');
+  }
+}
+
+class _SilentAutoImportFailureProbe extends StatefulWidget {
+  const _SilentAutoImportFailureProbe({
+    required this.onError,
+    required this.message,
+  });
+
+  final ValueChanged<String> onError;
+  final String message;
+
+  @override
+  State<_SilentAutoImportFailureProbe> createState() =>
+      _SilentAutoImportFailureProbeState();
+}
+
+class _SilentAutoImportFailureProbeState
+    extends State<_SilentAutoImportFailureProbe> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onError(widget.message);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('silent auto import failure');
   }
 }

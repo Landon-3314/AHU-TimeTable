@@ -47,6 +47,8 @@ class AcademicAccountPage extends StatefulWidget {
 }
 
 class _AcademicAccountPageState extends State<AcademicAccountPage> {
+  static const int _maxSilentAutoImportRecoverableRetries = 1;
+
   final TextEditingController _studentIdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _autoLoginEnabled = true;
@@ -54,6 +56,7 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
   bool _isBusy = false;
   AcademicAutoAction? _silentAutoAction;
   int _silentAutoImportRunId = 0;
+  int _silentAutoImportRetryCount = 0;
 
   @override
   void initState() {
@@ -347,6 +350,7 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
       _isBusy = true;
       _silentAutoAction = action;
       _silentAutoImportRunId += 1;
+      _silentAutoImportRetryCount = 0;
     });
     _showSnackBar(
       settingsProvider.t(
@@ -389,6 +393,7 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
     setState(() {
       _isBusy = false;
       _silentAutoAction = null;
+      _silentAutoImportRetryCount = 0;
     });
     _showSnackBar(
       _buildImportSummary(context.read<SettingsProvider>(), result),
@@ -399,9 +404,21 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
     if (!mounted) {
       return;
     }
+    if (_silentAutoAction != null &&
+        _silentAutoImportRetryCount < _maxSilentAutoImportRecoverableRetries &&
+        isRecoverableAcademicAutoImportError(message)) {
+      setState(() {
+        _silentAutoImportRetryCount += 1;
+        _silentAutoImportRunId += 1;
+      });
+      _showSnackBar(context.read<SettingsProvider>().t('auto_import_retrying'));
+      return;
+    }
+
     setState(() {
       _isBusy = false;
       _silentAutoAction = null;
+      _silentAutoImportRetryCount = 0;
     });
     _showSnackBar(message);
   }

@@ -2,7 +2,15 @@ import 'dart:convert';
 
 import '../models/academic_credential.dart';
 
-enum AcademicPageKind { casLogin, jwLogin, studentHome, timetable, exam, other }
+enum AcademicPageKind {
+  casLogin,
+  jwLogin,
+  jwSsoLogin,
+  studentHome,
+  timetable,
+  exam,
+  other,
+}
 
 class AcademicAutoLoginService {
   const AcademicAutoLoginService._();
@@ -19,6 +27,9 @@ class AcademicAutoLoginService {
     }
     if (host == 'jw.ahu.edu.cn' && path == '/student/login') {
       return AcademicPageKind.jwLogin;
+    }
+    if (host == 'jw.ahu.edu.cn' && path == '/student/sso/login') {
+      return AcademicPageKind.jwSsoLogin;
     }
     if (host == 'jw.ahu.edu.cn' && path == '/student/home') {
       return AcademicPageKind.studentHome;
@@ -65,6 +76,9 @@ class AcademicAutoLoginService {
       '.login_box_landing_btn',
       'button[type="submit"]',
       'input[type="submit"]',
+      '[role="button"]',
+      '[onclick*="login" i]',
+      '[class*="login" i]',
       '.login-btn',
       '#login',
       '#loginButton'
@@ -148,7 +162,7 @@ class AcademicAutoLoginService {
 
     const submit =
       firstVisible(submitSelectors) ||
-      firstVisibleButtonByText(['立即登录']);
+      firstVisibleButtonByText(['立即登录', '登录', '登 录']);
     if (!submit) {
       return 'MISSING_SUBMIT';
     }

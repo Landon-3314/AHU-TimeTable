@@ -85,6 +85,46 @@ AcademicImportResult buildExamImportResult({
   );
 }
 
+bool isRecoverableAcademicAutoImportError(String message) {
+  final normalized = message.toLowerCase();
+  const userActionRequiredIndicators = <String>[
+    '验证码',
+    '二次验证',
+    'captcha',
+    'second verification',
+    '请先填写学号和密码',
+    'student id and password',
+    '账号或密码',
+    '用户名或密码',
+    '密码错误',
+    'invalid credential',
+    'incorrect password',
+  ];
+  if (userActionRequiredIndicators.any(normalized.contains)) {
+    return false;
+  }
+
+  const transientIndicators = <String>[
+    '超时',
+    'timed out',
+    '未找到登录按钮',
+    'login button was not found',
+    '连接失败',
+    'connection failed',
+    'network',
+    '重新登录',
+  ];
+  return transientIndicators.any(normalized.contains);
+}
+
+void _logAcademicAutoImport(String message) {
+  if (kDebugMode) {
+    debugPrint(
+      '[AcademicAutoImport] ${DateTime.now().toIso8601String()} $message',
+    );
+  }
+}
+
 Future<int?> importTimetableCoursesWithConflictConfirmation({
   required BuildContext context,
   required CourseProvider courseProvider,
@@ -141,8 +181,11 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   static const Duration _extractScriptSettleDelay = Duration(milliseconds: 350);
   static const Duration _examExtractScriptSettleDelay = Duration(seconds: 5);
   static const Duration _autoStepDelay = Duration(milliseconds: 700);
+  static const Duration _autoRetryDelay = Duration(seconds: 1);
   static const Duration _autoImportTimeout = Duration(seconds: 30);
   static const Duration _autoExamImportTimeout = Duration(seconds: 70);
+  static const int _maxAutoImportRecoverableRetries = 1;
+  static const int _maxPortalLoginSubmissions = 2;
   static const Set<String> _allowedAcademicHosts = <String>{
     'wvpn.ahu.edu.cn',
     'ahu.edu.cn',
@@ -444,9 +487,19 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
           final uri = Uri.tryParse(request.url);
           if (uri == null || !_isAllowedAcademicUri(uri)) {
             _showBlockedNavigationMessage(request.url);
+            _logAcademicAutoImport('blocked navigation url=${request.url}');
             return NavigationDecision.prevent;
           }
           return NavigationDecision.navigate;
+        },
+        onWebResourceError: (error) {
+          if (error.isForMainFrame ?? true) {
+            _logAcademicAutoImport(
+              'main frame load error code=${error.errorCode} '
+              'type=${error.errorType} url=${error.url} '
+              'description=${error.description}',
+            );
+          }
         },
       ),
     );
@@ -610,37 +663,63 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       _autoImportStatus = settingsProvider.t(openingMessageKey);
     });
 
+    var attempt = 0;
     try {
-      await _controller.loadRequest(Uri.parse(targetUrl));
-      await _waitForAutoPageReady(
-        credential: credential,
-        targetUrl: targetUrl,
-        readyScript: readyScript,
-        timeout: timeout,
-        openingMessageKey: openingMessageKey,
-        waitingMessageKey: waitingMessageKey,
-        refreshBeforeWaitingScript: refreshBeforeWaitingScript,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _activeAction = kind;
-        _autoImportStatus = settingsProvider.t(extractingMessageKey);
-      });
-      await extract();
-    } catch (error) {
-      final message = settingsProvider
-          .t('auto_import_failed')
-          .replaceAll('{reason}', error.toString());
-      _finishImportWithMessage(message);
-      if (!widget.showWebView && widget.onImportError == null) {
-        setState(() {
-          _autoImportStatus = message;
-        });
-        await Future<void>.delayed(const Duration(seconds: 2));
-        if (mounted) {
-          await Navigator.of(context).maybePop();
+      while (mounted) {
+        try {
+          if (attempt > 0) {
+            _setAutoImportStatus(settingsProvider.t('auto_import_retrying'));
+            await Future<void>.delayed(_autoRetryDelay);
+          }
+          _logAcademicAutoImport(
+            'attempt=${attempt + 1} action=${kind.name} target=$targetUrl',
+          );
+          await _controller.loadRequest(Uri.parse(targetUrl));
+          await _waitForAutoPageReady(
+            credential: credential,
+            targetUrl: targetUrl,
+            readyScript: readyScript,
+            timeout: timeout,
+            openingMessageKey: openingMessageKey,
+            waitingMessageKey: waitingMessageKey,
+            refreshBeforeWaitingScript: refreshBeforeWaitingScript,
+          );
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _activeAction = kind;
+            _autoImportStatus = settingsProvider.t(extractingMessageKey);
+          });
+          await extract();
+          return;
+        } catch (error) {
+          final reason = error.toString();
+          final canRetry =
+              attempt < _maxAutoImportRecoverableRetries &&
+              isRecoverableAcademicAutoImportError(reason);
+          _logAcademicAutoImport(
+            'attempt=${attempt + 1} failed recoverable=$canRetry reason=$reason',
+          );
+          if (canRetry) {
+            attempt += 1;
+            continue;
+          }
+
+          final message = settingsProvider
+              .t('auto_import_failed')
+              .replaceAll('{reason}', reason);
+          _finishImportWithMessage(message);
+          if (!widget.showWebView && widget.onImportError == null) {
+            setState(() {
+              _autoImportStatus = message;
+            });
+            await Future<void>.delayed(const Duration(seconds: 2));
+            if (mounted) {
+              await Navigator.of(context).maybePop();
+            }
+          }
+          return;
         }
       }
     } finally {
@@ -665,12 +744,19 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     final deadline = DateTime.now().add(timeout);
     var redirectedFromHome = false;
     var refreshAttempted = false;
-    var portalLoginSubmitted = false;
+    var portalLoginSubmissionCount = 0;
+    String? lastLoggedUrl;
+    AcademicPageKind? lastLoggedPageKind;
 
     while (DateTime.now().isBefore(deadline)) {
       final currentUrl = await _controller.currentUrl();
       final uri = currentUrl == null ? null : Uri.tryParse(currentUrl);
       final pageKind = AcademicAutoLoginService.classifyUrl(uri);
+      if (currentUrl != lastLoggedUrl || pageKind != lastLoggedPageKind) {
+        lastLoggedUrl = currentUrl;
+        lastLoggedPageKind = pageKind;
+        _logAcademicAutoImport('page kind=$pageKind url=$currentUrl');
+      }
       if (!refreshAttempted &&
           refreshBeforeWaitingScript != null &&
           pageKind == AcademicPageKind.exam) {
@@ -688,11 +774,15 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
       switch (pageKind) {
         case AcademicPageKind.casLogin:
-          if (portalLoginSubmitted) {
+          if (portalLoginSubmissionCount >= _maxPortalLoginSubmissions) {
             _setAutoImportStatus(settingsProvider.t('auto_import_logging_in'));
             break;
           }
           final loginResult = await _runUnifiedPortalLoginScript(credential);
+          _logAcademicAutoImport(
+            'portal login result=$loginResult '
+            'submissionCount=$portalLoginSubmissionCount',
+          );
           if (loginResult == 'CHALLENGE_REQUIRED') {
             throw settingsProvider.t('auto_import_challenge_required');
           }
@@ -700,14 +790,16 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
             throw loginResult.replaceFirst('JS_ERROR:', '').trim();
           }
           if (loginResult == 'SUBMITTED') {
-            portalLoginSubmitted = true;
+            portalLoginSubmissionCount += 1;
             _setAutoImportStatus(settingsProvider.t('auto_import_logging_in'));
           } else if (loginResult == 'MISSING_FORM') {
             _setAutoImportStatus(
               settingsProvider.t('auto_import_waiting_unified_login'),
             );
           } else if (loginResult == 'MISSING_SUBMIT') {
-            throw settingsProvider.t('auto_import_submit_missing');
+            _setAutoImportStatus(
+              settingsProvider.t('auto_import_waiting_unified_login'),
+            );
           }
         case AcademicPageKind.jwLogin:
           _setAutoImportStatus(
@@ -716,6 +808,8 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
           await _controller.loadRequest(
             Uri.parse(ScheduleHtmlExtractor.academicCasLoginUrl),
           );
+        case AcademicPageKind.jwSsoLogin:
+          _setAutoImportStatus(settingsProvider.t('auto_import_waiting_page'));
         case AcademicPageKind.studentHome:
           if (!redirectedFromHome) {
             redirectedFromHome = true;

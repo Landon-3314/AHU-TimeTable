@@ -363,6 +363,10 @@ class AppStrings {
       'zh': '正在等待教务页面响应...',
       'en': 'Waiting for academic page...',
     },
+    'auto_import_retrying': {
+      'zh': '登录状态更新中，正在重试...',
+      'en': 'Refreshing login state. Retrying...',
+    },
     'auto_import_extracting': {
       'zh': '已进入课表，正在提取...',
       'en': 'Timetable ready. Extracting...',

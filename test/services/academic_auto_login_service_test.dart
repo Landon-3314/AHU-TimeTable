@@ -26,6 +26,10 @@ void main() {
     expect(script, contains('input[type="password"]'));
     expect(script, contains('#index_login_btn'));
     expect(script, contains('button[type="submit"]'));
+    expect(script, contains('[role="button"]'));
+    expect(script, contains('[onclick*="login" i]'));
+    expect(script, contains('登录'));
+    expect(script, contains('登 录'));
     expect(script, contains('window.login()'));
     expect(script, contains('SUBMITTED'));
     expect(script, contains('CHALLENGE_REQUIRED'));
@@ -57,6 +61,12 @@ void main() {
         ),
       ),
       AcademicPageKind.jwLogin,
+    );
+    expect(
+      AcademicAutoLoginService.classifyUrl(
+        Uri.parse('https://jw.ahu.edu.cn/student/sso/login'),
+      ),
+      AcademicPageKind.jwSsoLogin,
     );
     expect(
       AcademicAutoLoginService.classifyUrl(
