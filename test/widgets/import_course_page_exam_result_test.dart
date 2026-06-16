@@ -43,4 +43,31 @@ void main() {
     expect(result.importedCount, 2);
     expect(result.skippedReasons, isEmpty);
   });
+
+  test(
+    'exam import is blocked until timetable import initializes semester',
+    () {
+      expect(
+        buildUninitializedAcademicImportMessage(
+          kind: AcademicImportKind.exam,
+          isCurrentSemesterInitialized: false,
+        ),
+        '请先导入课程以自动初始化学期起始日期，再导入考试。',
+      );
+      expect(
+        buildUninitializedAcademicImportMessage(
+          kind: AcademicImportKind.timetable,
+          isCurrentSemesterInitialized: false,
+        ),
+        isNull,
+      );
+      expect(
+        buildUninitializedAcademicImportMessage(
+          kind: AcademicImportKind.exam,
+          isCurrentSemesterInitialized: true,
+        ),
+        isNull,
+      );
+    },
+  );
 }

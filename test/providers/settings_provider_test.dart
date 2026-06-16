@@ -50,19 +50,75 @@ void main() {
   test('restores default period start times from session defaults', () async {
     final settings = await _buildSettingsProvider();
 
+    expect(settings.bigBreakEnabled, isTrue);
+    expect(settings.bigBreak, 15);
+    expect(settings.bigBreakAfterPeriods, [2, 7]);
     expect(
-      settings.morningPeriodStartTimes.first,
-      const TimeOfDay(hour: 8, minute: 0),
+      settings.morningPeriodStartTimes,
+      containsAllInOrder([
+        const TimeOfDay(hour: 8, minute: 0),
+        const TimeOfDay(hour: 8, minute: 50),
+        const TimeOfDay(hour: 9, minute: 50),
+        const TimeOfDay(hour: 10, minute: 40),
+        const TimeOfDay(hour: 11, minute: 30),
+      ]),
     );
     expect(
-      settings.afternoonPeriodStartTimes.first,
-      const TimeOfDay(hour: 14, minute: 0),
+      settings.afternoonPeriodStartTimes,
+      containsAllInOrder([
+        const TimeOfDay(hour: 14, minute: 0),
+        const TimeOfDay(hour: 14, minute: 50),
+        const TimeOfDay(hour: 15, minute: 50),
+        const TimeOfDay(hour: 16, minute: 40),
+        const TimeOfDay(hour: 17, minute: 30),
+      ]),
     );
     expect(
-      settings.eveningPeriodStartTimes.first,
-      const TimeOfDay(hour: 19, minute: 0),
+      settings.eveningPeriodStartTimes,
+      containsAllInOrder([
+        const TimeOfDay(hour: 19, minute: 0),
+        const TimeOfDay(hour: 19, minute: 50),
+        const TimeOfDay(hour: 20, minute: 40),
+      ]),
     );
     expect(settings.totalClassPeriods, 13);
+  });
+
+  test('big break settings reflow matching period tails', () async {
+    final settings = await _buildSettingsProvider();
+
+    await settings.updateBigBreakSettings(
+      enabled: false,
+      durationMinutes: 15,
+      afterPeriods: const [2, 7],
+    );
+
+    expect(settings.bigBreakEnabled, isFalse);
+    expect(
+      settings.morningPeriodStartTimes[2],
+      const TimeOfDay(hour: 9, minute: 40),
+    );
+    expect(
+      settings.afternoonPeriodStartTimes[2],
+      const TimeOfDay(hour: 15, minute: 40),
+    );
+
+    await settings.updateBigBreakSettings(
+      enabled: true,
+      durationMinutes: 20,
+      afterPeriods: const [7, 2, 2, 99],
+    );
+
+    expect(settings.bigBreakAfterPeriods, [2, 7]);
+    expect(settings.bigBreak, 20);
+    expect(
+      settings.morningPeriodStartTimes[2],
+      const TimeOfDay(hour: 9, minute: 55),
+    );
+    expect(
+      settings.afternoonPeriodStartTimes[2],
+      const TimeOfDay(hour: 15, minute: 55),
+    );
   });
 
   test('drops stored period start times with invalid hours', () async {
@@ -104,7 +160,7 @@ void main() {
       );
       expect(
         settings.morningPeriodStartTimes[2],
-        const TimeOfDay(hour: 10, minute: 0),
+        const TimeOfDay(hour: 10, minute: 10),
       );
       expect(
         settings.afternoonPeriodStartTimes.first,
@@ -155,12 +211,20 @@ void main() {
         const TimeOfDay(hour: 8, minute: 55),
       );
       expect(
+        settings.morningPeriodStartTimes[2],
+        const TimeOfDay(hour: 9, minute: 55),
+      );
+      expect(
         settings.afternoonPeriodStartTimes[0],
         const TimeOfDay(hour: 14, minute: 10),
       );
       expect(
         settings.afternoonPeriodStartTimes[1],
         const TimeOfDay(hour: 15, minute: 5),
+      );
+      expect(
+        settings.afternoonPeriodStartTimes[2],
+        const TimeOfDay(hour: 16, minute: 5),
       );
       expect(
         settings.eveningPeriodStartTimes[1],
@@ -300,6 +364,28 @@ void main() {
       await settings.deleteSemester(created.id);
 
       expect(semesterChangeCount, 4);
+    },
+  );
+
+  test(
+    'academic import initializes the current semester once from start date',
+    () async {
+      final settings = await _buildSettingsProvider();
+
+      expect(settings.isCurrentSemesterInitialized, isFalse);
+
+      final initialized = await settings
+          .initializeCurrentSemesterFromAcademicImport(DateTime(2026, 3, 4));
+
+      expect(initialized, isTrue);
+      expect(settings.isCurrentSemesterInitialized, isTrue);
+      expect(settings.semesterStartDate, DateTime(2026, 3, 2));
+
+      final overwritten = await settings
+          .initializeCurrentSemesterFromAcademicImport(DateTime(2026, 9, 7));
+
+      expect(overwritten, isFalse);
+      expect(settings.semesterStartDate, DateTime(2026, 3, 2));
     },
   );
 

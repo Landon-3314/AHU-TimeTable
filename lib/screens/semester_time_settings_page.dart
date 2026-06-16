@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_constants.dart';
+import '../core/app_theme_tokens.dart';
 import '../models/semester.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
@@ -10,6 +11,7 @@ import '../providers/timetable_view_provider.dart';
 import '../services/app_services.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/app_wheel_pickers.dart';
+import '../widgets/common/capsule_multi_select.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/semester_start_date_dialog.dart';
 import 'period_start_time_settings_page.dart';
@@ -118,6 +120,19 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
             ),
           ),
           const Divider(height: 1),
+          AppActionTile(
+            icon: Icons.more_time_outlined,
+            title: '大课间',
+            subtitle: _bigBreakSubtitle(provider),
+            trailing: AppPickerPill(
+              label: provider.bigBreakEnabled
+                  ? '${provider.bigBreak} 分钟'
+                  : '关闭',
+              onTap: () => _pickBigBreakSettings(context, provider),
+            ),
+            onTap: () => _pickBigBreakSettings(context, provider),
+          ),
+          const Divider(height: 1),
           _sessionCountTile(
             context: context,
             icon: Icons.wb_sunny_outlined,
@@ -170,6 +185,50 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  String _bigBreakSubtitle(SettingsProvider provider) {
+    if (!provider.bigBreakEnabled) {
+      return '未启用';
+    }
+    final positions = provider.bigBreakAfterPeriods;
+    if (positions.isEmpty) {
+      return '已启用 · ${provider.bigBreak} 分钟 · 未选择位置';
+    }
+    final positionText = positions.map((period) => '第$period节后').join('、');
+    return '已启用 · ${provider.bigBreak} 分钟 · $positionText';
+  }
+
+  Future<void> _pickBigBreakSettings(
+    BuildContext context,
+    SettingsProvider provider,
+  ) async {
+    final draft = await showModalBottomSheet<_BigBreakSettingsDraft>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return _BigBreakSettingsSheet(
+          enabled: provider.bigBreakEnabled,
+          durationMinutes: provider.bigBreak,
+          afterPeriods: provider.bigBreakAfterPeriods,
+          totalClassPeriods: provider.totalClassPeriods,
+        );
+      },
+    );
+    if (draft == null || !context.mounted) {
+      return;
+    }
+
+    await _updateAndRefresh(
+      context,
+      provider,
+      () => provider.updateBigBreakSettings(
+        enabled: draft.enabled,
+        durationMinutes: draft.durationMinutes,
+        afterPeriods: draft.afterPeriods,
       ),
     );
   }
@@ -612,6 +671,216 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
     return '${date.year}-$month-$day';
+  }
+}
+
+class _BigBreakSettingsDraft {
+  const _BigBreakSettingsDraft({
+    required this.enabled,
+    required this.durationMinutes,
+    required this.afterPeriods,
+  });
+
+  final bool enabled;
+  final int durationMinutes;
+  final List<int> afterPeriods;
+}
+
+class _BigBreakSettingsSheet extends StatefulWidget {
+  const _BigBreakSettingsSheet({
+    required this.enabled,
+    required this.durationMinutes,
+    required this.afterPeriods,
+    required this.totalClassPeriods,
+  });
+
+  final bool enabled;
+  final int durationMinutes;
+  final List<int> afterPeriods;
+  final int totalClassPeriods;
+
+  @override
+  State<_BigBreakSettingsSheet> createState() => _BigBreakSettingsSheetState();
+}
+
+class _BigBreakSettingsSheetState extends State<_BigBreakSettingsSheet> {
+  late bool _enabled;
+  late int _durationMinutes;
+  late Set<int> _afterPeriods;
+
+  @override
+  void initState() {
+    super.initState();
+    _enabled = widget.enabled;
+    _durationMinutes = widget.durationMinutes.clamp(5, 60).toInt();
+    _afterPeriods = widget.afterPeriods.toSet();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = appThemeTokensOf(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.lg,
+            AppSpacing.xl,
+            AppSpacing.xl,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '大课间设置',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              Text(
+                '大课间发生在两节课之间，会影响后续节次的默认起始时间。',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('启用大课间'),
+                value: _enabled,
+                onChanged: (value) {
+                  setState(() {
+                    _enabled = value;
+                  });
+                },
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  const Icon(Icons.timer_outlined),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      '大课间时长',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  Text('$_durationMinutes 分钟'),
+                ],
+              ),
+              Slider(
+                value: _durationMinutes.toDouble(),
+                min: 5,
+                max: 60,
+                divisions: 55,
+                label: '$_durationMinutes 分钟',
+                onChanged: _enabled
+                    ? (value) {
+                        setState(() {
+                          _durationMinutes = value.round();
+                        });
+                      }
+                    : null,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                '大课间位置',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '选择“第几节后”，最后一节后不可设置。',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              if (widget.totalClassPeriods <= 1)
+                Text(
+                  '当前节次数不足，暂无可选位置',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
+                )
+              else
+                IgnorePointer(
+                  ignoring: !_enabled,
+                  child: Opacity(
+                    opacity: _enabled ? 1 : 0.45,
+                    child: CapsuleMultiSelect<int>(
+                      key: const ValueKey('big-break-position-selector'),
+                      options: [
+                        for (
+                          int period = 1;
+                          period < widget.totalClassPeriods;
+                          period += 1
+                        )
+                          CapsuleMultiSelectOption<int>(
+                            value: period,
+                            label: '第$period节后',
+                            semanticLabel: '第$period节和第${period + 1}节之间',
+                          ),
+                      ],
+                      selectedValues: _afterPeriods,
+                      onChanged: (values) {
+                        setState(() {
+                          _afterPeriods = values;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _submit,
+                      child: const Text('完成'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _submit() {
+    final sortedPeriods = _afterPeriods.toList()..sort();
+    Navigator.of(context).pop(
+      _BigBreakSettingsDraft(
+        enabled: _enabled,
+        durationMinutes: _durationMinutes,
+        afterPeriods: sortedPeriods,
+      ),
+    );
   }
 }
 

@@ -19,7 +19,6 @@ import '../services/schedule_html_extractor.dart';
 import '../services/schedule_parser_service.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/guided_tour_overlay.dart';
-import '../widgets/semester_initialization_guard.dart';
 
 enum _ImportAction { timetable, exam }
 
@@ -83,6 +82,16 @@ AcademicImportResult buildExamImportResult({
     kind: AcademicImportKind.exam,
     importedCount: importedCount,
   );
+}
+
+String? buildUninitializedAcademicImportMessage({
+  required AcademicImportKind kind,
+  required bool isCurrentSemesterInitialized,
+}) {
+  if (isCurrentSemesterInitialized || kind == AcademicImportKind.timetable) {
+    return null;
+  }
+  return '请先导入课程以自动初始化学期起始日期，再导入考试。';
 }
 
 bool isRecoverableAcademicAutoImportError(String message) {
@@ -636,7 +645,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     String? refreshBeforeWaitingScript,
   }) async {
     await _controllerReady;
-    if (!await _ensureSemesterInitializedForImport()) {
+    if (!await _ensureSemesterInitializedForImport(kind)) {
       return;
     }
     if (!mounted) {
@@ -912,12 +921,26 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     _isImportGuideShowing = false;
   }
 
-  Future<bool> _ensureSemesterInitializedForImport() async {
-    return ensureCurrentSemesterInitialized(context);
+  Future<bool> _ensureSemesterInitializedForImport(_ImportAction action) async {
+    final settingsProvider = context.read<SettingsProvider>();
+    final blockedMessage = buildUninitializedAcademicImportMessage(
+      kind: switch (action) {
+        _ImportAction.timetable => AcademicImportKind.timetable,
+        _ImportAction.exam => AcademicImportKind.exam,
+      },
+      isCurrentSemesterInitialized:
+          settingsProvider.isCurrentSemesterInitialized,
+    );
+    if (blockedMessage == null) {
+      return true;
+    }
+
+    _finishImportWithMessage(blockedMessage);
+    return false;
   }
 
   Future<void> _runTimetableExtractScript() async {
-    if (!await _ensureSemesterInitializedForImport()) {
+    if (!await _ensureSemesterInitializedForImport(_ImportAction.timetable)) {
       return;
     }
 
@@ -936,7 +959,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   }
 
   Future<void> _runExamExtractScript() async {
-    if (!await _ensureSemesterInitializedForImport()) {
+    if (!await _ensureSemesterInitializedForImport(_ImportAction.exam)) {
       return;
     }
 
@@ -1014,11 +1037,16 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         );
       }
 
+      final courseProvider = context.read<CourseProvider>();
       final parseReport = _parserService.parseTimetableReport(rawMessage);
+      await _initializeSemesterFromTimetablePageIfNeeded();
+      if (!mounted) {
+        return;
+      }
       final importedCount =
           await importTimetableCoursesWithConflictConfirmation(
             context: context,
-            courseProvider: context.read<CourseProvider>(),
+            courseProvider: courseProvider,
             courses: parseReport.items,
             confirmConflicts: widget.confirmTimetableConflicts,
           );
@@ -1044,6 +1072,33 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         });
       }
     }
+  }
+
+  Future<void> _initializeSemesterFromTimetablePageIfNeeded() async {
+    final settingsProvider = context.read<SettingsProvider>();
+    if (settingsProvider.isCurrentSemesterInitialized) {
+      return;
+    }
+
+    final rawStartDate = await _runJavaScriptExtraction(
+      ScheduleHtmlExtractor.extractSemesterStartDateScript,
+    );
+    if (rawStartDate.startsWith('JS_ERROR:')) {
+      throw ScheduleParseException('教务系统连接失败，请检查网络或重新登录后重试。');
+    }
+    if (rawStartDate.startsWith('ERROR:')) {
+      throw ScheduleParseException('未在课表页面找到学期起始日期，请确认已打开课表页面后重试。');
+    }
+
+    final startDate = ScheduleHtmlExtractor.parseSemesterStartDate(
+      rawStartDate,
+    );
+    if (startDate == null) {
+      throw ScheduleParseException('学期起始日期格式无效，请确认课表页面显示正确后重试。');
+    }
+    await settingsProvider.initializeCurrentSemesterFromAcademicImport(
+      startDate,
+    );
   }
 
   Future<void> _handleExamHtml(String rawMessage) async {

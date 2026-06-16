@@ -74,6 +74,38 @@ void main() {
     expect(dailyService.markCompletedCount, 0);
   });
 
+  testWidgets(
+    'daily auto import host can start before semester initialization',
+    (tester) async {
+      final settings = await _createUninitializedSettingsProvider();
+      final dailyService = _FakeDailyAutoImportService(shouldRun: true);
+      final launchedActions = <AcademicAutoAction>[];
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<SettingsProvider>.value(
+          value: settings,
+          child: MaterialApp(
+            home: Scaffold(
+              body: DailyAcademicAutoImportHost(
+                dailyAutoImportService: dailyService,
+                silentAutoImportBuilder: (context, action, onResult, onError) {
+                  launchedActions.add(action);
+                  return _SilentAutoImportProbe(onResult: onResult);
+                },
+                child: const Text('home'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(settings.isCurrentSemesterInitialized, isFalse);
+      expect(launchedActions, [AcademicAutoAction.timetable]);
+    },
+  );
+
   testWidgets('daily auto import host retries after a silent failure', (
     tester,
   ) async {
@@ -121,6 +153,14 @@ Future<SettingsProvider> _createSettingsProvider() async {
   final preferences = await SharedPreferences.getInstance();
   final storage = StorageService(sharedPreferences: preferences);
   return _InitializedSettingsProvider(storageService: storage);
+}
+
+Future<SettingsProvider> _createUninitializedSettingsProvider() async {
+  SharedPreferences.setMockInitialValues({});
+  final preferences = await SharedPreferences.getInstance();
+  final storage = StorageService(sharedPreferences: preferences);
+  await storage.ensureSemesterMigration();
+  return SettingsProvider(storageService: storage);
 }
 
 class _InitializedSettingsProvider extends SettingsProvider {

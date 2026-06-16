@@ -47,8 +47,11 @@ class StorageService {
   static const String _pixelsPerMinuteKey = 'settings.pixelsPerMinute';
   static const String _classDurationKey = 'settings.classDuration';
   static const String _shortBreakKey = 'settings.shortBreak';
+  static const String _bigBreakEnabledKey = 'settings.bigBreakEnabled';
   static const String _bigBreakKey = 'settings.bigBreak';
   static const String _bigBreakAfterPeriodKey = 'settings.bigBreakAfterPeriod';
+  static const String _bigBreakAfterPeriodsKey =
+      'settings.bigBreakAfterPeriods';
   static const String _morningStartTimeKey = 'settings.morningStartTime';
   static const String _morningClassesKey = 'settings.morningClasses';
   static const String _morningPeriodStartTimesKey =
@@ -581,6 +584,17 @@ class StorageService {
     return _setInt(_currentSemesterKey(_shortBreakKey), value);
   }
 
+  bool readBigBreakEnabled({required bool fallback}) {
+    return _sharedPreferences.getBool(
+          _currentSemesterKey(_bigBreakEnabledKey),
+        ) ??
+        fallback;
+  }
+
+  Future<void> writeBigBreakEnabled(bool value) {
+    return _setBool(_currentSemesterKey(_bigBreakEnabledKey), value);
+  }
+
   int readBigBreak({required int fallback}) {
     return _sharedPreferences.getInt(_currentSemesterKey(_bigBreakKey)) ??
         fallback;
@@ -599,6 +613,29 @@ class StorageService {
 
   Future<void> writeBigBreakAfterPeriod(int value) {
     return _setInt(_currentSemesterKey(_bigBreakAfterPeriodKey), value);
+  }
+
+  List<int>? readBigBreakAfterPeriods() {
+    final values = _sharedPreferences.getStringList(
+      _currentSemesterKey(_bigBreakAfterPeriodsKey),
+    );
+    if (values != null) {
+      return values.map(int.tryParse).whereType<int>().toList(growable: false);
+    }
+
+    final legacyKey = _currentSemesterKey(_bigBreakAfterPeriodKey);
+    if (!_sharedPreferences.containsKey(legacyKey)) {
+      return null;
+    }
+    final legacyValue = _sharedPreferences.getInt(legacyKey);
+    return legacyValue == null ? null : <int>[legacyValue];
+  }
+
+  Future<void> writeBigBreakAfterPeriods(List<int> values) {
+    return _setStringList(
+      _currentSemesterKey(_bigBreakAfterPeriodsKey),
+      values.map((value) => value.toString()).toList(growable: false),
+    );
   }
 
   String readMorningStartTime({required String fallback}) {
@@ -886,8 +923,10 @@ class StorageService {
       _pixelsPerMinuteKey,
       _classDurationKey,
       _shortBreakKey,
+      _bigBreakEnabledKey,
       _bigBreakKey,
       _bigBreakAfterPeriodKey,
+      _bigBreakAfterPeriodsKey,
       _morningStartTimeKey,
       _morningClassesKey,
       _morningPeriodStartTimesKey,
@@ -942,8 +981,10 @@ class StorageService {
     await _copyLegacySetting(_pixelsPerMinuteKey, semesterId: semesterId);
     await _copyLegacySetting(_classDurationKey, semesterId: semesterId);
     await _copyLegacySetting(_shortBreakKey, semesterId: semesterId);
+    await _copyLegacySetting(_bigBreakEnabledKey, semesterId: semesterId);
     await _copyLegacySetting(_bigBreakKey, semesterId: semesterId);
     await _copyLegacySetting(_bigBreakAfterPeriodKey, semesterId: semesterId);
+    await _copyLegacySetting(_bigBreakAfterPeriodsKey, semesterId: semesterId);
     await _copyLegacySetting(_morningStartTimeKey, semesterId: semesterId);
     await _copyLegacySetting(_morningClassesKey, semesterId: semesterId);
     await _copyLegacySetting(

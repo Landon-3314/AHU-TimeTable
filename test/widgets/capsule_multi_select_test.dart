@@ -134,6 +134,29 @@ void main() {
     expect(selectedText.style?.color, theme.colorScheme.secondary);
   });
 
+  testWidgets('selecting a capsule keeps chip size and position stable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildHarness(initialSelection: const {}, onChanged: (_) {}),
+    );
+
+    final chipTwoFinder = find.byKey(
+      const ValueKey<String>('capsule_multi_select_2'),
+    );
+    final chipThreeFinder = find.byKey(
+      const ValueKey<String>('capsule_multi_select_3'),
+    );
+    final chipTwoRectBefore = tester.getRect(chipTwoFinder);
+    final chipThreeRectBefore = tester.getRect(chipThreeFinder);
+
+    await tester.tap(find.text('Week 2'));
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(chipTwoFinder), chipTwoRectBefore);
+    expect(tester.getRect(chipThreeFinder), chipThreeRectBefore);
+  });
+
   testWidgets(
     'dragging from an unselected capsule selects every touched item',
     (tester) async {

@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../providers/settings_provider.dart';
 import '../screens/import_course_page.dart';
 import '../services/academic_daily_auto_import_service.dart';
 
@@ -102,10 +100,6 @@ class _DailyAcademicAutoImportHostState
         _isChecking ||
         _runningAction != null ||
         _retryTimer != null) {
-      return;
-    }
-
-    if (!context.read<SettingsProvider>().isCurrentSemesterInitialized) {
       return;
     }
 

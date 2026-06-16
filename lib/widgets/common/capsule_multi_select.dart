@@ -298,7 +298,7 @@ class _CapsuleChip extends StatelessWidget {
             decoration: BoxDecoration(
               color: backgroundColor,
               borderRadius: borderRadius,
-              border: Border.all(color: borderColor, width: selected ? 1.4 : 1),
+              border: Border.all(color: borderColor, width: 1.2),
               boxShadow: [
                 BoxShadow(
                   color: selectedColor.withValues(
@@ -315,7 +315,7 @@ class _CapsuleChip extends StatelessWidget {
                 label,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: textColor,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),

@@ -33,8 +33,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('详细调整每节课起始时间'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('详细调整每节课起始时间'));
 
     expect(find.text('每节课起始时间'), findsOneWidget);
     expect(find.text('上午'), findsOneWidget);
@@ -59,8 +58,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('详细调整每节课起始时间'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('详细调整每节课起始时间'));
     await tester.tap(find.text('第 1 节'));
     await tester.pumpAndSettle();
 
@@ -90,8 +88,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('详细调整每节课起始时间'));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('详细调整每节课起始时间'));
     await tester.tap(find.text('第 1 节'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('09'));
@@ -135,8 +132,7 @@ void main() {
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(AppPickerPill).at(1));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('上午几节课'));
 
     expect(
       find.byType(AppWheelPicker<AppWheelPickerOption<int>>),
@@ -144,6 +140,45 @@ void main() {
     );
     expect(find.byType(GridView), findsNothing);
     expect(find.text('确定'), findsOneWidget);
+  });
+
+  testWidgets('big break settings use bottom sheet capsule selector', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final bundle = await _createProviderBundle();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SettingsProvider>.value(
+            value: bundle.settings,
+          ),
+          ChangeNotifierProvider<CourseProvider>.value(value: bundle.courses),
+        ],
+        child: const MaterialApp(home: SemesterTimeSettingsPage()),
+      ),
+    );
+
+    await tester.tap(find.text('大课间'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('大课间设置'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('big-break-position-selector')),
+      findsOneWidget,
+    );
+    expect(find.text('第2节后'), findsOneWidget);
+    expect(find.text('第7节后'), findsOneWidget);
+
+    await tester.tap(find.text('第7节后'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+
+    expect(bundle.settings.bigBreakAfterPeriods, [2]);
   });
 
   testWidgets('event time uses wheel time picker', (tester) async {
@@ -324,4 +359,11 @@ class _ProviderBundle {
 
   final SettingsProvider settings;
   final CourseProvider courses;
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
 }
