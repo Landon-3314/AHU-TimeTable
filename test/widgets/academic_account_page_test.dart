@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/models/academic_credential.dart';
-import 'package:timetable/providers/settings_provider.dart';
-import 'package:timetable/screens/academic_account_page.dart';
-import 'package:timetable/screens/import_course_page.dart';
-import 'package:timetable/services/academic_credential_service.dart';
-import 'package:timetable/services/storage_service.dart';
+import 'package:AnKe/models/academic_credential.dart';
+import 'package:AnKe/providers/settings_provider.dart';
+import 'package:AnKe/screens/academic_account_page.dart';
+import 'package:AnKe/screens/import_course_page.dart';
+import 'package:AnKe/services/academic_credential_service.dart';
+import 'package:AnKe/services/storage_service.dart';
 
 void main() {
   testWidgets(

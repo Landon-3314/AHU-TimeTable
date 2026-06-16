@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/update_manifest.dart';
-import 'package:timetable/services/update_check_service.dart';
-import 'package:timetable/widgets/update_prompt.dart';
+import 'package:AnKe/models/update_manifest.dart';
+import 'package:AnKe/services/update_check_service.dart';
+import 'package:AnKe/widgets/update_prompt.dart';
 
 void main() {
   final testUpdate = AvailableUpdate(

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/services/corrupt_row_diagnostic_store.dart';
+import 'package:AnKe/services/corrupt_row_diagnostic_store.dart';
 
 void main() {
   test('records corrupt rows and consumes pending notice count once', () async {

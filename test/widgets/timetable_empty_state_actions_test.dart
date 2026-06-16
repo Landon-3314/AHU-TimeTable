@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/timetable_view_data.dart';
-import 'package:timetable/widgets/timetable/course_overview_panel.dart';
-import 'package:timetable/widgets/timetable/holiday_list_view.dart';
-import 'package:timetable/widgets/timetable/timetable_grid.dart';
+import 'package:AnKe/models/timetable_view_data.dart';
+import 'package:AnKe/widgets/timetable/course_overview_panel.dart';
+import 'package:AnKe/widgets/timetable/holiday_list_view.dart';
+import 'package:AnKe/widgets/timetable/timetable_grid.dart';
 
 void main() {
   testWidgets('empty week view renders the supplied action', (tester) async {

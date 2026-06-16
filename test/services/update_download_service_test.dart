@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/update_manifest.dart';
-import 'package:timetable/services/app_update_platform.dart';
-import 'package:timetable/services/update_check_service.dart';
-import 'package:timetable/services/update_download_service.dart';
-import 'package:timetable/services/update_http_client.dart';
+import 'package:AnKe/models/update_manifest.dart';
+import 'package:AnKe/services/app_update_platform.dart';
+import 'package:AnKe/services/update_check_service.dart';
+import 'package:AnKe/services/update_download_service.dart';
+import 'package:AnKe/services/update_http_client.dart';
 
 void main() {
   test('validates downloaded APK sha256', () async {

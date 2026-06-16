@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/services/schedule_html_extractor.dart';
+import 'package:AnKe/services/schedule_html_extractor.dart';
 
 void main() {
   group('semester start date extraction', () {

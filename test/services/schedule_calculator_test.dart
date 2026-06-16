@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/clock_time.dart';
-import 'package:timetable/services/schedule_calculator.dart';
+import 'package:AnKe/models/clock_time.dart';
+import 'package:AnKe/services/schedule_calculator.dart';
 
 void main() {
   test('generates slots from explicit session start times', () {

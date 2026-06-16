@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/core/app_routes.dart';
-import 'package:timetable/core/app_theme.dart';
-import 'package:timetable/models/event.dart';
-import 'package:timetable/providers/course_provider.dart';
-import 'package:timetable/providers/settings_provider.dart';
-import 'package:timetable/screens/exam_overview_page.dart';
-import 'package:timetable/services/storage_service.dart';
+import 'package:AnKe/core/app_routes.dart';
+import 'package:AnKe/core/app_theme.dart';
+import 'package:AnKe/models/event.dart';
+import 'package:AnKe/providers/course_provider.dart';
+import 'package:AnKe/providers/settings_provider.dart';
+import 'package:AnKe/screens/exam_overview_page.dart';
+import 'package:AnKe/services/storage_service.dart';
 
 void main() {
   testWidgets('exam overview only shows academic exams and countdown labels', (

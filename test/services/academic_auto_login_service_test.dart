@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/academic_credential.dart';
-import 'package:timetable/services/academic_auto_login_service.dart';
-import 'package:timetable/services/schedule_html_extractor.dart';
+import 'package:AnKe/models/academic_credential.dart';
+import 'package:AnKe/services/academic_auto_login_service.dart';
+import 'package:AnKe/services/schedule_html_extractor.dart';
 
 void main() {
   test('builds unified portal login script with escaped credentials', () {

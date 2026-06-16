@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/core/app_page_transitions.dart';
-import 'package:timetable/core/app_theme.dart';
+import 'package:AnKe/core/app_page_transitions.dart';
+import 'package:AnKe/core/app_theme.dart';
 
 void main() {
   testWidgets(

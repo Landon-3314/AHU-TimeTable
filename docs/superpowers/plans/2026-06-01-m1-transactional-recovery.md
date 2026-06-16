@@ -61,7 +61,7 @@ contain `Grouped Course` on a Monday.
 Add the panel import:
 
 ```dart
-import 'package:timetable/widgets/timetable/course_overview_panel.dart';
+import 'package:AnKe/widgets/timetable/course_overview_panel.dart';
 ```
 
 After opening the overview, create a scoped finder and use it for overview-row

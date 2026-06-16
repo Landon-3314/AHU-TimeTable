@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/screens/import_course_page.dart';
+import 'package:AnKe/screens/import_course_page.dart';
 
 void main() {
   test('exam import result returns empty message when no exams are parsed', () {

@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/models/course.dart';
-import 'package:timetable/providers/course_provider.dart';
-import 'package:timetable/providers/settings_provider.dart';
-import 'package:timetable/screens/add_course_page.dart';
-import 'package:timetable/services/storage_service.dart';
-import 'package:timetable/widgets/common/capsule_multi_select.dart';
+import 'package:AnKe/models/course.dart';
+import 'package:AnKe/providers/course_provider.dart';
+import 'package:AnKe/providers/settings_provider.dart';
+import 'package:AnKe/screens/add_course_page.dart';
+import 'package:AnKe/services/storage_service.dart';
+import 'package:AnKe/widgets/common/capsule_multi_select.dart';
 
 void main() {
   testWidgets('weekday and teaching weeks use capsule multi-select widgets', (
@@ -54,7 +54,7 @@ void main() {
     });
   });
 
-  testWidgets('saving a new course initializes current semester first', (
+  testWidgets('saving a new course no longer forces semester initialization', (
     tester,
   ) async {
     final bundle = await _createProviderBundle(initialized: false);
@@ -67,13 +67,8 @@ void main() {
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
 
-    expect(find.text('选择学期开始日期'), findsOneWidget);
-    expect(bundle.courses.courses, isEmpty);
-
-    await tester.tap(find.text('确认'));
-    await tester.pumpAndSettle();
-
-    expect(bundle.settings.isCurrentSemesterInitialized, isTrue);
+    expect(find.text('选择学期开始日期'), findsNothing);
+    expect(bundle.settings.isCurrentSemesterInitialized, isFalse);
     expect(bundle.courses.courses, hasLength(1));
     expect(bundle.courses.courses.single.name, 'Math');
   });

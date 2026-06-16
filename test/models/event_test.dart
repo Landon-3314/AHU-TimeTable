@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/event.dart';
+import 'package:AnKe/models/event.dart';
 
 void main() {
   test('event json rejects missing date time', () {

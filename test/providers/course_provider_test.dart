@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/models/course.dart';
-import 'package:timetable/models/event.dart';
-import 'package:timetable/providers/course_provider.dart';
-import 'package:timetable/services/storage_service.dart';
+import 'package:AnKe/models/course.dart';
+import 'package:AnKe/models/event.dart';
+import 'package:AnKe/providers/course_provider.dart';
+import 'package:AnKe/services/storage_service.dart';
 
 void main() {
   test('sortedCourseGroups groups by name and sorts records', () async {

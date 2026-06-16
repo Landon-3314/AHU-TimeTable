@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/academic_credential.dart';
-import 'package:timetable/services/academic_credential_service.dart';
-import 'package:timetable/services/academic_daily_auto_import_service.dart';
+import 'package:AnKe/models/academic_credential.dart';
+import 'package:AnKe/services/academic_credential_service.dart';
+import 'package:AnKe/services/academic_daily_auto_import_service.dart';
 
 void main() {
   test('daily auto import is not due without saved credentials', () async {

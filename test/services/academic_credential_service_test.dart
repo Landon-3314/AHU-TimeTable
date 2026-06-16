@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/academic_credential.dart';
-import 'package:timetable/services/academic_credential_service.dart';
+import 'package:AnKe/models/academic_credential.dart';
+import 'package:AnKe/services/academic_credential_service.dart';
 
 void main() {
   test('saves loads overwrites and clears academic credentials', () async {

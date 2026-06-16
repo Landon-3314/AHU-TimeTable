@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/core/app_theme.dart';
-import 'package:timetable/core/app_theme_tokens.dart';
-import 'package:timetable/providers/course_provider.dart';
-import 'package:timetable/providers/settings_provider.dart';
-import 'package:timetable/providers/timetable_view_provider.dart';
-import 'package:timetable/screens/settings_page.dart';
-import 'package:timetable/services/storage_service.dart';
-import 'package:timetable/widgets/timetable_app.dart';
-import 'package:timetable/widgets/common/app_ui.dart';
+import 'package:AnKe/core/app_theme.dart';
+import 'package:AnKe/core/app_theme_tokens.dart';
+import 'package:AnKe/providers/course_provider.dart';
+import 'package:AnKe/providers/settings_provider.dart';
+import 'package:AnKe/providers/timetable_view_provider.dart';
+import 'package:AnKe/screens/settings_page.dart';
+import 'package:AnKe/services/storage_service.dart';
+import 'package:AnKe/widgets/timetable_app.dart';
+import 'package:AnKe/widgets/common/app_ui.dart';
 
 void main() {
   testWidgets('settings page changes the app display mode', (tester) async {

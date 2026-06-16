@@ -4,9 +4,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/models/course.dart';
-import 'package:timetable/models/semester.dart';
-import 'package:timetable/services/external_data_backup_store.dart';
+import 'package:AnKe/models/course.dart';
+import 'package:AnKe/models/semester.dart';
+import 'package:AnKe/services/external_data_backup_store.dart';
 
 void main() {
   test(

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/providers/settings_provider.dart';
-import 'package:timetable/services/permission_service.dart';
-import 'package:timetable/services/storage_service.dart';
+import 'package:AnKe/providers/settings_provider.dart';
+import 'package:AnKe/services/permission_service.dart';
+import 'package:AnKe/services/storage_service.dart';
 
 Future<SettingsProvider> _buildSettingsProvider({
   Map<String, Object> initialValues = const {},

@@ -3,12 +3,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/models/course.dart';
-import 'package:timetable/models/event.dart';
-import 'package:timetable/models/semester.dart';
-import 'package:timetable/services/corrupt_row_diagnostic_store.dart';
-import 'package:timetable/services/external_data_backup_store.dart';
-import 'package:timetable/services/storage_service.dart';
+import 'package:AnKe/models/course.dart';
+import 'package:AnKe/models/event.dart';
+import 'package:AnKe/models/semester.dart';
+import 'package:AnKe/services/corrupt_row_diagnostic_store.dart';
+import 'package:AnKe/services/external_data_backup_store.dart';
+import 'package:AnKe/services/storage_service.dart';
 
 void main() {
   test(

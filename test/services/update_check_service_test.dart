@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/update_manifest.dart';
-import 'package:timetable/services/update_check_service.dart';
+import 'package:AnKe/models/update_manifest.dart';
+import 'package:AnKe/services/update_check_service.dart';
 
 void main() {
   const manifestJson = '''

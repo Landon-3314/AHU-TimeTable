@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/clock_time.dart';
-import 'package:timetable/models/course.dart';
-import 'package:timetable/models/event.dart';
-import 'package:timetable/models/time_slot.dart';
-import 'package:timetable/services/schedule_plan.dart';
+import 'package:AnKe/models/clock_time.dart';
+import 'package:AnKe/models/course.dart';
+import 'package:AnKe/models/event.dart';
+import 'package:AnKe/models/time_slot.dart';
+import 'package:AnKe/services/schedule_plan.dart';
 
 void main() {
   const slots = <TimeSlot>[

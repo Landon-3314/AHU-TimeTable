@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/widgets/semester_initialization_guard.dart';
+import 'package:AnKe/widgets/semester_initialization_guard.dart';
 
 void main() {
   testWidgets('semester initialization guard no longer blocks actions', (

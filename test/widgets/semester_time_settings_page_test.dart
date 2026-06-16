@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/providers/course_provider.dart';
-import 'package:timetable/providers/settings_provider.dart';
-import 'package:timetable/screens/add_course_page.dart';
-import 'package:timetable/screens/reminder_settings_page.dart';
-import 'package:timetable/screens/semester_time_settings_page.dart';
-import 'package:timetable/services/storage_service.dart';
-import 'package:timetable/widgets/common/app_ui.dart';
-import 'package:timetable/widgets/common/app_wheel_pickers.dart';
+import 'package:AnKe/providers/course_provider.dart';
+import 'package:AnKe/providers/settings_provider.dart';
+import 'package:AnKe/screens/add_course_page.dart';
+import 'package:AnKe/screens/reminder_settings_page.dart';
+import 'package:AnKe/screens/semester_time_settings_page.dart';
+import 'package:AnKe/services/storage_service.dart';
+import 'package:AnKe/widgets/common/app_ui.dart';
+import 'package:AnKe/widgets/common/app_wheel_pickers.dart';
 
 void main() {
   testWidgets('opens detailed period start time settings page', (tester) async {

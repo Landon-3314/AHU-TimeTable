@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/core/app_theme.dart';
-import 'package:timetable/providers/settings_provider.dart';
-import 'package:timetable/screens/theme_settings_page.dart';
-import 'package:timetable/services/storage_service.dart';
-import 'package:timetable/widgets/common/app_wheel_pickers.dart';
+import 'package:AnKe/core/app_theme.dart';
+import 'package:AnKe/providers/settings_provider.dart';
+import 'package:AnKe/screens/theme_settings_page.dart';
+import 'package:AnKe/services/storage_service.dart';
+import 'package:AnKe/widgets/common/app_wheel_pickers.dart';
 
 void main() {
   testWidgets('theme color options expose numbered Chinese semantics', (

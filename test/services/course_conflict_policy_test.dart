@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/models/course.dart';
-import 'package:timetable/services/course_conflict_policy.dart';
+import 'package:AnKe/models/course.dart';
+import 'package:AnKe/services/course_conflict_policy.dart';
 
 void main() {
   const policy = CourseConflictPolicy();

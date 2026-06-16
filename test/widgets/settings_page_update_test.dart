@@ -5,15 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/models/update_manifest.dart';
-import 'package:timetable/providers/course_provider.dart';
-import 'package:timetable/providers/settings_provider.dart';
-import 'package:timetable/screens/settings_page.dart';
-import 'package:timetable/services/app_update_platform.dart';
-import 'package:timetable/services/external_data_backup_store.dart';
-import 'package:timetable/services/storage_service.dart';
-import 'package:timetable/services/update_check_service.dart';
-import 'package:timetable/services/update_download_service.dart';
+import 'package:AnKe/models/update_manifest.dart';
+import 'package:AnKe/providers/course_provider.dart';
+import 'package:AnKe/providers/settings_provider.dart';
+import 'package:AnKe/screens/settings_page.dart';
+import 'package:AnKe/services/app_update_platform.dart';
+import 'package:AnKe/services/external_data_backup_store.dart';
+import 'package:AnKe/services/storage_service.dart';
+import 'package:AnKe/services/update_check_service.dart';
+import 'package:AnKe/services/update_download_service.dart';
 
 void main() {
   testWidgets(

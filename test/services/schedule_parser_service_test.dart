@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/services/schedule_parser_service.dart';
+import 'package:AnKe/services/schedule_parser_service.dart';
 
 void main() {
   const parser = ScheduleParserService();

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/widgets/common/guided_tour_overlay.dart';
+import 'package:AnKe/widgets/common/guided_tour_overlay.dart';
 
 void main() {
   testWidgets('advances through steps and completes on final confirmation', (

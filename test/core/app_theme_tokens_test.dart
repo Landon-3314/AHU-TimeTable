@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/core/app_colors.dart';
-import 'package:timetable/core/app_theme.dart';
-import 'package:timetable/core/app_theme_tokens.dart';
+import 'package:AnKe/core/app_colors.dart';
+import 'package:AnKe/core/app_theme.dart';
+import 'package:AnKe/core/app_theme_tokens.dart';
 
 void main() {
   test('best contrasting foreground chooses black or white', () {

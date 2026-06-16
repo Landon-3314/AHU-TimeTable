@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetable/core/app_theme.dart';
-import 'package:timetable/providers/course_provider.dart';
-import 'package:timetable/providers/settings_provider.dart';
-import 'package:timetable/providers/timetable_view_provider.dart';
-import 'package:timetable/screens/main_scaffold.dart';
-import 'package:timetable/services/corrupt_row_diagnostic_store.dart';
-import 'package:timetable/services/storage_service.dart';
+import 'package:AnKe/core/app_theme.dart';
+import 'package:AnKe/providers/course_provider.dart';
+import 'package:AnKe/providers/settings_provider.dart';
+import 'package:AnKe/providers/timetable_view_provider.dart';
+import 'package:AnKe/screens/main_scaffold.dart';
+import 'package:AnKe/services/corrupt_row_diagnostic_store.dart';
+import 'package:AnKe/services/storage_service.dart';
 
 void main() {
   testWidgets('shows newly isolated corrupt row count once on startup', (

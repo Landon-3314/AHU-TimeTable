@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timetable/core/app_colors.dart';
-import 'package:timetable/core/app_theme.dart';
-import 'package:timetable/widgets/common/capsule_multi_select.dart';
+import 'package:AnKe/core/app_colors.dart';
+import 'package:AnKe/core/app_theme.dart';
+import 'package:AnKe/widgets/common/capsule_multi_select.dart';
 
 void main() {
   Widget buildHarness({
