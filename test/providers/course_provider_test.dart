@@ -540,6 +540,77 @@ void main() {
       isNull,
     );
   });
+
+  test('course mutations roll back in memory when persistence fails', () async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final storage = _FailingCourseStorageService(
+      sharedPreferences: preferences,
+    );
+    await storage.ensureSemesterMigration();
+    final provider = CourseProvider(storageService: storage);
+    final original = _course(id: 'original', name: '大学英语');
+    expect(await provider.addCourse(original), isTrue);
+    var reminderRefreshCount = 0;
+    provider.bindReminderScheduler(() async {
+      reminderRefreshCount += 1;
+    });
+
+    storage.failCourseWrites = true;
+    final added = _course(id: 'added', name: '线性代数', weekday: 2);
+    await expectLater(provider.addCourse(added), throwsStateError);
+    expect(provider.courses.map((course) => course.id), ['original']);
+
+    await expectLater(
+      provider.updateCourse(
+        originalCourse: original,
+        updatedCourse: original.copyWith(name: '改名课程'),
+      ),
+      throwsStateError,
+    );
+    expect(provider.courses.single.name, original.name);
+
+    await expectLater(provider.removeCourse(original), throwsStateError);
+    expect(provider.courses.map((course) => course.id), ['original']);
+    expect(reminderRefreshCount, 0);
+  });
+
+  test('event mutations roll back in memory when persistence fails', () async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final storage = _FailingCourseStorageService(
+      sharedPreferences: preferences,
+    );
+    await storage.ensureSemesterMigration();
+    final provider = CourseProvider(storageService: storage);
+    final original = Event(
+      id: 'original-event',
+      name: '班会',
+      location: 'A101',
+      dateTime: DateTime(2026, 6, 1, 19),
+      enableAlarm: true,
+    );
+    await provider.addEvent(original);
+    var reminderRefreshCount = 0;
+    provider.bindReminderScheduler(() async {
+      reminderRefreshCount += 1;
+    });
+
+    storage.failEventWrites = true;
+    final added = original.copyWith(id: 'added-event', name: '社团活动');
+    await expectLater(provider.addEvent(added), throwsStateError);
+    expect(provider.events.map((event) => event.id), ['original-event']);
+
+    await expectLater(
+      provider.updateEvent(original.copyWith(name: '改名日程')),
+      throwsStateError,
+    );
+    expect(provider.events.single.name, original.name);
+
+    await expectLater(provider.deleteEvent(original.id), throwsStateError);
+    expect(provider.events.map((event) => event.id), ['original-event']);
+    expect(reminderRefreshCount, 0);
+  });
 }
 
 Future<CourseProvider> _createProvider() async {
@@ -571,4 +642,27 @@ Course _course({
     endPeriod: endPeriod,
     colorValue: 0xFF2563EB,
   );
+}
+
+class _FailingCourseStorageService extends StorageService {
+  _FailingCourseStorageService({required super.sharedPreferences});
+
+  bool failCourseWrites = false;
+  bool failEventWrites = false;
+
+  @override
+  Future<void> saveCourses(Iterable<Course> courses) {
+    if (failCourseWrites) {
+      throw StateError('course write failed');
+    }
+    return super.saveCourses(courses);
+  }
+
+  @override
+  Future<void> saveEvents(Iterable<Event> events) {
+    if (failEventWrites) {
+      throw StateError('event write failed');
+    }
+    return super.saveEvents(events);
+  }
 }

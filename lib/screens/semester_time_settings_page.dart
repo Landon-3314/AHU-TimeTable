@@ -15,6 +15,7 @@ import '../widgets/common/capsule_multi_select.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
 import '../widgets/semester_start_date_dialog.dart';
 import 'period_start_time_settings_page.dart';
+import 'settings_update_error_handler.dart';
 
 class SemesterTimeSettingsPage extends StatefulWidget {
   const SemesterTimeSettingsPage({super.key});
@@ -641,11 +642,12 @@ class _SemesterTimeSettingsPageState extends State<SemesterTimeSettingsPage> {
     SettingsProvider provider,
     Future<void> Function() update,
   ) async {
-    await update();
-    if (!context.mounted) {
-      return;
-    }
-    await _refreshSchedules(context, provider);
+    await runSettingsUpdateWithFeedback(
+      context: context,
+      update: update,
+      afterPersisted: () => _refreshSchedules(context, provider),
+      debugLabel: 'SemesterTimeSettingsPage',
+    );
   }
 
   Future<void> _refreshSchedules(

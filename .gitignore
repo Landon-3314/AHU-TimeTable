@@ -51,6 +51,8 @@ AGENTS.md
 .env.*
 .dev.vars
 .dev.vars.*
+key.properties
+**/key.properties
 **/.env
 **/.env.*
 **/.dev.vars

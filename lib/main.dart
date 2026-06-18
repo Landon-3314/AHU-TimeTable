@@ -76,6 +76,7 @@ class _MainApp extends StatefulWidget {
 
 class _MainAppState extends State<_MainApp> {
   late Future<_AppInitBundle> _initFuture;
+  _AppInitBundle? _activeBundle;
 
   @override
   void initState() {
@@ -84,9 +85,21 @@ class _MainAppState extends State<_MainApp> {
   }
 
   void _retryInitialization() {
+    _disposeActiveBundle();
     setState(() {
       _initFuture = _initAppSafely();
     });
+  }
+
+  void _disposeActiveBundle() {
+    _activeBundle?.dispose();
+    _activeBundle = null;
+  }
+
+  @override
+  void dispose() {
+    _disposeActiveBundle();
+    super.dispose();
   }
 
   @override
@@ -110,6 +123,13 @@ class _MainAppState extends State<_MainApp> {
         }
 
         if (snapshot.hasError || bundle == null) {
+          if (_activeBundle != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _disposeActiveBundle();
+              }
+            });
+          }
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(),
@@ -122,6 +142,16 @@ class _MainAppState extends State<_MainApp> {
               onRetry: _retryInitialization,
             ),
           );
+        }
+
+        if (!identical(_activeBundle, bundle)) {
+          final previousBundle = _activeBundle;
+          _activeBundle = bundle;
+          if (previousBundle != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              previousBundle.dispose();
+            });
+          }
         }
 
         return MultiProvider(
@@ -210,4 +240,10 @@ class _AppInitBundle {
   final SettingsProvider settingsProvider;
   final CourseProvider courseProvider;
   final TimetableViewProvider timetableViewProvider;
+
+  void dispose() {
+    settingsProvider.dispose();
+    courseProvider.dispose();
+    timetableViewProvider.dispose();
+  }
 }

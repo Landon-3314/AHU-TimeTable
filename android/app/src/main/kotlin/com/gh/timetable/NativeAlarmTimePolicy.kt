@@ -68,9 +68,11 @@ object NativeAlarmTimePolicy {
         return items.map { item ->
             item.copy(
                 startAtMillis =
-                    rebaseTimestamp(item.startAtMillis, sourceTimeZoneId, targetTimeZoneId)!!,
+                    rebaseTimestamp(item.startAtMillis, sourceTimeZoneId, targetTimeZoneId)
+                        ?: item.startAtMillis,
                 endAtMillis =
-                    rebaseTimestamp(item.endAtMillis, sourceTimeZoneId, targetTimeZoneId)!!,
+                    rebaseTimestamp(item.endAtMillis, sourceTimeZoneId, targetTimeZoneId)
+                        ?: item.endAtMillis,
             )
         }
     }

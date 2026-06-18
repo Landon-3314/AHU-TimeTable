@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:AnKe/providers/course_provider.dart';
 import 'package:AnKe/providers/settings_provider.dart';
 import 'package:AnKe/screens/add_course_page.dart';
+import 'package:AnKe/screens/period_start_time_settings_page.dart';
 import 'package:AnKe/screens/reminder_settings_page.dart';
 import 'package:AnKe/screens/semester_time_settings_page.dart';
 import 'package:AnKe/services/storage_service.dart';
@@ -142,6 +143,104 @@ void main() {
     expect(find.text('确定'), findsOneWidget);
   });
 
+  testWidgets('semester settings reports reminder refresh failure separately', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final bundle = await _createProviderBundle();
+    final settings = _ThrowingSettingsProvider(
+      storageService: bundle.storage,
+      totalWeeksError: SettingsReminderRefreshException(
+        StateError('refresh failed'),
+        StackTrace.current,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SettingsProvider>.value(value: settings),
+          ChangeNotifierProvider<CourseProvider>.value(value: bundle.courses),
+        ],
+        child: const MaterialApp(home: SemesterTimeSettingsPage()),
+      ),
+    );
+
+    await tester.tap(find.byType(AppPickerPill).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已保存，但提醒刷新失败'), findsOneWidget);
+    expect(find.text('保存失败，请稍后重试'), findsNothing);
+  });
+
+  testWidgets('semester settings reports save failure separately', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final bundle = await _createProviderBundle();
+    final settings = _ThrowingSettingsProvider(
+      storageService: bundle.storage,
+      totalWeeksError: StateError('save failed'),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SettingsProvider>.value(value: settings),
+          ChangeNotifierProvider<CourseProvider>.value(value: bundle.courses),
+        ],
+        child: const MaterialApp(home: SemesterTimeSettingsPage()),
+      ),
+    );
+
+    await tester.tap(find.byType(AppPickerPill).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('保存失败，请稍后重试'), findsOneWidget);
+    expect(find.text('已保存，但提醒刷新失败'), findsNothing);
+  });
+
+  testWidgets('period start time settings reports reminder refresh failure', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final bundle = await _createProviderBundle();
+    final settings = _ThrowingSettingsProvider(
+      storageService: bundle.storage,
+      periodStartError: SettingsReminderRefreshException(
+        StateError('refresh failed'),
+        StackTrace.current,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SettingsProvider>.value(value: settings),
+          ChangeNotifierProvider<CourseProvider>.value(value: bundle.courses),
+        ],
+        child: const MaterialApp(home: PeriodStartTimeSettingsPage()),
+      ),
+    );
+
+    await tester.tap(find.text('第 1 节'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已保存，但提醒刷新失败'), findsOneWidget);
+  });
+
   testWidgets('big break settings use bottom sheet capsule selector', (
     tester,
   ) async {
@@ -272,6 +371,39 @@ void main() {
     expect(find.text('分'), findsOneWidget);
   });
 
+  testWidgets('reminder settings reports reminder refresh failure', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final bundle = await _createProviderBundle(courseReminderMinutes: 10);
+    final settings = _ThrowingSettingsProvider(
+      storageService: bundle.storage,
+      reminderAdvanceError: SettingsReminderRefreshException(
+        StateError('refresh failed'),
+        StackTrace.current,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SettingsProvider>.value(value: settings),
+          ChangeNotifierProvider<CourseProvider>.value(value: bundle.courses),
+        ],
+        child: const MaterialApp(home: ReminderSettingsPage()),
+      ),
+    );
+
+    await tester.tap(find.text('提前提醒时间'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已保存，但提醒刷新失败'), findsOneWidget);
+  });
+
   testWidgets('course period single choice uses grid picker', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -349,16 +481,66 @@ Future<_ProviderBundle> _createProviderBundle({
   await storage.writeReminderAdvanceMinutes(courseReminderMinutes);
   await storage.writeEventReminderAdvanceMinutes(eventReminderMinutes);
   return _ProviderBundle(
+    storage: storage,
     settings: SettingsProvider(storageService: storage),
     courses: CourseProvider(storageService: storage),
   );
 }
 
 class _ProviderBundle {
-  const _ProviderBundle({required this.settings, required this.courses});
+  const _ProviderBundle({
+    required this.storage,
+    required this.settings,
+    required this.courses,
+  });
 
+  final StorageService storage;
   final SettingsProvider settings;
   final CourseProvider courses;
+}
+
+class _ThrowingSettingsProvider extends SettingsProvider {
+  _ThrowingSettingsProvider({
+    required super.storageService,
+    this.totalWeeksError,
+    this.periodStartError,
+    this.reminderAdvanceError,
+  });
+
+  final Object? totalWeeksError;
+  final Object? periodStartError;
+  final Object? reminderAdvanceError;
+
+  @override
+  Future<void> updateTotalWeeks(int value) async {
+    final error = totalWeeksError;
+    if (error != null) {
+      throw error;
+    }
+    return super.updateTotalWeeks(value);
+  }
+
+  @override
+  Future<void> updatePeriodStartTime(
+    ClassDayPeriod period,
+    int index,
+    TimeOfDay value,
+  ) async {
+    final error = periodStartError;
+    if (error != null) {
+      throw error;
+    }
+    return super.updatePeriodStartTime(period, index, value);
+  }
+
+  @override
+  Future<SettingsActionResult> updateReminderAdvanceMinutes(int value) async {
+    final error = reminderAdvanceError;
+    if (error != null) {
+      throw error;
+    }
+    return super.updateReminderAdvanceMinutes(value);
+  }
 }
 
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {

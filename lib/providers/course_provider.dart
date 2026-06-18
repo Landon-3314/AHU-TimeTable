@@ -183,10 +183,9 @@ class CourseProvider extends ChangeNotifier {
       return false;
     }
 
+    final previousCourses = List<Course>.of(_courses);
     _courses.add(semesterCourse);
-    notifyListeners();
-    await _persistCourses();
-    await _refreshReminders();
+    await _commitCourseMutation(previousCourses);
     return true;
   }
 
@@ -216,10 +215,9 @@ class CourseProvider extends ChangeNotifier {
       return 0;
     }
 
+    final previousCourses = List<Course>.of(_courses);
     _courses.addAll(acceptedCourses);
-    notifyListeners();
-    await _persistCourses();
-    await _refreshReminders();
+    await _commitCourseMutation(previousCourses);
     return acceptedCourses.length;
   }
 
@@ -264,14 +262,13 @@ class CourseProvider extends ChangeNotifier {
       return 0;
     }
 
+    final previousCourses = List<Course>.of(_courses);
     _courses
       ..clear()
       ..addAll(remainingCourses)
       ..addAll(uniqueImported.values);
 
-    notifyListeners();
-    await _persistCourses();
-    await _refreshReminders();
+    await _commitCourseMutation(previousCourses);
     return uniqueImported.length;
   }
 
@@ -280,10 +277,9 @@ class CourseProvider extends ChangeNotifier {
     if (index == -1) {
       return null;
     }
+    final previousCourses = List<Course>.of(_courses);
     final removed = _courses.removeAt(index);
-    notifyListeners();
-    await _persistCourses();
-    await _refreshReminders();
+    await _commitCourseMutation(previousCourses);
     return removed;
   }
 
@@ -291,10 +287,9 @@ class CourseProvider extends ChangeNotifier {
     if (_courses.any((item) => item.id == course.id)) {
       return;
     }
+    final previousCourses = List<Course>.of(_courses);
     _courses.add(course);
-    notifyListeners();
-    await _persistCourses();
-    await _refreshReminders();
+    await _commitCourseMutation(previousCourses);
   }
 
   Future<bool> updateCourse({
@@ -325,10 +320,9 @@ class CourseProvider extends ChangeNotifier {
       return false;
     }
 
+    final previousCourses = List<Course>.of(_courses);
     _courses[index] = semesterCourse;
-    notifyListeners();
-    await _persistCourses();
-    await _refreshReminders();
+    await _commitCourseMutation(previousCourses);
     return true;
   }
 
@@ -379,6 +373,7 @@ class CourseProvider extends ChangeNotifier {
       return false;
     }
 
+    final previousCourses = List<Course>.of(_courses);
     if (remainingWeeks.isEmpty) {
       _courses.removeAt(index);
     } else {
@@ -387,32 +382,36 @@ class CourseProvider extends ChangeNotifier {
 
     _courses.add(rescheduledCourse);
 
-    notifyListeners();
-    await _persistCourses();
-    await _refreshReminders();
+    await _commitCourseMutation(previousCourses);
     return true;
   }
 
   Future<void> clearAllCourses() async {
+    final previousCourses = List<Course>.of(_courses);
     _courses.clear();
-    notifyListeners();
-    await _storageService.clearCourses();
-    await _refreshReminders();
+    await _commitMutation(
+      previousCourses: previousCourses,
+      previousEvents: null,
+      persist: _storageService.clearCourses,
+    );
   }
 
   Future<void> clearAllData() async {
+    final previousCourses = List<Course>.of(_courses);
+    final previousEvents = List<Event>.of(_events);
     _courses.clear();
     _events.clear();
-    notifyListeners();
-    await _storageService.clearAllTimetableData();
-    await _refreshReminders();
+    await _commitMutation(
+      previousCourses: previousCourses,
+      previousEvents: previousEvents,
+      persist: _storageService.clearAllTimetableData,
+    );
   }
 
   Future<void> addEvent(Event event) async {
+    final previousEvents = List<Event>.of(_events);
     _events.add(event.copyWith(semesterId: _storageService.currentSemesterId));
-    notifyListeners();
-    await _persistEvents();
-    await _refreshReminders();
+    await _commitEventMutation(previousEvents);
   }
 
   Future<int> mergeImportedEvents(List<Event> events) async {
@@ -444,13 +443,12 @@ class CourseProvider extends ChangeNotifier {
     final remainingEvents = _events
         .where((event) => event.importSource != academicExamImportSource)
         .toList();
+    final previousEvents = List<Event>.of(_events);
     _events
       ..clear()
       ..addAll(remainingEvents)
       ..addAll(uniqueImported.values);
-    notifyListeners();
-    await _persistEvents();
-    await _refreshReminders();
+    await _commitEventMutation(previousEvents);
     return uniqueImported.length;
   }
 
@@ -459,10 +457,9 @@ class CourseProvider extends ChangeNotifier {
     if (index == -1) {
       return null;
     }
+    final previousEvents = List<Event>.of(_events);
     final removed = _events.removeAt(index);
-    notifyListeners();
-    await _persistEvents();
-    await _refreshReminders();
+    await _commitEventMutation(previousEvents);
     return removed;
   }
 
@@ -470,10 +467,9 @@ class CourseProvider extends ChangeNotifier {
     if (_events.any((item) => item.id == event.id)) {
       return;
     }
+    final previousEvents = List<Event>.of(_events);
     _events.add(event);
-    notifyListeners();
-    await _persistEvents();
-    await _refreshReminders();
+    await _commitEventMutation(previousEvents);
   }
 
   Future<void> updateEvent(Event updatedEvent) async {
@@ -482,11 +478,51 @@ class CourseProvider extends ChangeNotifier {
       return;
     }
 
+    final previousEvents = List<Event>.of(_events);
     _events[index] = updatedEvent.copyWith(
       semesterId: _storageService.currentSemesterId,
     );
+    await _commitEventMutation(previousEvents);
+  }
+
+  Future<void> _commitCourseMutation(List<Course> previousCourses) {
+    return _commitMutation(
+      previousCourses: previousCourses,
+      previousEvents: null,
+      persist: _persistCourses,
+    );
+  }
+
+  Future<void> _commitEventMutation(List<Event> previousEvents) {
+    return _commitMutation(
+      previousCourses: null,
+      previousEvents: previousEvents,
+      persist: _persistEvents,
+    );
+  }
+
+  Future<void> _commitMutation({
+    required List<Course>? previousCourses,
+    required List<Event>? previousEvents,
+    required Future<void> Function() persist,
+  }) async {
     notifyListeners();
-    await _persistEvents();
+    try {
+      await persist();
+    } catch (_) {
+      if (previousCourses != null) {
+        _courses
+          ..clear()
+          ..addAll(previousCourses);
+      }
+      if (previousEvents != null) {
+        _events
+          ..clear()
+          ..addAll(previousEvents);
+      }
+      notifyListeners();
+      rethrow;
+    }
     await _refreshReminders();
   }
 

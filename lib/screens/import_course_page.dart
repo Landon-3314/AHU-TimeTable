@@ -195,10 +195,6 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   static const Duration _autoExamImportTimeout = Duration(seconds: 70);
   static const int _maxAutoImportRecoverableRetries = 1;
   static const int _maxPortalLoginSubmissions = 2;
-  static const Set<String> _allowedAcademicHosts = <String>{
-    'wvpn.ahu.edu.cn',
-    'ahu.edu.cn',
-  };
   static final Set<Factory<OneSequenceGestureRecognizer>>
   _webViewGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
     Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
@@ -861,7 +857,9 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   Future<void> _runOptionalRefreshScript(String script) async {
     try {
       await _controller.runJavaScriptReturningResult(script);
-    } catch (_) {}
+    } catch (error) {
+      debugPrint('[AcademicAutoImport] optional refresh script failed: $error');
+    }
   }
 
   void _setAutoImportStatus(String message) {
@@ -944,6 +942,10 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       return;
     }
 
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _activeAction = _ImportAction.timetable;
     });
@@ -960,6 +962,10 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
   Future<void> _runExamExtractScript() async {
     if (!await _ensureSemesterInitializedForImport(_ImportAction.exam)) {
+      return;
+    }
+
+    if (!mounted) {
       return;
     }
 
@@ -1003,12 +1009,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   }
 
   bool _isAllowedAcademicUri(Uri uri) {
-    if (uri.scheme != 'https') {
-      return false;
-    }
-
-    final host = uri.host.toLowerCase();
-    return _allowedAcademicHosts.contains(host) || host.endsWith('.ahu.edu.cn');
+    return AcademicAutoLoginService.isAllowedAcademicUri(uri);
   }
 
   void _showBlockedNavigationMessage(String url) {
@@ -1155,6 +1156,10 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     final onImportResult = widget.onImportResult;
     if (onImportResult != null) {
       onImportResult(result);
+      return;
+    }
+
+    if (!mounted) {
       return;
     }
 

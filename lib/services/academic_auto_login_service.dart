@@ -15,6 +15,20 @@ enum AcademicPageKind {
 class AcademicAutoLoginService {
   const AcademicAutoLoginService._();
 
+  static const Set<String> allowedAcademicHosts = <String>{
+    'ahu.edu.cn',
+    'jw.ahu.edu.cn',
+    'one.ahu.edu.cn',
+    'wvpn.ahu.edu.cn',
+  };
+
+  static bool isAllowedAcademicUri(Uri uri) {
+    if (uri.scheme != 'https') {
+      return false;
+    }
+    return allowedAcademicHosts.contains(uri.host.toLowerCase());
+  }
+
   static AcademicPageKind classifyUrl(Uri? uri) {
     if (uri == null || uri.scheme != 'https') {
       return AcademicPageKind.other;
@@ -51,7 +65,7 @@ class AcademicAutoLoginService {
 (function() {
   try {
     const studentId = $studentId;
-    const password = $password;
+    let password = $password;
     const usernameSelectors = [
       '#un',
       '#username',
@@ -154,6 +168,7 @@ class AcademicAutoLoginService {
     if (window.jQuery) {
       window.jQuery(passwordInput).val(password).trigger('input').trigger('change');
     }
+    password = null;
 
     if (typeof window.login === 'function') {
       window.login();
@@ -189,12 +204,15 @@ class AcademicAutoLoginService {
       try {
         frameCount = targetWindow.frames ? targetWindow.frames.length : 0;
       } catch (_) {
+        // Cross-origin frames can deny access; keep scanning reachable windows.
         frameCount = 0;
       }
       for (let index = 0; index < frameCount; index += 1) {
         try {
           collect(targetWindow.frames[index], bucket);
-        } catch (_) {}
+        } catch (_) {
+          // Cross-origin child frames are skipped intentionally.
+        }
       }
     }
 
@@ -206,7 +224,9 @@ class AcademicAutoLoginService {
         if (doc && doc.querySelector('table.courseTable, table.Wjkc')) {
           return 'READY';
         }
-      } catch (_) {}
+      } catch (_) {
+        // Cross-origin frames cannot expose document; ignore that frame only.
+      }
     }
     return 'NOT_READY';
   } catch (error) {
@@ -229,12 +249,15 @@ class AcademicAutoLoginService {
       try {
         frameCount = targetWindow.frames ? targetWindow.frames.length : 0;
       } catch (_) {
+        // Cross-origin frames can deny access; keep scanning reachable windows.
         frameCount = 0;
       }
       for (let index = 0; index < frameCount; index += 1) {
         try {
           collect(targetWindow.frames[index], bucket);
-        } catch (_) {}
+        } catch (_) {
+          // Cross-origin child frames are skipped intentionally.
+        }
       }
     }
 
@@ -246,7 +269,9 @@ class AcademicAutoLoginService {
         if (doc && doc.querySelector('#exams, table.exam-table')) {
           return 'READY';
         }
-      } catch (_) {}
+      } catch (_) {
+        // Cross-origin frames cannot expose document; ignore that frame only.
+      }
     }
     return 'NOT_READY';
   } catch (error) {

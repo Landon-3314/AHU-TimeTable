@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +10,7 @@ import '../providers/settings_provider.dart';
 import '../services/storage_service.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
+import 'settings_update_error_handler.dart';
 
 class ThemeSettingsPage extends StatefulWidget {
   const ThemeSettingsPage({super.key});
@@ -18,6 +21,16 @@ class ThemeSettingsPage extends StatefulWidget {
 
 class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
   final ScrollController _scrollController = ScrollController();
+
+  void _runThemeUpdate(Future<void> Function() update) {
+    unawaited(
+      runSettingsUpdateWithFeedback(
+        context: context,
+        update: update,
+        debugLabel: 'ThemeSettingsPage',
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -74,8 +87,10 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
                           label: provider.t(
                             AppThemePalette.values[index].nameKey,
                           ),
-                          onTap: () => provider.changeThemePalette(
-                            AppThemePalette.values[index].id,
+                          onTap: () => _runThemeUpdate(
+                            () => provider.changeThemePalette(
+                              AppThemePalette.values[index].id,
+                            ),
                           ),
                         ),
                         if (index != AppThemePalette.values.length - 1)
@@ -101,9 +116,11 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
                         selected:
                             provider.themePaletteId == AppThemePalette.customId,
                         label: provider.t('theme_custom'),
-                        onTap: () => provider.changeCustomThemeColors(
-                          primaryValue: provider.customThemePrimaryValue,
-                          accentValue: provider.customThemeAccentValue,
+                        onTap: () => _runThemeUpdate(
+                          () => provider.changeCustomThemeColors(
+                            primaryValue: provider.customThemePrimaryValue,
+                            accentValue: provider.customThemeAccentValue,
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
@@ -112,9 +129,11 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
                       _ThemeColorGrid(
                         keyPrefix: 'theme-primary-color',
                         selectedValue: provider.customThemePrimaryValue,
-                        onSelected: (value) => provider.changeCustomThemeColors(
-                          primaryValue: value,
-                          accentValue: provider.customThemeAccentValue,
+                        onSelected: (value) => _runThemeUpdate(
+                          () => provider.changeCustomThemeColors(
+                            primaryValue: value,
+                            accentValue: provider.customThemeAccentValue,
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
@@ -123,9 +142,11 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
                       _ThemeColorGrid(
                         keyPrefix: 'theme-accent-color',
                         selectedValue: provider.customThemeAccentValue,
-                        onSelected: (value) => provider.changeCustomThemeColors(
-                          primaryValue: provider.customThemePrimaryValue,
-                          accentValue: value,
+                        onSelected: (value) => _runThemeUpdate(
+                          () => provider.changeCustomThemeColors(
+                            primaryValue: provider.customThemePrimaryValue,
+                            accentValue: value,
+                          ),
                         ),
                       ),
                     ],
@@ -156,7 +177,11 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
     if (!context.mounted || selected == null) {
       return;
     }
-    await provider.changeAppThemeMode(selected);
+    await runSettingsUpdateWithFeedback(
+      context: context,
+      update: () => provider.changeAppThemeMode(selected),
+      debugLabel: 'ThemeSettingsPage',
+    );
   }
 }
 

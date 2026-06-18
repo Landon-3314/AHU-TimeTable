@@ -24,6 +24,16 @@ class SettingsActionResult {
       SettingsActionResult._(success: false, message: message);
 }
 
+class SettingsReminderRefreshException implements Exception {
+  SettingsReminderRefreshException(this.cause, this.stackTrace);
+
+  final Object cause;
+  final StackTrace stackTrace;
+
+  @override
+  String toString() => 'SettingsReminderRefreshException: $cause';
+}
+
 enum ClassDayPeriod { morning, afternoon, evening }
 
 enum CourseReminderStyle { singleNotification, persistentDisplay }
@@ -189,11 +199,14 @@ class SettingsProvider extends ChangeNotifier {
       : bigBreakAfterPeriods.first;
   List<int> get bigBreakAfterPeriods =>
       _sanitizeBigBreakAfterPeriods(_bigBreakAfterPeriods, totalClassPeriods);
-  TimeOfDay get morningStartTime => _parseTime(_morningStartTime);
+  TimeOfDay get morningStartTime =>
+      _parseTime(_morningStartTime, fallback: _defaultMorningStartTime);
   int get morningClasses => _morningClasses;
-  TimeOfDay get afternoonStartTime => _parseTime(_afternoonStartTime);
+  TimeOfDay get afternoonStartTime =>
+      _parseTime(_afternoonStartTime, fallback: _defaultAfternoonStartTime);
   int get afternoonClasses => _afternoonClasses;
-  TimeOfDay get eveningStartTime => _parseTime(_eveningStartTime);
+  TimeOfDay get eveningStartTime =>
+      _parseTime(_eveningStartTime, fallback: _defaultEveningStartTime);
   int get eveningClasses => _eveningClasses;
   List<TimeOfDay> get morningPeriodStartTimes =>
       _parseTimeList(_morningPeriodStartTimes);
@@ -386,9 +399,13 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final snapshot = _themeSnapshot();
     _appThemeMode = mode;
-    notifyListeners();
-    await _storageService.writeAppThemeMode(mode);
+    await _commitSettingsMutation(
+      restore: () => _restoreThemeSnapshot(snapshot),
+      persist: () => _storageService.writeAppThemeMode(mode),
+      compensate: () => _persistThemeSnapshot(snapshot),
+    );
   }
 
   Future<void> changeThemePalette(String id) async {
@@ -397,41 +414,72 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final snapshot = _themeSnapshot();
     _themePaletteId = palette.id;
-    notifyListeners();
-    await _storageService.writeThemePaletteId(palette.id);
+    await _commitSettingsMutation(
+      restore: () => _restoreThemeSnapshot(snapshot),
+      persist: () => _storageService.writeThemePaletteId(palette.id),
+      compensate: () => _persistThemeSnapshot(snapshot),
+    );
   }
 
   Future<void> confirmTimetableToolbarGuide() async {
     if (_timetableToolbarGuideConfirmed) {
       return;
     }
+    final previousToolbarConfirmed = _timetableToolbarGuideConfirmed;
+    final previousMenuConfirmed = _timetableMenuGuideConfirmed;
     _timetableToolbarGuideConfirmed = true;
-    notifyListeners();
-    await _storageService.writeTimetableToolbarGuideConfirmed(true);
-    // 显式写入 menuGuide=false，确保 key 存在于存储中。
-    // 这样新用户重启后不会因为 fallback 到 toolbar 值而误跳过菜单引导。
-    if (!_timetableMenuGuideConfirmed) {
-      await _storageService.writeTimetableMenuGuideConfirmed(false);
-    }
+    await _commitSettingsMutation(
+      restore: () {
+        _timetableToolbarGuideConfirmed = previousToolbarConfirmed;
+        _timetableMenuGuideConfirmed = previousMenuConfirmed;
+      },
+      persist: () async {
+        await _storageService.writeTimetableToolbarGuideConfirmed(true);
+        // 显式写入 menuGuide=false，确保 key 存在于存储中。
+        // 这样新用户重启后不会因为 fallback 到 toolbar 值而误跳过菜单引导。
+        if (!previousMenuConfirmed) {
+          await _storageService.writeTimetableMenuGuideConfirmed(false);
+        }
+      },
+      compensate: () async {
+        await _storageService.writeTimetableToolbarGuideConfirmed(
+          previousToolbarConfirmed,
+        );
+        await _storageService.writeTimetableMenuGuideConfirmed(
+          previousMenuConfirmed,
+        );
+      },
+    );
   }
 
   Future<void> confirmTimetableMenuGuide() async {
     if (_timetableMenuGuideConfirmed) {
       return;
     }
+    final previousValue = _timetableMenuGuideConfirmed;
     _timetableMenuGuideConfirmed = true;
-    notifyListeners();
-    await _storageService.writeTimetableMenuGuideConfirmed(true);
+    await _commitSettingsMutation(
+      restore: () => _timetableMenuGuideConfirmed = previousValue,
+      persist: () => _storageService.writeTimetableMenuGuideConfirmed(true),
+      compensate: () =>
+          _storageService.writeTimetableMenuGuideConfirmed(previousValue),
+    );
   }
 
   Future<void> confirmImportWebViewGuide() async {
     if (_importWebViewGuideConfirmed) {
       return;
     }
+    final previousValue = _importWebViewGuideConfirmed;
     _importWebViewGuideConfirmed = true;
-    notifyListeners();
-    await _storageService.writeImportWebViewGuideConfirmed(true);
+    await _commitSettingsMutation(
+      restore: () => _importWebViewGuideConfirmed = previousValue,
+      persist: () => _storageService.writeImportWebViewGuideConfirmed(true),
+      compensate: () =>
+          _storageService.writeImportWebViewGuideConfirmed(previousValue),
+    );
   }
 
   Future<void> changeCustomThemeColors({
@@ -444,15 +492,19 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final snapshot = _themeSnapshot();
     _themePaletteId = AppThemePalette.customId;
     _customThemePrimaryValue = primaryValue;
     _customThemeAccentValue = accentValue;
-    notifyListeners();
-    await Future.wait([
-      _storageService.writeThemePaletteId(AppThemePalette.customId),
-      _storageService.writeCustomThemePrimaryValue(primaryValue),
-      _storageService.writeCustomThemeAccentValue(accentValue),
-    ]);
+    await _commitSettingsMutation(
+      restore: () => _restoreThemeSnapshot(snapshot),
+      persist: () async {
+        await _storageService.writeThemePaletteId(AppThemePalette.customId);
+        await _storageService.writeCustomThemePrimaryValue(primaryValue);
+        await _storageService.writeCustomThemeAccentValue(accentValue);
+      },
+      compensate: () => _persistThemeSnapshot(snapshot),
+    );
   }
 
   List<TimeSlot> generateTimeSlots() {
@@ -469,9 +521,13 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final previousValue = _pixelsPerMinute;
     _pixelsPerMinute = value;
-    notifyListeners();
-    await _storageService.writePixelsPerMinute(value);
+    await _commitSettingsMutation(
+      restore: () => _pixelsPerMinute = previousValue,
+      persist: () => _storageService.writePixelsPerMinute(value),
+      compensate: () => _storageService.writePixelsPerMinute(previousValue),
+    );
   }
 
   Future<void> updateClassDuration(int value) async {
@@ -479,12 +535,18 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final snapshot = _periodSnapshot();
     _classDuration = value;
     _reflowAllSessionStartTimes();
-    notifyListeners();
-    await _storageService.writeClassDuration(value);
-    await _persistAllSessionStartTimes();
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _restorePeriodSnapshot(snapshot),
+      persist: () async {
+        await _storageService.writeClassDuration(value);
+        await _persistAllSessionStartTimes();
+      },
+      compensate: () => _persistPeriodSnapshot(snapshot),
+      refreshReminders: true,
+    );
   }
 
   Future<void> updateShortBreak(int value) async {
@@ -492,12 +554,18 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final snapshot = _periodSnapshot();
     _shortBreak = value;
     _reflowAllSessionStartTimes();
-    notifyListeners();
-    await _storageService.writeShortBreak(value);
-    await _persistAllSessionStartTimes();
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _restorePeriodSnapshot(snapshot),
+      persist: () async {
+        await _storageService.writeShortBreak(value);
+        await _persistAllSessionStartTimes();
+      },
+      compensate: () => _persistPeriodSnapshot(snapshot),
+      refreshReminders: true,
+    );
   }
 
   Future<void> updateBigBreakEnabled(bool value) async {
@@ -548,16 +616,22 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final snapshot = _periodSnapshot();
     _bigBreakEnabled = enabled;
     _bigBreak = safeDuration;
     _bigBreakAfterPeriods = safeAfterPeriods;
     _reflowAllSessionStartTimes();
-    notifyListeners();
-    await _storageService.writeBigBreakEnabled(enabled);
-    await _storageService.writeBigBreak(safeDuration);
-    await _storageService.writeBigBreakAfterPeriods(safeAfterPeriods);
-    await _persistAllSessionStartTimes();
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _restorePeriodSnapshot(snapshot),
+      persist: () async {
+        await _storageService.writeBigBreakEnabled(enabled);
+        await _storageService.writeBigBreak(safeDuration);
+        await _storageService.writeBigBreakAfterPeriods(safeAfterPeriods);
+        await _persistAllSessionStartTimes();
+      },
+      compensate: () => _persistPeriodSnapshot(snapshot),
+      refreshReminders: true,
+    );
   }
 
   Future<void> updateMorningStartTime(TimeOfDay value) async {
@@ -596,6 +670,7 @@ class SettingsProvider extends ChangeNotifier {
       safeValue,
       _fallbackStartTimeFor(period),
     );
+    final snapshot = _periodSnapshot();
     _setClassCount(period, safeValue);
     _bigBreakAfterPeriods = _sanitizeBigBreakAfterPeriods(
       _bigBreakAfterPeriods,
@@ -603,11 +678,16 @@ class SettingsProvider extends ChangeNotifier {
     );
     _setStartTimes(period, startTimes);
     _reflowAllSessionStartTimes();
-    notifyListeners();
-    await _persistClassCount(period, safeValue);
-    await _storageService.writeBigBreakAfterPeriods(_bigBreakAfterPeriods);
-    await _persistStartTimes(period, startTimes);
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _restorePeriodSnapshot(snapshot),
+      persist: () async {
+        await _persistClassCount(period, safeValue);
+        await _storageService.writeBigBreakAfterPeriods(_bigBreakAfterPeriods);
+        await _persistStartTimes(period, startTimes);
+      },
+      compensate: () => _persistPeriodSnapshot(snapshot),
+      refreshReminders: true,
+    );
   }
 
   Future<void> updatePeriodStartTime(
@@ -635,16 +715,22 @@ class SettingsProvider extends ChangeNotifier {
       );
     }
 
+    final snapshot = _periodSnapshot();
     _setStartTimes(period, updatedStartTimes);
     if (index == 0) {
       _setLegacySessionStartTime(period, formatted);
     }
-    notifyListeners();
-    await _persistStartTimes(period, updatedStartTimes);
-    if (index == 0) {
-      await _persistLegacySessionStartTime(period, formatted);
-    }
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _restorePeriodSnapshot(snapshot),
+      persist: () async {
+        await _persistStartTimes(period, updatedStartTimes);
+        if (index == 0) {
+          await _persistLegacySessionStartTime(period, formatted);
+        }
+      },
+      compensate: () => _persistPeriodSnapshot(snapshot),
+      refreshReminders: true,
+    );
   }
 
   Future<void> updateSemesterStartDate(DateTime value) async {
@@ -653,38 +739,54 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final previousStartDate = _semesterStartDate;
     _semesterStartDate = aligned;
-    notifyListeners();
     if (!isCurrentSemesterInitialized) {
-      final semesterId = _currentSemesterId;
-      if (semesterId != null) {
-        await _storageService.initializeExistingSemester(
-          semesterId,
-          startDate: aligned,
-        );
-      }
+      await _commitSettingsMutation(
+        restore: () => _semesterStartDate = previousStartDate,
+        persist: () async {
+          final semesterId = _currentSemesterId;
+          if (semesterId != null) {
+            await _storageService.initializeExistingSemester(
+              semesterId,
+              startDate: aligned,
+            );
+          } else {
+            await _storageService.writeSemesterStartDate(aligned);
+          }
+        },
+      );
       _reloadSemesterState();
       notifyListeners();
       await _handleSemesterChange();
       return;
     }
-    await _storageService.writeSemesterStartDate(aligned);
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _semesterStartDate = previousStartDate,
+      persist: () => _storageService.writeSemesterStartDate(aligned),
+      refreshReminders: true,
+    );
   }
 
   Future<void> completeInitialSemesterStartDate(DateTime value) async {
     final aligned = _scheduleCalculator.alignToMonday(value);
+    final previousStartDate = _semesterStartDate;
     _semesterStartDate = aligned;
 
-    final semesterId = _currentSemesterId;
-    if (semesterId != null) {
-      await _storageService.initializeExistingSemester(
-        semesterId,
-        startDate: aligned,
-      );
-    } else {
-      await _storageService.writeSemesterStartDate(aligned);
-    }
+    await _commitSettingsMutation(
+      restore: () => _semesterStartDate = previousStartDate,
+      persist: () async {
+        final semesterId = _currentSemesterId;
+        if (semesterId != null) {
+          await _storageService.initializeExistingSemester(
+            semesterId,
+            startDate: aligned,
+          );
+        } else {
+          await _storageService.writeSemesterStartDate(aligned);
+        }
+      },
+    );
     _reloadSemesterState();
     notifyListeners();
     await _handleSemesterChange();
@@ -698,17 +800,23 @@ class SettingsProvider extends ChangeNotifier {
     }
 
     final aligned = _scheduleCalculator.alignToMonday(startDate);
+    final previousStartDate = _semesterStartDate;
     _semesterStartDate = aligned;
 
-    final semesterId = _currentSemesterId;
-    if (semesterId != null) {
-      await _storageService.initializeExistingSemester(
-        semesterId,
-        startDate: aligned,
-      );
-    } else {
-      await _storageService.writeSemesterStartDate(aligned);
-    }
+    await _commitSettingsMutation(
+      restore: () => _semesterStartDate = previousStartDate,
+      persist: () async {
+        final semesterId = _currentSemesterId;
+        if (semesterId != null) {
+          await _storageService.initializeExistingSemester(
+            semesterId,
+            startDate: aligned,
+          );
+        } else {
+          await _storageService.writeSemesterStartDate(aligned);
+        }
+      },
+    );
 
     _reloadSemesterState();
     notifyListeners();
@@ -722,10 +830,13 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final previousTotalWeeks = _totalWeeks;
     _totalWeeks = safeValue;
-    notifyListeners();
-    await _storageService.writeTotalWeeks(safeValue);
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _totalWeeks = previousTotalWeeks,
+      persist: () => _storageService.writeTotalWeeks(safeValue),
+      refreshReminders: true,
+    );
   }
 
   Future<SettingsActionResult> updateReminderAdvanceMinutes(int value) async {
@@ -741,32 +852,37 @@ class SettingsProvider extends ChangeNotifier {
       }
     }
 
+    final snapshot = _reminderSnapshot();
     _reminderAdvanceMinutes = safeValue;
-    notifyListeners();
-    await _storageService.writeReminderAdvanceMinutes(safeValue);
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _restoreReminderSnapshot(snapshot),
+      persist: () => _storageService.writeReminderAdvanceMinutes(safeValue),
+      compensate: () => _persistReminderSnapshot(snapshot),
+      refreshReminders: true,
+    );
     return SettingsActionResult.success();
   }
 
   Future<SettingsActionResult> toggleCourseReminder(bool value) async {
     if (!value) {
-      var changed = false;
-      if (_reminderAdvanceMinutes != 0) {
-        _reminderAdvanceMinutes = 0;
-        await _storageService.writeReminderAdvanceMinutes(0);
-        changed = true;
+      if (_reminderAdvanceMinutes == 0 &&
+          !_courseReminderPersistentDisplayEnabled) {
+        return SettingsActionResult.success();
       }
-      if (_courseReminderPersistentDisplayEnabled) {
-        _courseReminderPersistentDisplayEnabled = false;
-        await _storageService.writeCourseReminderPersistentDisplayEnabled(
-          false,
-        );
-        changed = true;
-      }
-      if (changed) {
-        notifyListeners();
-        await _refreshReminders();
-      }
+      final snapshot = _reminderSnapshot();
+      _reminderAdvanceMinutes = 0;
+      _courseReminderPersistentDisplayEnabled = false;
+      await _commitSettingsMutation(
+        restore: () => _restoreReminderSnapshot(snapshot),
+        persist: () async {
+          await _storageService.writeReminderAdvanceMinutes(0);
+          await _storageService.writeCourseReminderPersistentDisplayEnabled(
+            false,
+          );
+        },
+        compensate: () => _persistReminderSnapshot(snapshot),
+        refreshReminders: true,
+      );
       return SettingsActionResult.success();
     }
     if (_reminderAdvanceMinutes > 0) {
@@ -785,34 +901,44 @@ class SettingsProvider extends ChangeNotifier {
 
     switch (style) {
       case CourseReminderStyle.singleNotification:
-        var changed = false;
-        if (_courseReminderPersistentDisplayEnabled) {
-          _courseReminderPersistentDisplayEnabled = false;
-          await _storageService.writeCourseReminderPersistentDisplayEnabled(
-            false,
-          );
-          changed = true;
+        if (!_courseReminderPersistentDisplayEnabled &&
+            _reminderAdvanceMinutes > 0) {
+          return SettingsActionResult.success();
         }
+        final snapshot = _reminderSnapshot();
+        _courseReminderPersistentDisplayEnabled = false;
         if (_reminderAdvanceMinutes == 0) {
           _reminderAdvanceMinutes = 10;
-          await _storageService.writeReminderAdvanceMinutes(
-            _reminderAdvanceMinutes,
-          );
-          changed = true;
         }
-        if (changed) {
-          notifyListeners();
-          await _refreshReminders();
-        }
+        await _commitSettingsMutation(
+          restore: () => _restoreReminderSnapshot(snapshot),
+          persist: () async {
+            await _storageService.writeCourseReminderPersistentDisplayEnabled(
+              false,
+            );
+            if (snapshot.reminderAdvanceMinutes != _reminderAdvanceMinutes) {
+              await _storageService.writeReminderAdvanceMinutes(
+                _reminderAdvanceMinutes,
+              );
+            }
+          },
+          compensate: () => _persistReminderSnapshot(snapshot),
+          refreshReminders: true,
+        );
         return SettingsActionResult.success();
       case CourseReminderStyle.persistentDisplay:
         if (_courseReminderPersistentDisplayEnabled) {
           return SettingsActionResult.success();
         }
+        final snapshot = _reminderSnapshot();
         _courseReminderPersistentDisplayEnabled = true;
-        await _storageService.writeCourseReminderPersistentDisplayEnabled(true);
-        notifyListeners();
-        await _refreshReminders();
+        await _commitSettingsMutation(
+          restore: () => _restoreReminderSnapshot(snapshot),
+          persist: () =>
+              _storageService.writeCourseReminderPersistentDisplayEnabled(true),
+          compensate: () => _persistReminderSnapshot(snapshot),
+          refreshReminders: true,
+        );
         return SettingsActionResult.success();
     }
   }
@@ -832,10 +958,15 @@ class SettingsProvider extends ChangeNotifier {
       }
     }
 
+    final snapshot = _reminderSnapshot();
     _eventReminderAdvanceMinutes = safeValue;
-    notifyListeners();
-    await _storageService.writeEventReminderAdvanceMinutes(safeValue);
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _restoreReminderSnapshot(snapshot),
+      persist: () =>
+          _storageService.writeEventReminderAdvanceMinutes(safeValue),
+      compensate: () => _persistReminderSnapshot(snapshot),
+      refreshReminders: true,
+    );
     return SettingsActionResult.success();
   }
 
@@ -851,10 +982,14 @@ class SettingsProvider extends ChangeNotifier {
       return;
     }
 
+    final snapshot = _reminderSnapshot();
     _autoMuteEnabled = value;
-    notifyListeners();
-    await _storageService.writeAutoMuteEnabled(value);
-    await _refreshReminders();
+    await _commitSettingsMutation(
+      restore: () => _restoreReminderSnapshot(snapshot),
+      persist: () => _storageService.writeAutoMuteEnabled(value),
+      compensate: () => _persistReminderSnapshot(snapshot),
+      refreshReminders: true,
+    );
   }
 
   Future<SettingsActionResult> toggleAutoMuteWithCheck(bool value) async {
@@ -902,6 +1037,17 @@ class SettingsProvider extends ChangeNotifier {
     await scheduler();
   }
 
+  Future<void> _refreshRemindersAfterPersistence() async {
+    try {
+      await _refreshReminders();
+    } catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        SettingsReminderRefreshException(error, stackTrace),
+        stackTrace,
+      );
+    }
+  }
+
   Future<void> _handleSemesterChange() async {
     final handler = _semesterChangeHandler;
     if (handler == null) {
@@ -910,6 +1056,160 @@ class SettingsProvider extends ChangeNotifier {
     }
 
     await handler();
+  }
+
+  Future<void> _commitSettingsMutation({
+    required VoidCallback restore,
+    required Future<void> Function() persist,
+    Future<void> Function()? compensate,
+    bool refreshReminders = false,
+  }) async {
+    notifyListeners();
+    try {
+      await persist();
+    } catch (error, stackTrace) {
+      restore();
+      try {
+        await compensate?.call();
+      } catch (compensationError) {
+        debugPrint(
+          '[SettingsProvider] Failed to compensate persisted settings: '
+          '$compensationError',
+        );
+      }
+      notifyListeners();
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    if (refreshReminders) {
+      await _refreshRemindersAfterPersistence();
+    }
+  }
+
+  _ThemeSettingsSnapshot _themeSnapshot() {
+    return _ThemeSettingsSnapshot(
+      appThemeMode: _appThemeMode,
+      themePaletteId: _themePaletteId,
+      customThemePrimaryValue: _customThemePrimaryValue,
+      customThemeAccentValue: _customThemeAccentValue,
+    );
+  }
+
+  void _restoreThemeSnapshot(_ThemeSettingsSnapshot snapshot) {
+    _appThemeMode = snapshot.appThemeMode;
+    _themePaletteId = snapshot.themePaletteId;
+    _customThemePrimaryValue = snapshot.customThemePrimaryValue;
+    _customThemeAccentValue = snapshot.customThemeAccentValue;
+  }
+
+  Future<void> _persistThemeSnapshot(_ThemeSettingsSnapshot snapshot) async {
+    await _storageService.writeAppThemeMode(snapshot.appThemeMode);
+    await _storageService.writeThemePaletteId(snapshot.themePaletteId);
+    await _storageService.writeCustomThemePrimaryValue(
+      snapshot.customThemePrimaryValue,
+    );
+    await _storageService.writeCustomThemeAccentValue(
+      snapshot.customThemeAccentValue,
+    );
+  }
+
+  _PeriodSettingsSnapshot _periodSnapshot() {
+    return _PeriodSettingsSnapshot(
+      classDuration: _classDuration,
+      shortBreak: _shortBreak,
+      bigBreakEnabled: _bigBreakEnabled,
+      bigBreak: _bigBreak,
+      bigBreakAfterPeriods: List<int>.of(_bigBreakAfterPeriods),
+      morningStartTime: _morningStartTime,
+      morningClasses: _morningClasses,
+      afternoonStartTime: _afternoonStartTime,
+      afternoonClasses: _afternoonClasses,
+      eveningStartTime: _eveningStartTime,
+      eveningClasses: _eveningClasses,
+      morningPeriodStartTimes: List<String>.of(_morningPeriodStartTimes),
+      afternoonPeriodStartTimes: List<String>.of(_afternoonPeriodStartTimes),
+      eveningPeriodStartTimes: List<String>.of(_eveningPeriodStartTimes),
+    );
+  }
+
+  void _restorePeriodSnapshot(_PeriodSettingsSnapshot snapshot) {
+    _classDuration = snapshot.classDuration;
+    _shortBreak = snapshot.shortBreak;
+    _bigBreakEnabled = snapshot.bigBreakEnabled;
+    _bigBreak = snapshot.bigBreak;
+    _bigBreakAfterPeriods = List<int>.of(snapshot.bigBreakAfterPeriods);
+    _morningStartTime = snapshot.morningStartTime;
+    _morningClasses = snapshot.morningClasses;
+    _afternoonStartTime = snapshot.afternoonStartTime;
+    _afternoonClasses = snapshot.afternoonClasses;
+    _eveningStartTime = snapshot.eveningStartTime;
+    _eveningClasses = snapshot.eveningClasses;
+    _morningPeriodStartTimes = List<String>.of(
+      snapshot.morningPeriodStartTimes,
+    );
+    _afternoonPeriodStartTimes = List<String>.of(
+      snapshot.afternoonPeriodStartTimes,
+    );
+    _eveningPeriodStartTimes = List<String>.of(
+      snapshot.eveningPeriodStartTimes,
+    );
+  }
+
+  Future<void> _persistPeriodSnapshot(_PeriodSettingsSnapshot snapshot) async {
+    await _storageService.writeClassDuration(snapshot.classDuration);
+    await _storageService.writeShortBreak(snapshot.shortBreak);
+    await _storageService.writeBigBreakEnabled(snapshot.bigBreakEnabled);
+    await _storageService.writeBigBreak(snapshot.bigBreak);
+    await _storageService.writeBigBreakAfterPeriods(
+      snapshot.bigBreakAfterPeriods,
+    );
+    await _storageService.writeMorningClasses(snapshot.morningClasses);
+    await _storageService.writeAfternoonClasses(snapshot.afternoonClasses);
+    await _storageService.writeEveningClasses(snapshot.eveningClasses);
+    await _storageService.writeMorningPeriodStartTimes(
+      snapshot.morningPeriodStartTimes,
+    );
+    await _storageService.writeAfternoonPeriodStartTimes(
+      snapshot.afternoonPeriodStartTimes,
+    );
+    await _storageService.writeEveningPeriodStartTimes(
+      snapshot.eveningPeriodStartTimes,
+    );
+    await _storageService.writeMorningStartTime(snapshot.morningStartTime);
+    await _storageService.writeAfternoonStartTime(snapshot.afternoonStartTime);
+    await _storageService.writeEveningStartTime(snapshot.eveningStartTime);
+  }
+
+  _ReminderSettingsSnapshot _reminderSnapshot() {
+    return _ReminderSettingsSnapshot(
+      reminderAdvanceMinutes: _reminderAdvanceMinutes,
+      eventReminderAdvanceMinutes: _eventReminderAdvanceMinutes,
+      autoMuteEnabled: _autoMuteEnabled,
+      courseReminderPersistentDisplayEnabled:
+          _courseReminderPersistentDisplayEnabled,
+    );
+  }
+
+  void _restoreReminderSnapshot(_ReminderSettingsSnapshot snapshot) {
+    _reminderAdvanceMinutes = snapshot.reminderAdvanceMinutes;
+    _eventReminderAdvanceMinutes = snapshot.eventReminderAdvanceMinutes;
+    _autoMuteEnabled = snapshot.autoMuteEnabled;
+    _courseReminderPersistentDisplayEnabled =
+        snapshot.courseReminderPersistentDisplayEnabled;
+  }
+
+  Future<void> _persistReminderSnapshot(
+    _ReminderSettingsSnapshot snapshot,
+  ) async {
+    await _storageService.writeReminderAdvanceMinutes(
+      snapshot.reminderAdvanceMinutes,
+    );
+    await _storageService.writeEventReminderAdvanceMinutes(
+      snapshot.eventReminderAdvanceMinutes,
+    );
+    await _storageService.writeAutoMuteEnabled(snapshot.autoMuteEnabled);
+    await _storageService.writeCourseReminderPersistentDisplayEnabled(
+      snapshot.courseReminderPersistentDisplayEnabled,
+    );
   }
 
   int _classCountFor(ClassDayPeriod period) {
@@ -1135,11 +1435,31 @@ class SettingsProvider extends ChangeNotifier {
     return null;
   }
 
-  TimeOfDay _parseTime(String value) {
+  TimeOfDay _parseTime(String value, {String fallback = '08:00'}) {
     final parts = value.split(':');
+    final fallbackParts = fallback.split(':');
+    final fallbackHour = fallbackParts.isNotEmpty
+        ? int.tryParse(fallbackParts[0])
+        : null;
+    final fallbackMinute = fallbackParts.length > 1
+        ? int.tryParse(fallbackParts[1])
+        : null;
+    final parsedHour = parts.length == 2 ? int.tryParse(parts[0]) : null;
+    final parsedMinute = parts.length == 2 ? int.tryParse(parts[1]) : null;
+    final hasValidValue =
+        parsedHour != null &&
+        parsedMinute != null &&
+        parsedHour >= 0 &&
+        parsedHour <= 23 &&
+        parsedMinute >= 0 &&
+        parsedMinute <= 59;
     return TimeOfDay(
-      hour: int.parse(parts[0]).clamp(0, 23).toInt(),
-      minute: int.parse(parts[1]).clamp(0, 59).toInt(),
+      hour: (hasValidValue ? parsedHour : fallbackHour ?? 8)
+          .clamp(0, 23)
+          .toInt(),
+      minute: (hasValidValue ? parsedMinute : fallbackMinute ?? 0)
+          .clamp(0, 59)
+          .toInt(),
     );
   }
 
@@ -1509,4 +1829,66 @@ class SettingsProvider extends ChangeNotifier {
     }
     return scheduleCalculator.alignToMonday(storedValue);
   }
+}
+
+class _ThemeSettingsSnapshot {
+  const _ThemeSettingsSnapshot({
+    required this.appThemeMode,
+    required this.themePaletteId,
+    required this.customThemePrimaryValue,
+    required this.customThemeAccentValue,
+  });
+
+  final AppThemeMode appThemeMode;
+  final String themePaletteId;
+  final int customThemePrimaryValue;
+  final int customThemeAccentValue;
+}
+
+class _PeriodSettingsSnapshot {
+  const _PeriodSettingsSnapshot({
+    required this.classDuration,
+    required this.shortBreak,
+    required this.bigBreakEnabled,
+    required this.bigBreak,
+    required this.bigBreakAfterPeriods,
+    required this.morningStartTime,
+    required this.morningClasses,
+    required this.afternoonStartTime,
+    required this.afternoonClasses,
+    required this.eveningStartTime,
+    required this.eveningClasses,
+    required this.morningPeriodStartTimes,
+    required this.afternoonPeriodStartTimes,
+    required this.eveningPeriodStartTimes,
+  });
+
+  final int classDuration;
+  final int shortBreak;
+  final bool bigBreakEnabled;
+  final int bigBreak;
+  final List<int> bigBreakAfterPeriods;
+  final String morningStartTime;
+  final int morningClasses;
+  final String afternoonStartTime;
+  final int afternoonClasses;
+  final String eveningStartTime;
+  final int eveningClasses;
+  final List<String> morningPeriodStartTimes;
+  final List<String> afternoonPeriodStartTimes;
+  final List<String> eveningPeriodStartTimes;
+}
+
+class _ReminderSettingsSnapshot {
+  const _ReminderSettingsSnapshot({
+    required this.reminderAdvanceMinutes,
+    required this.eventReminderAdvanceMinutes,
+    required this.autoMuteEnabled,
+    required this.courseReminderPersistentDisplayEnabled,
+  });
+
+  final int reminderAdvanceMinutes;
+  final int eventReminderAdvanceMinutes;
+  final bool autoMuteEnabled;
+  final bool courseReminderPersistentDisplayEnabled;
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 
 import 'app_update_platform.dart';
 import 'update_check_service.dart';
@@ -69,12 +70,20 @@ class UpdateDownloadService {
         if (await targetFile.exists()) {
           try {
             await targetFile.delete();
-          } catch (_) {}
+          } catch (deleteError) {
+            debugPrint(
+              '[UpdateDownloadService] Failed to delete partial APK: '
+              '$deleteError',
+            );
+          }
         }
         await _deleteDownloadedApkMarker(directory);
       }
     }
-    Error.throwWithStackTrace(lastError!, lastStackTrace!);
+    if (lastError == null || lastStackTrace == null) {
+      throw StateError('No download URIs available for update APK');
+    }
+    Error.throwWithStackTrace(lastError, lastStackTrace);
   }
 
   Future<File> _downloadApkFromUri(
@@ -95,7 +104,12 @@ class UpdateDownloadService {
       if (!verified) {
         try {
           await file.delete();
-        } catch (_) {}
+        } catch (deleteError) {
+          debugPrint(
+            '[UpdateDownloadService] Failed to delete APK after sha256 '
+            'mismatch: $deleteError',
+          );
+        }
         await _deleteDownloadedApkMarker(file.parent);
         throw const FormatException('APK sha256 mismatch');
       }
@@ -212,7 +226,11 @@ class UpdateDownloadService {
       if (decoded is Map) {
         return Map<String, Object?>.from(decoded);
       }
-    } catch (_) {}
+    } catch (error) {
+      debugPrint(
+        '[UpdateDownloadService] Failed to read downloaded APK marker: $error',
+      );
+    }
     return null;
   }
 
@@ -244,7 +262,12 @@ class UpdateDownloadService {
     }
     try {
       await markerFile.delete();
-    } catch (_) {}
+    } catch (error) {
+      debugPrint(
+        '[UpdateDownloadService] Failed to delete downloaded APK marker: '
+        '$error',
+      );
+    }
   }
 
   static String _fileName(File file) {

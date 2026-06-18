@@ -19,6 +19,11 @@ void main() {
 
     expect(script, contains(jsonEncode(credential.studentId)));
     expect(script, contains(jsonEncode(credential.password)));
+    expect(
+      script,
+      contains('let password = ${jsonEncode(credential.password)};'),
+    );
+    expect(script, contains('password = null;'));
     expect(script, contains('#un'));
     expect(script, contains('#pd'));
     expect(script, contains('#username'));
@@ -35,6 +40,45 @@ void main() {
     expect(script, contains('CHALLENGE_REQUIRED'));
     expect(script, isNot(contains("studentId = '${credential.studentId}'")));
     expect(script, isNot(contains("password = '${credential.password}'")));
+  });
+
+  test('only allows explicit academic import hosts', () {
+    expect(
+      AcademicAutoLoginService.isAllowedAcademicUri(
+        Uri.parse('https://ahu.edu.cn'),
+      ),
+      isTrue,
+    );
+    expect(
+      AcademicAutoLoginService.isAllowedAcademicUri(
+        Uri.parse('https://jw.ahu.edu.cn/student/home'),
+      ),
+      isTrue,
+    );
+    expect(
+      AcademicAutoLoginService.isAllowedAcademicUri(
+        Uri.parse('https://one.ahu.edu.cn/cas/login'),
+      ),
+      isTrue,
+    );
+    expect(
+      AcademicAutoLoginService.isAllowedAcademicUri(
+        Uri.parse('https://wvpn.ahu.edu.cn'),
+      ),
+      isTrue,
+    );
+    expect(
+      AcademicAutoLoginService.isAllowedAcademicUri(
+        Uri.parse('https://takeover.ahu.edu.cn'),
+      ),
+      isFalse,
+    );
+    expect(
+      AcademicAutoLoginService.isAllowedAcademicUri(
+        Uri.parse('http://jw.ahu.edu.cn/student/home'),
+      ),
+      isFalse,
+    );
   });
 
   test('provides exam ready and refresh scripts for exam extraction', () {

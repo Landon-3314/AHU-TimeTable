@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,6 +26,7 @@ class StorageService {
   final SharedPreferences _sharedPreferences;
   final ExternalDataBackupStore? _externalDataBackupStore;
   final ExternalDataRecoveryStatus _lastRecoveryStatus;
+  Future<void> _writeQueue = Future<void>.value();
 
   static const String _coursesKey = 'courses.items';
   static const String _eventsKey = 'events.items';
@@ -1111,10 +1113,15 @@ class StorageService {
   }
 
   Future<void> _setString(String key, String value, {bool sync = true}) async {
-    await _sharedPreferences.setString(key, value);
-    if (sync) {
-      await syncExternalBackup();
-    }
+    return _serializedWrite(() async {
+      await _ensurePreferenceWrite(
+        key,
+        _sharedPreferences.setString(key, value),
+      );
+      if (sync) {
+        await syncExternalBackup();
+      }
+    });
   }
 
   Future<void> _setStringList(
@@ -1122,37 +1129,69 @@ class StorageService {
     List<String> value, {
     bool sync = true,
   }) async {
-    await _sharedPreferences.setStringList(key, value);
-    if (sync) {
-      await syncExternalBackup();
-    }
+    return _serializedWrite(() async {
+      await _ensurePreferenceWrite(
+        key,
+        _sharedPreferences.setStringList(key, value),
+      );
+      if (sync) {
+        await syncExternalBackup();
+      }
+    });
   }
 
   Future<void> _setInt(String key, int value, {bool sync = true}) async {
-    await _sharedPreferences.setInt(key, value);
-    if (sync) {
-      await syncExternalBackup();
-    }
+    return _serializedWrite(() async {
+      await _ensurePreferenceWrite(key, _sharedPreferences.setInt(key, value));
+      if (sync) {
+        await syncExternalBackup();
+      }
+    });
   }
 
   Future<void> _setDouble(String key, double value, {bool sync = true}) async {
-    await _sharedPreferences.setDouble(key, value);
-    if (sync) {
-      await syncExternalBackup();
-    }
+    return _serializedWrite(() async {
+      await _ensurePreferenceWrite(
+        key,
+        _sharedPreferences.setDouble(key, value),
+      );
+      if (sync) {
+        await syncExternalBackup();
+      }
+    });
   }
 
   Future<void> _setBool(String key, bool value, {bool sync = true}) async {
-    await _sharedPreferences.setBool(key, value);
-    if (sync) {
-      await syncExternalBackup();
-    }
+    return _serializedWrite(() async {
+      await _ensurePreferenceWrite(key, _sharedPreferences.setBool(key, value));
+      if (sync) {
+        await syncExternalBackup();
+      }
+    });
   }
 
   Future<void> _remove(String key, {bool sync = true}) async {
-    await _sharedPreferences.remove(key);
-    if (sync) {
-      await syncExternalBackup();
+    return _serializedWrite(() async {
+      await _ensurePreferenceWrite(key, _sharedPreferences.remove(key));
+      if (sync) {
+        await syncExternalBackup();
+      }
+    });
+  }
+
+  Future<void> _serializedWrite(Future<void> Function() write) {
+    final operation = _writeQueue.then((_) => write());
+    _writeQueue = operation.catchError((_) {});
+    return operation;
+  }
+
+  static Future<void> _ensurePreferenceWrite(
+    String key,
+    Future<bool> write,
+  ) async {
+    final saved = await write;
+    if (!saved) {
+      throw StateError('Failed to persist preference: $key');
     }
   }
 

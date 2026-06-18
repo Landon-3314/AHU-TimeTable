@@ -816,6 +816,10 @@ class _EventFormState extends State<_EventForm> {
       return;
     }
 
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _selectedDateTime = DateTime(
         base.year,

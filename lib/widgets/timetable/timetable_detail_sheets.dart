@@ -144,31 +144,47 @@ Future<void> showCourseDetailsSheet(
                 Future<void>.delayed(AppDurations.sheetActionDelay).then((
                   _,
                 ) async {
-                  final removed = await courseProvider.removeCourse(course);
-                  if (removed == null) {
-                    return;
-                  }
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: const Text('已删除课程'),
-                      action: SnackBarAction(
-                        label: '撤销',
-                        onPressed: () {
-                          unawaited(() async {
-                            if (!context.mounted) {
-                              return;
-                            }
-                            if (!await ensureCurrentSemesterInitialized(
-                              context,
-                            )) {
-                              return;
-                            }
-                            await courseProvider.restoreCourse(removed);
-                          }());
-                        },
+                  try {
+                    final removed = await courseProvider.removeCourse(course);
+                    if (removed == null) {
+                      return;
+                    }
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: const Text('已删除课程'),
+                        action: SnackBarAction(
+                          label: '撤销',
+                          onPressed: () {
+                            unawaited(() async {
+                              try {
+                                if (!context.mounted) {
+                                  return;
+                                }
+                                if (!await ensureCurrentSemesterInitialized(
+                                  context,
+                                )) {
+                                  return;
+                                }
+                                await courseProvider.restoreCourse(removed);
+                              } catch (error) {
+                                debugPrint(
+                                  '[TimetableDetailSheets] Failed to restore '
+                                  'course: $error',
+                                );
+                              }
+                            }());
+                          },
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  } catch (error) {
+                    debugPrint(
+                      '[TimetableDetailSheets] Failed to delete course: $error',
+                    );
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('删除课程失败')),
+                    );
+                  }
                 }),
               );
             },
@@ -336,33 +352,52 @@ Future<void> showEventDetailsSheet(BuildContext context, Event event) async {
                         Future<void>.delayed(
                           AppDurations.sheetActionDelay,
                         ).then((_) async {
-                          final removed = await courseProvider.deleteEvent(
-                            event.id,
-                          );
-                          if (removed == null) {
-                            return;
-                          }
-                          messenger.showSnackBar(
-                            SnackBar(
-                              content: const Text('已删除日程'),
-                              action: SnackBarAction(
-                                label: '撤销',
-                                onPressed: () {
-                                  unawaited(() async {
-                                    if (!context.mounted) {
-                                      return;
-                                    }
-                                    if (!await ensureCurrentSemesterInitialized(
-                                      context,
-                                    )) {
-                                      return;
-                                    }
-                                    await courseProvider.restoreEvent(removed);
-                                  }());
-                                },
+                          try {
+                            final removed = await courseProvider.deleteEvent(
+                              event.id,
+                            );
+                            if (removed == null) {
+                              return;
+                            }
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: const Text('已删除日程'),
+                                action: SnackBarAction(
+                                  label: '撤销',
+                                  onPressed: () {
+                                    unawaited(() async {
+                                      try {
+                                        if (!context.mounted) {
+                                          return;
+                                        }
+                                        if (!await ensureCurrentSemesterInitialized(
+                                          context,
+                                        )) {
+                                          return;
+                                        }
+                                        await courseProvider.restoreEvent(
+                                          removed,
+                                        );
+                                      } catch (error) {
+                                        debugPrint(
+                                          '[TimetableDetailSheets] Failed to '
+                                          'restore event: $error',
+                                        );
+                                      }
+                                    }());
+                                  },
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                          } catch (error) {
+                            debugPrint(
+                              '[TimetableDetailSheets] Failed to delete event: '
+                              '$error',
+                            );
+                            messenger.showSnackBar(
+                              const SnackBar(content: Text('删除日程失败')),
+                            );
+                          }
                         }),
                       );
                     },

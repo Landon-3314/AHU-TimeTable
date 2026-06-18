@@ -59,8 +59,18 @@ class TimetableForegroundService : Service() {
             return START_NOT_STICKY
         }
 
+        var foregroundStarted = false
+        if (action == ACTION_START || action == ACTION_REFRESH || action == ACTION_SHOW) {
+            startForeground(NOTIFICATION_ID, buildNotification())
+            foregroundStarted = true
+        }
+
         if (!NativeStateStore.isForegroundServiceEnabled(this) && action != ACTION_START) {
-            stopSelf()
+            if (foregroundStarted) {
+                hideForegroundNotification()
+            } else {
+                stopSelf()
+            }
             return START_NOT_STICKY
         }
 
@@ -71,7 +81,9 @@ class TimetableForegroundService : Service() {
             return START_NOT_STICKY
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification())
+        if (!foregroundStarted) {
+            startForeground(NOTIFICATION_ID, buildNotification())
+        }
         startUpdater()
         return START_STICKY
     }

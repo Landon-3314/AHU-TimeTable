@@ -46,6 +46,33 @@ void main() {
     expect(bundle.settings.appThemeMode, AppThemeMode.dark);
   });
 
+  testWidgets('theme mode save failure shows settings save message', (
+    tester,
+  ) async {
+    final bundle = await _createProviderBundle();
+    final settings = _ThrowingThemeSettingsProvider(
+      storageService: bundle.storage,
+      themeModeError: StateError('save failed'),
+    );
+
+    await tester.pumpWidget(
+      _SettingsHost(
+        settings: settings,
+        courses: bundle.courses,
+        child: const SettingsPage(),
+      ),
+    );
+
+    await tester.tap(find.text('主题颜色'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(AppActionTile, '显示模式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('保存失败，请稍后重试'), findsOneWidget);
+  });
+
   testWidgets('root app forwards the selected material theme mode', (
     tester,
   ) async {
@@ -158,14 +185,34 @@ Future<_ProviderBundle> _createProviderBundle({
   final storage = StorageService(sharedPreferences: preferences);
   await storage.ensureSemesterMigration();
   return _ProviderBundle(
+    storage: storage,
     settings: SettingsProvider(storageService: storage),
     courses: CourseProvider(storageService: storage),
   );
 }
 
 class _ProviderBundle {
-  const _ProviderBundle({required this.settings, required this.courses});
+  const _ProviderBundle({
+    required this.storage,
+    required this.settings,
+    required this.courses,
+  });
 
+  final StorageService storage;
   final SettingsProvider settings;
   final CourseProvider courses;
+}
+
+class _ThrowingThemeSettingsProvider extends SettingsProvider {
+  _ThrowingThemeSettingsProvider({
+    required super.storageService,
+    required this.themeModeError,
+  });
+
+  final Object themeModeError;
+
+  @override
+  Future<void> changeAppThemeMode(AppThemeMode mode) async {
+    throw themeModeError;
+  }
 }

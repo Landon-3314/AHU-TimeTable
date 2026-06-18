@@ -10,6 +10,7 @@ import '../services/app_services.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/app_wheel_pickers.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
+import 'settings_update_error_handler.dart';
 
 class PeriodStartTimeSettingsPage extends StatefulWidget {
   const PeriodStartTimeSettingsPage({super.key});
@@ -97,16 +98,18 @@ class _PeriodStartTimeSettingsPageState
     int index,
     TimeOfDay value,
   ) async {
-    await provider.updatePeriodStartTime(period, index, value);
-    if (!context.mounted) {
-      return;
-    }
-
-    final courseProvider = context.read<CourseProvider>();
-    await AppServices.refreshSchedules(
-      courses: courseProvider.courses.toList(),
-      events: courseProvider.events.toList(),
-      settings: provider,
+    await runSettingsUpdateWithFeedback(
+      context: context,
+      update: () => provider.updatePeriodStartTime(period, index, value),
+      afterPersisted: () async {
+        final courseProvider = context.read<CourseProvider>();
+        await AppServices.refreshSchedules(
+          courses: courseProvider.courses.toList(),
+          events: courseProvider.events.toList(),
+          settings: provider,
+        );
+      },
+      debugLabel: 'PeriodStartTimeSettingsPage',
     );
   }
 }

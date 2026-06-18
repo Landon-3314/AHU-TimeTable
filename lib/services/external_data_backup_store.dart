@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_storage_platform.dart';
@@ -175,7 +176,11 @@ class ExternalDataBackupStore {
     }
     try {
       await _fileOperations.rename(previousFile, file.path);
-    } catch (_) {}
+    } catch (error) {
+      debugPrint(
+        '[ExternalDataBackupStore] Failed to restore previous backup: $error',
+      );
+    }
   }
 
   Future<void> _deleteObsoleteSnapshots(File file) async {
@@ -196,7 +201,12 @@ class ExternalDataBackupStore {
       if (await _fileOperations.exists(file)) {
         await _fileOperations.delete(file);
       }
-    } catch (_) {}
+    } catch (error) {
+      debugPrint(
+        '[ExternalDataBackupStore] Failed to delete temporary backup file: '
+        '$error',
+      );
+    }
   }
 
   Future<Map<String, Object>?> readPreferences() async {
@@ -463,7 +473,12 @@ class ExternalDataBackupStore {
     } catch (_) {
       try {
         await file.delete();
-      } catch (_) {}
+      } catch (deleteError) {
+        debugPrint(
+          '[ExternalDataBackupStore] Failed to delete invalid backup: '
+          '$deleteError',
+        );
+      }
     }
   }
 

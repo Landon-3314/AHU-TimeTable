@@ -12,6 +12,7 @@ import '../services/permission_service.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/app_wheel_pickers.dart';
 import '../widgets/long_screenshot_scroll_capture.dart';
+import 'settings_update_error_handler.dart';
 
 class ReminderSettingsPage extends StatefulWidget {
   const ReminderSettingsPage({super.key});
@@ -640,8 +641,12 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
     }
 
     if (!value) {
-      await provider.toggleAutoMuteWithCheck(false);
-      await _refreshSchedules(provider);
+      await runSettingsUpdateWithFeedback(
+        context: context,
+        update: () => provider.toggleAutoMuteWithCheck(false),
+        afterPersisted: () => _refreshSchedules(provider),
+        debugLabel: 'ReminderSettingsPage',
+      );
       return;
     }
 
@@ -652,19 +657,49 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
       return;
     }
 
-    final result = await provider.toggleAutoMuteWithCheck(true);
-    if (!result.success) {
-      _showSnackBar('开启上课自动静音失败');
+    final updated = await _runSettingsAction(
+      provider: provider,
+      action: () => provider.toggleAutoMuteWithCheck(true),
+      failureMessage: '开启上课自动静音失败',
+    );
+    if (!updated) {
       return;
     }
 
     await _refreshPermissionSnapshot();
-    await _refreshSchedules(provider);
     final snapshot = _permissionSnapshot;
     if (snapshot != null &&
         (!snapshot.exactAlarmGranted || !snapshot.dndGranted)) {
       _showSnackBar('已开启；缺少精确闹钟或勿扰权限时，将改为上课手动静音提醒');
     }
+  }
+
+  Future<bool> _runSettingsAction({
+    required SettingsProvider provider,
+    required Future<SettingsActionResult> Function() action,
+    required String failureMessage,
+  }) async {
+    SettingsActionResult? result;
+    final completed = await runSettingsUpdateWithFeedback(
+      context: context,
+      update: () async {
+        result = await action();
+      },
+      afterPersisted: () async {
+        if (result?.success == true) {
+          await _refreshSchedules(provider);
+        }
+      },
+      debugLabel: 'ReminderSettingsPage',
+    );
+    if (!mounted || !completed) {
+      return false;
+    }
+    if (result?.success != true) {
+      _showSnackBar(failureMessage);
+      return false;
+    }
+    return true;
   }
 
   Future<void> _onCourseReminderChanged(
@@ -680,15 +715,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
       }
     }
 
-    final result = await provider.toggleCourseReminder(value);
-    if (!context.mounted) {
-      return;
-    }
-    if (!result.success) {
-      _showSnackBar('开启课前提醒失败，请先完成权限授权');
-      return;
-    }
-    await _refreshSchedules(provider);
+    await _runSettingsAction(
+      provider: provider,
+      action: () => provider.toggleCourseReminder(value),
+      failureMessage: '开启课前提醒失败，请先完成权限授权',
+    );
   }
 
   Future<void> _onCourseReminderStyleChanged(
@@ -696,15 +727,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
     SettingsProvider provider,
     CourseReminderStyle style,
   ) async {
-    final result = await provider.updateCourseReminderStyle(style);
-    if (!context.mounted) {
-      return;
-    }
-    if (!result.success) {
-      _showSnackBar('请先授予通知权限再切换课前提醒样式');
-      return;
-    }
-    await _refreshSchedules(provider);
+    await _runSettingsAction(
+      provider: provider,
+      action: () => provider.updateCourseReminderStyle(style),
+      failureMessage: '请先授予通知权限再切换课前提醒样式',
+    );
   }
 
   Future<void> _onCourseReminderOffsetChanged(
@@ -712,15 +739,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
     SettingsProvider provider,
     int minutes,
   ) async {
-    final result = await provider.updateReminderAdvanceMinutes(minutes);
-    if (!context.mounted) {
-      return;
-    }
-    if (!result.success) {
-      _showSnackBar('更新课前提醒时间失败，请检查权限');
-      return;
-    }
-    await _refreshSchedules(provider);
+    await _runSettingsAction(
+      provider: provider,
+      action: () => provider.updateReminderAdvanceMinutes(minutes),
+      failureMessage: '更新课前提醒时间失败，请检查权限',
+    );
   }
 
   Future<void> _onEventReminderChanged(
@@ -736,17 +759,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
       }
     }
 
-    final result = await provider.updateEventReminderAdvanceMinutes(
-      value ? 10 : 0,
+    await _runSettingsAction(
+      provider: provider,
+      action: () => provider.updateEventReminderAdvanceMinutes(value ? 10 : 0),
+      failureMessage: '开启日程提醒失败，请先完成权限授权',
     );
-    if (!context.mounted) {
-      return;
-    }
-    if (!result.success) {
-      _showSnackBar('开启日程提醒失败，请先完成权限授权');
-      return;
-    }
-    await _refreshSchedules(provider);
   }
 
   Future<void> _onEventReminderOffsetChanged(
@@ -754,15 +771,11 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
     SettingsProvider provider,
     int minutes,
   ) async {
-    final result = await provider.updateEventReminderAdvanceMinutes(minutes);
-    if (!context.mounted) {
-      return;
-    }
-    if (!result.success) {
-      _showSnackBar('更新日程提醒时间失败，请检查权限');
-      return;
-    }
-    await _refreshSchedules(provider);
+    await _runSettingsAction(
+      provider: provider,
+      action: () => provider.updateEventReminderAdvanceMinutes(minutes),
+      failureMessage: '更新日程提醒时间失败，请检查权限',
+    );
   }
 
   Future<void> _refreshSchedules(SettingsProvider provider) async {
