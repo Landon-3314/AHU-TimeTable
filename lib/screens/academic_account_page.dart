@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../core/app_constants.dart';
 import '../models/academic_credential.dart';
+import '../models/academic_import.dart';
 import '../providers/settings_provider.dart';
 import '../services/academic_credential_service.dart';
 import '../widgets/common/app_ui.dart';

@@ -10,21 +10,19 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../core/app_colors.dart';
 import '../models/academic_credential.dart';
-import '../models/course.dart';
+import '../models/academic_import.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/academic_auto_login_service.dart';
 import '../services/academic_credential_service.dart';
 import '../services/schedule_html_extractor.dart';
 import '../services/schedule_parser_service.dart';
+import '../widgets/academic_import/academic_credential_panel.dart';
+import '../widgets/academic_import/academic_import_conflict_confirmation.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/guided_tour_overlay.dart';
 
 enum _ImportAction { timetable, exam }
-
-enum AcademicImportKind { timetable, exam }
-
-enum AcademicAutoAction { timetable, exam }
 
 class AcademicImportPopGuard extends StatelessWidget {
   const AcademicImportPopGuard({
@@ -42,123 +40,12 @@ class AcademicImportPopGuard extends StatelessWidget {
   }
 }
 
-class AcademicImportResult {
-  const AcademicImportResult({
-    required this.kind,
-    required this.importedCount,
-    this.skippedReasons = const <String>[],
-  });
-
-  final AcademicImportKind kind;
-  final int importedCount;
-  final List<String> skippedReasons;
-
-  int get skippedCount => skippedReasons.length;
-}
-
-AcademicImportResult buildExamImportResult({
-  required bool hasParsedEvents,
-  required int importedCount,
-  required String emptyMessage,
-  required String duplicatedMessage,
-}) {
-  if (!hasParsedEvents) {
-    return AcademicImportResult(
-      kind: AcademicImportKind.exam,
-      importedCount: 0,
-      skippedReasons: <String>[emptyMessage],
-    );
-  }
-
-  if (importedCount == 0) {
-    return AcademicImportResult(
-      kind: AcademicImportKind.exam,
-      importedCount: 0,
-      skippedReasons: <String>[duplicatedMessage],
-    );
-  }
-
-  return AcademicImportResult(
-    kind: AcademicImportKind.exam,
-    importedCount: importedCount,
-  );
-}
-
-String? buildUninitializedAcademicImportMessage({
-  required AcademicImportKind kind,
-  required bool isCurrentSemesterInitialized,
-}) {
-  if (isCurrentSemesterInitialized || kind == AcademicImportKind.timetable) {
-    return null;
-  }
-  return '请先导入课程以自动初始化学期起始日期，再导入考试。';
-}
-
-bool isRecoverableAcademicAutoImportError(String message) {
-  final normalized = message.toLowerCase();
-  const userActionRequiredIndicators = <String>[
-    '验证码',
-    '二次验证',
-    'captcha',
-    'second verification',
-    '请先填写学号和密码',
-    'student id and password',
-    '账号或密码',
-    '用户名或密码',
-    '密码错误',
-    'invalid credential',
-    'incorrect password',
-  ];
-  if (userActionRequiredIndicators.any(normalized.contains)) {
-    return false;
-  }
-
-  const transientIndicators = <String>[
-    '超时',
-    'timed out',
-    '未找到登录按钮',
-    'login button was not found',
-    '连接失败',
-    'connection failed',
-    'network',
-    '重新登录',
-  ];
-  return transientIndicators.any(normalized.contains);
-}
-
 void _logAcademicAutoImport(String message) {
   if (kDebugMode) {
     debugPrint(
       '[AcademicAutoImport] ${DateTime.now().toIso8601String()} $message',
     );
   }
-}
-
-Future<int?> importTimetableCoursesWithConflictConfirmation({
-  required BuildContext context,
-  required CourseProvider courseProvider,
-  required List<Course> courses,
-  bool confirmConflicts = true,
-}) async {
-  if (!confirmConflicts) {
-    return courseProvider.mergeImportedCourses(courses);
-  }
-
-  final conflicts = courseProvider.findImportedCourseConflicts(courses);
-  var allowConflicts = false;
-  if (conflicts.isNotEmpty) {
-    allowConflicts = await showCourseConflictConfirmDialog(
-      context,
-      conflicts: conflicts,
-    );
-    if (!context.mounted || !allowConflicts) {
-      return null;
-    }
-  }
-  return courseProvider.mergeImportedCourses(
-    courses,
-    allowConflicts: allowConflicts,
-  );
 }
 
 class ImportCoursePage extends StatefulWidget {
@@ -338,109 +225,24 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   }
 
   Widget _buildCredentialPanel(SettingsProvider settingsProvider, bool isBusy) {
-    final status = _autoImportStatus;
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _studentIdController,
-                    enabled: !isBusy,
-                    decoration: InputDecoration(
-                      labelText: settingsProvider.t('academic_student_id'),
-                      isDense: true,
-                      border: const OutlineInputBorder(),
-                    ),
-                    autofillHints: const [AutofillHints.username],
-                    textInputAction: TextInputAction.next,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _passwordController,
-                    enabled: !isBusy,
-                    decoration: InputDecoration(
-                      labelText: settingsProvider.t('academic_password'),
-                      isDense: true,
-                      border: const OutlineInputBorder(),
-                    ),
-                    autofillHints: const [AutofillHints.password],
-                    obscureText: true,
-                    textInputAction: TextInputAction.done,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: Text(settingsProvider.t('academic_auto_login_enabled')),
-              subtitle: Text(settingsProvider.t('academic_credentials_notice')),
-              value: _autoLoginEnabled,
-              onChanged: isBusy || _isCredentialLoading
-                  ? null
-                  : (value) {
-                      setState(() {
-                        _autoLoginEnabled = value;
-                      });
-                    },
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.end,
-              children: [
-                TextButton.icon(
-                  onPressed: isBusy || _isCredentialLoading
-                      ? null
-                      : _saveCredentialFromInput,
-                  icon: const Icon(Icons.save_outlined),
-                  label: Text(settingsProvider.t('save_academic_credentials')),
-                ),
-                if (_storedCredential != null)
-                  TextButton.icon(
-                    onPressed: isBusy ? null : _clearCredential,
-                    icon: const Icon(Icons.delete_outline),
-                    label: Text(
-                      settingsProvider.t('clear_academic_credentials'),
-                    ),
-                  ),
-                FilledButton.icon(
-                  onPressed: isBusy || _isCredentialLoading
-                      ? null
-                      : _runAutoTimetableImport,
-                  icon: const Icon(Icons.auto_awesome_outlined),
-                  label: Text(settingsProvider.t('auto_login_extract')),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: isBusy || _isCredentialLoading
-                      ? null
-                      : _runAutoExamImport,
-                  icon: const Icon(Icons.assignment_turned_in_outlined),
-                  label: Text(settingsProvider.t('auto_login_extract_exam')),
-                ),
-              ],
-            ),
-            if (status != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                status,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+    return AcademicCredentialPanel(
+      settingsProvider: settingsProvider,
+      studentIdController: _studentIdController,
+      passwordController: _passwordController,
+      isBusy: isBusy,
+      isCredentialLoading: _isCredentialLoading,
+      autoLoginEnabled: _autoLoginEnabled,
+      storedCredential: _storedCredential,
+      status: _autoImportStatus,
+      onAutoLoginChanged: (value) {
+        setState(() {
+          _autoLoginEnabled = value;
+        });
+      },
+      onSaveCredential: _saveCredentialFromInput,
+      onClearCredential: _clearCredential,
+      onRunTimetableImport: _runAutoTimetableImport,
+      onRunExamImport: _runAutoExamImport,
     );
   }
 

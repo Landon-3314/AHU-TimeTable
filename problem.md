@@ -21,6 +21,7 @@
 | S-6 | `.gitignore` 已加入 `key.properties` / `**/key.properties`，且当前未发现相关文件被 Git 跟踪。 |
 | H-2 | 报告中列出的主题设置、课程/日程删除和撤销等 fire-and-forget 路径已补错误捕获、提示或日志。 |
 | H-4 / M-4 | `StorageService` 底层写入已串行化，并检查 `set/remove` 返回值，失败时抛错。 |
+| H-1 | 已按职责拆分 `StorageService`、`SettingsProvider`、`TimetablePage`、`ImportCoursePage`、`MainActivity`，保留现有存储 key、路由、Provider API 与 MethodChannel 协议，并通过目标回归、analyze 与 Kotlin 编译验证。 |
 | M-1 | 教务导入 URL 已改为显式主机白名单，不再接受任意 `*.ahu.edu.cn`。 |
 | M-2 / N-24 | `_parseTime` 已改为 tryParse + 范围校验，损坏/越界时间整体回退 fallback。 |
 | M-10 | 真实 Dart 空 `catch` 已补日志；跨域 iframe 的 JS catch 已加意图说明。 |
@@ -42,7 +43,7 @@
 
 ### ⏳ 仍未纳入本轮
 
-S-1 更新清单签名/APK 完整签名校验、H-1 God Class 拆分、H-5 领域模型相等性、H-6 hash 统一，以及 N-19、N-23、N-25、N-26、N-29 之后的专项问题仍保留为后续项。
+S-1 更新清单签名/APK 完整签名校验、H-5 领域模型相等性、H-6 hash 统一，以及 N-19、N-23、N-25、N-26、N-29 之后的专项问题仍保留为后续项。
 
 ---
 

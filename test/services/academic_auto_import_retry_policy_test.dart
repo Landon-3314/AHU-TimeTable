@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:AnKe/screens/import_course_page.dart';
+import 'package:AnKe/models/academic_import.dart';
 
 void main() {
   test(

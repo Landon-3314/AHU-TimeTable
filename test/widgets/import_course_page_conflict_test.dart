@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:AnKe/models/course.dart';
 import 'package:AnKe/providers/course_provider.dart';
-import 'package:AnKe/screens/import_course_page.dart';
 import 'package:AnKe/services/storage_service.dart';
+import 'package:AnKe/widgets/academic_import/academic_import_conflict_confirmation.dart';
 
 void main() {
   testWidgets(

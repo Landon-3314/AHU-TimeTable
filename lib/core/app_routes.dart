@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/academic_import.dart';
 import '../models/course.dart';
 import '../screens/add_course_page.dart';
 import '../screens/developer_diagnostics_page.dart';

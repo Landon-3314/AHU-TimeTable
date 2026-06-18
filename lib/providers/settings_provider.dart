@@ -7,9 +7,12 @@ import '../models/clock_time.dart';
 import '../models/semester.dart';
 import '../models/time_slot.dart';
 
+import 'settings_mutation_runner.dart';
 import '../services/permission_service.dart';
 import '../services/schedule_calculator.dart';
 import '../services/storage_service.dart';
+
+part 'settings_provider_helpers.dart';
 
 class SettingsActionResult {
   const SettingsActionResult._({required this.success, this.message});
@@ -151,6 +154,8 @@ class SettingsProvider extends ChangeNotifier {
   static const int _defaultEventReminderAdvanceMinutes = 0;
   static const int _maxCourseReminderAdvanceMinutes = 23 * 60 + 59;
   static const int _maxEventReminderAdvanceMinutes = 7 * 24 * 60 + 23 * 60 + 59;
+  static const SettingsMutationRunner _mutationRunner =
+      SettingsMutationRunner();
 
   final StorageService _storageService;
   final ScheduleCalculator _scheduleCalculator;
@@ -1064,25 +1069,15 @@ class SettingsProvider extends ChangeNotifier {
     Future<void> Function()? compensate,
     bool refreshReminders = false,
   }) async {
-    notifyListeners();
-    try {
-      await persist();
-    } catch (error, stackTrace) {
-      restore();
-      try {
-        await compensate?.call();
-      } catch (compensationError) {
-        debugPrint(
-          '[SettingsProvider] Failed to compensate persisted settings: '
-          '$compensationError',
-        );
-      }
-      notifyListeners();
-      Error.throwWithStackTrace(error, stackTrace);
-    }
-    if (refreshReminders) {
-      await _refreshRemindersAfterPersistence();
-    }
+    await _mutationRunner.commit(
+      notifyListeners: notifyListeners,
+      restore: restore,
+      persist: persist,
+      compensate: compensate,
+      refreshAfterPersistence: refreshReminders
+          ? _refreshRemindersAfterPersistence
+          : null,
+    );
   }
 
   _ThemeSettingsSnapshot _themeSnapshot() {
@@ -1573,322 +1568,4 @@ class SettingsProvider extends ChangeNotifier {
       bigBreakAfterPeriods: _bigBreakAfterPeriods,
     );
   }
-
-  static List<String> _restoreSessionStartTimesFromStorage(
-    StorageService storageService,
-    ClassDayPeriod period,
-  ) {
-    final morningClasses = storageService.readMorningClasses(
-      fallback: _defaultMorningClasses,
-    );
-    final afternoonClasses = storageService.readAfternoonClasses(
-      fallback: _defaultAfternoonClasses,
-    );
-    final eveningClasses = storageService.readEveningClasses(
-      fallback: _defaultEveningClasses,
-    );
-    final totalClassPeriods =
-        morningClasses + afternoonClasses + eveningClasses;
-    final bigBreakAfterPeriods = _restoreBigBreakAfterPeriodsFromStorage(
-      storageService,
-    );
-
-    return _restoreSessionStartTimes(
-      storedValues: switch (period) {
-        ClassDayPeriod.morning => storageService.readMorningPeriodStartTimes(),
-        ClassDayPeriod.afternoon =>
-          storageService.readAfternoonPeriodStartTimes(),
-        ClassDayPeriod.evening => storageService.readEveningPeriodStartTimes(),
-      },
-      fallbackStartTime: switch (period) {
-        ClassDayPeriod.morning => storageService.readMorningStartTime(
-          fallback: _defaultMorningStartTime,
-        ),
-        ClassDayPeriod.afternoon => storageService.readAfternoonStartTime(
-          fallback: _defaultAfternoonStartTime,
-        ),
-        ClassDayPeriod.evening => storageService.readEveningStartTime(
-          fallback: _defaultEveningStartTime,
-        ),
-      },
-      count: switch (period) {
-        ClassDayPeriod.morning => morningClasses,
-        ClassDayPeriod.afternoon => afternoonClasses,
-        ClassDayPeriod.evening => eveningClasses,
-      },
-      firstPeriodNumber: _firstPeriodNumberForCounts(
-        period,
-        morningClasses: morningClasses,
-        afternoonClasses: afternoonClasses,
-      ),
-      classDuration: storageService.readClassDuration(
-        fallback: _defaultClassDuration,
-      ),
-      shortBreak: storageService.readShortBreak(fallback: _defaultShortBreak),
-      bigBreakEnabled: storageService.readBigBreakEnabled(
-        fallback: _defaultBigBreakEnabled,
-      ),
-      bigBreak: storageService.readBigBreak(fallback: _defaultBigBreak),
-      bigBreakAfterPeriods: _sanitizeBigBreakAfterPeriods(
-        bigBreakAfterPeriods,
-        totalClassPeriods,
-      ),
-    );
-  }
-
-  static List<String> _restoreSessionStartTimes({
-    required List<String>? storedValues,
-    required String fallbackStartTime,
-    required int count,
-    required int firstPeriodNumber,
-    required int classDuration,
-    required int shortBreak,
-    required bool bigBreakEnabled,
-    required int bigBreak,
-    required Iterable<int> bigBreakAfterPeriods,
-  }) {
-    final safeCount = count.clamp(0, 12).toInt();
-    if (safeCount == 0) {
-      return <String>[];
-    }
-
-    final values = (storedValues ?? <String>[])
-        .where(_isValidStoredTimeString)
-        .toList();
-    if (values.isEmpty) {
-      values.add(
-        _isValidStoredTimeString(fallbackStartTime)
-            ? fallbackStartTime
-            : _defaultMorningStartTime,
-      );
-    }
-
-    while (values.length < safeCount) {
-      values.add(
-        _nextStoredStartTime(
-          values.last,
-          firstPeriodNumber: firstPeriodNumber,
-          previousIndex: values.length - 1,
-          classDuration: classDuration,
-          shortBreak: shortBreak,
-          bigBreakEnabled: bigBreakEnabled,
-          bigBreak: bigBreak,
-          bigBreakAfterPeriods: bigBreakAfterPeriods,
-        ),
-      );
-    }
-    if (values.length > safeCount) {
-      return values.take(safeCount).toList();
-    }
-    return values;
-  }
-
-  static String _nextStoredStartTime(
-    String previousStartTime, {
-    required int firstPeriodNumber,
-    required int previousIndex,
-    required int classDuration,
-    required int shortBreak,
-    required bool bigBreakEnabled,
-    required int bigBreak,
-    required Iterable<int> bigBreakAfterPeriods,
-  }) {
-    final previous = ClockTime.fromString(previousStartTime);
-    final previousPeriodNumber = firstPeriodNumber + previousIndex;
-    final nextMinutes =
-        previous.toMinutes() +
-        classDuration +
-        _breakAfterPeriod(
-          previousPeriodNumber: previousPeriodNumber,
-          shortBreak: shortBreak,
-          bigBreakEnabled: bigBreakEnabled,
-          bigBreak: bigBreak,
-          bigBreakAfterPeriods: bigBreakAfterPeriods,
-        );
-    return ClockTime.fromMinutes(nextMinutes).format24Hour();
-  }
-
-  static int _breakAfterPeriod({
-    required int previousPeriodNumber,
-    required int shortBreak,
-    required bool bigBreakEnabled,
-    required int bigBreak,
-    required Iterable<int> bigBreakAfterPeriods,
-  }) {
-    final usesBigBreak =
-        bigBreakEnabled && bigBreakAfterPeriods.contains(previousPeriodNumber);
-    return usesBigBreak ? bigBreak : shortBreak;
-  }
-
-  static int _firstPeriodNumberForCounts(
-    ClassDayPeriod period, {
-    required int morningClasses,
-    required int afternoonClasses,
-  }) {
-    switch (period) {
-      case ClassDayPeriod.morning:
-        return 1;
-      case ClassDayPeriod.afternoon:
-        return morningClasses + 1;
-      case ClassDayPeriod.evening:
-        return morningClasses + afternoonClasses + 1;
-    }
-  }
-
-  static List<int> _restoreBigBreakAfterPeriodsFromStorage(
-    StorageService storageService,
-  ) {
-    final morningClasses = storageService.readMorningClasses(
-      fallback: _defaultMorningClasses,
-    );
-    final afternoonClasses = storageService.readAfternoonClasses(
-      fallback: _defaultAfternoonClasses,
-    );
-    final eveningClasses = storageService.readEveningClasses(
-      fallback: _defaultEveningClasses,
-    );
-    final totalClassPeriods =
-        morningClasses + afternoonClasses + eveningClasses;
-    return _sanitizeBigBreakAfterPeriods(
-      storageService.readBigBreakAfterPeriods() ??
-          _defaultBigBreakAfterPeriods(
-            morningClasses: morningClasses,
-            afternoonClasses: afternoonClasses,
-            totalClassPeriods: totalClassPeriods,
-          ),
-      totalClassPeriods,
-    );
-  }
-
-  static List<int> _defaultBigBreakAfterPeriods({
-    required int morningClasses,
-    required int afternoonClasses,
-    required int totalClassPeriods,
-  }) {
-    final values = <int>[];
-    if (morningClasses >= 3) {
-      values.add(2);
-    }
-    if (afternoonClasses >= 3) {
-      values.add(morningClasses + 2);
-    }
-    return _sanitizeBigBreakAfterPeriods(values, totalClassPeriods);
-  }
-
-  static List<int> _sanitizeBigBreakAfterPeriods(
-    Iterable<int> values,
-    int totalClassPeriods,
-  ) {
-    final maxPeriod = totalClassPeriods - 1;
-    if (maxPeriod < 1) {
-      return <int>[];
-    }
-    final unique =
-        values
-            .where((value) => value >= 1 && value <= maxPeriod)
-            .toSet()
-            .toList()
-          ..sort();
-    return unique;
-  }
-
-  static bool _listEquals(List<int> left, List<int> right) {
-    if (left.length != right.length) {
-      return false;
-    }
-    for (var index = 0; index < left.length; index += 1) {
-      if (left[index] != right[index]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  static bool _isValidStoredTimeString(String value) {
-    final parts = value.split(':');
-    if (parts.length != 2) {
-      return false;
-    }
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    return hour != null &&
-        minute != null &&
-        hour >= 0 &&
-        hour <= 23 &&
-        minute >= 0 &&
-        minute <= 59;
-  }
-
-  static DateTime _restoreSemesterStartDate({
-    required StorageService storageService,
-    required ScheduleCalculator scheduleCalculator,
-  }) {
-    final storedValue = storageService.readSemesterStartDate();
-    if (storedValue == null) {
-      return scheduleCalculator.defaultSemesterStartDate();
-    }
-    return scheduleCalculator.alignToMonday(storedValue);
-  }
-}
-
-class _ThemeSettingsSnapshot {
-  const _ThemeSettingsSnapshot({
-    required this.appThemeMode,
-    required this.themePaletteId,
-    required this.customThemePrimaryValue,
-    required this.customThemeAccentValue,
-  });
-
-  final AppThemeMode appThemeMode;
-  final String themePaletteId;
-  final int customThemePrimaryValue;
-  final int customThemeAccentValue;
-}
-
-class _PeriodSettingsSnapshot {
-  const _PeriodSettingsSnapshot({
-    required this.classDuration,
-    required this.shortBreak,
-    required this.bigBreakEnabled,
-    required this.bigBreak,
-    required this.bigBreakAfterPeriods,
-    required this.morningStartTime,
-    required this.morningClasses,
-    required this.afternoonStartTime,
-    required this.afternoonClasses,
-    required this.eveningStartTime,
-    required this.eveningClasses,
-    required this.morningPeriodStartTimes,
-    required this.afternoonPeriodStartTimes,
-    required this.eveningPeriodStartTimes,
-  });
-
-  final int classDuration;
-  final int shortBreak;
-  final bool bigBreakEnabled;
-  final int bigBreak;
-  final List<int> bigBreakAfterPeriods;
-  final String morningStartTime;
-  final int morningClasses;
-  final String afternoonStartTime;
-  final int afternoonClasses;
-  final String eveningStartTime;
-  final int eveningClasses;
-  final List<String> morningPeriodStartTimes;
-  final List<String> afternoonPeriodStartTimes;
-  final List<String> eveningPeriodStartTimes;
-}
-
-class _ReminderSettingsSnapshot {
-  const _ReminderSettingsSnapshot({
-    required this.reminderAdvanceMinutes,
-    required this.eventReminderAdvanceMinutes,
-    required this.autoMuteEnabled,
-    required this.courseReminderPersistentDisplayEnabled,
-  });
-
-  final int reminderAdvanceMinutes;
-  final int eventReminderAdvanceMinutes;
-  final bool autoMuteEnabled;
-  final bool courseReminderPersistentDisplayEnabled;
 }

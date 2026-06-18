@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../models/academic_import.dart';
 import '../screens/import_course_page.dart';
 import '../services/academic_daily_auto_import_service.dart';
 
