@@ -45,6 +45,9 @@ void main() {
       await tester.ensureVisible(find.text('自动提取考试'));
       await tester.tap(find.text('自动提取考试'));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('自动提取成绩'));
+      await tester.tap(find.text('自动提取成绩'));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('手动打开教务页面'));
       await tester.tap(find.text('手动打开教务页面'));
       await tester.pumpAndSettle();
@@ -52,6 +55,7 @@ void main() {
       expect(launchedActions, [
         AcademicAutoAction.timetable,
         AcademicAutoAction.exam,
+        AcademicAutoAction.grade,
         null,
       ]);
       expect(
@@ -152,15 +156,56 @@ void main() {
       expect(find.text('已导入 2 门课程'), findsOneWidget);
     },
   );
+
+  testWidgets('grade auto import does not require semester initialization', (
+    tester,
+  ) async {
+    final settings = await _createSettingsProvider(initialized: false);
+    final store = _MemoryCredentialStore();
+    final launchedActions = <AcademicAutoAction>[];
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<SettingsProvider>.value(
+        value: settings,
+        child: MaterialApp(
+          home: AcademicAccountPage(
+            credentialService: AcademicCredentialService(store: store),
+            autoImportLauncher: (context, action) async {
+              launchedActions.add(action);
+              return const AcademicImportResult(
+                kind: AcademicImportKind.grade,
+                importedCount: 1,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(_textFieldWithLabel('学号'), 'G12345678');
+    await tester.enterText(_textFieldWithLabel('密码'), 'secret');
+    await tester.ensureVisible(find.text('自动提取成绩'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('自动提取成绩'));
+    await tester.pumpAndSettle();
+
+    expect(launchedActions, [AcademicAutoAction.grade]);
+    expect(find.text('已提取 1 门成绩'), findsOneWidget);
+  });
 }
 
-Future<SettingsProvider> _createSettingsProvider() async {
+Future<SettingsProvider> _createSettingsProvider({
+  bool initialized = true,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final preferences = await SharedPreferences.getInstance();
   final storage = StorageService(sharedPreferences: preferences);
   await storage.ensureSemesterMigration();
   final settings = SettingsProvider(storageService: storage);
-  await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
+  if (initialized) {
+    await settings.completeInitialSemesterStartDate(DateTime(2026, 2, 23));
+  }
   return settings;
 }
 

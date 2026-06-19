@@ -13,10 +13,26 @@ void main() {
     final book = GradeBook(
       studentId: '123456',
       fetchedAt: DateTime(2026, 6, 18, 12),
+      statistics: const GradeStatistics(
+        gpa: 3.86,
+        rank: 37,
+        rankTotal: 314,
+        totalCredits: 114,
+        inPlanCredits: 80,
+        outPlanCredits: 34,
+        updatedAtText: '2026-06-18 23:53',
+      ),
       terms: [
         GradeTerm(
           remoteSemesterId: '202520261',
           semesterName: '2025-2026学年秋季学期',
+          statistics: const GradeStatistics(
+            gpa: 4.2,
+            rank: 6,
+            totalCredits: 21,
+            inPlanCredits: 18,
+            outPlanCredits: 3,
+          ),
           records: [
             GradeRecord(
               courseCode: 'MATH001',
@@ -42,6 +58,9 @@ void main() {
     await reloaded.loadCached();
 
     expect(reloaded.gradeBook?.studentId, '123456');
+    expect(reloaded.gradeBook?.statistics?.gpa, 3.86);
+    expect(reloaded.gradeBook?.statistics?.rank, 37);
+    expect(reloaded.gradeBook?.terms.single.statistics?.gpa, 4.2);
     expect(reloaded.gradeBook?.terms.single.records.single.grade, '95');
 
     await reloaded.refreshViaWebView(() async {

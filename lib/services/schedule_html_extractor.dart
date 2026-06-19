@@ -12,6 +12,9 @@ class ScheduleHtmlExtractor {
   static const String academicExamUrl =
       'https://jw.ahu.edu.cn/student/for-std/exam-arrange';
 
+  static const String academicGradeUrl =
+      'https://jw.ahu.edu.cn/student/for-std/grade/sheet';
+
   static const String academicCasLoginUrl =
       'https://one.ahu.edu.cn/cas/login?service=https%3A%2F%2Fjw.ahu.edu.cn%2Fstudent%2Fsso%2Flogin';
 

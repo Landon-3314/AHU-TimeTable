@@ -1,6 +1,6 @@
-enum AcademicImportKind { timetable, exam }
+enum AcademicImportKind { timetable, exam, grade }
 
-enum AcademicAutoAction { timetable, exam }
+enum AcademicAutoAction { timetable, exam, grade }
 
 class AcademicImportResult {
   const AcademicImportResult({
@@ -49,6 +49,9 @@ String? buildUninitializedAcademicImportMessage({
   required bool isCurrentSemesterInitialized,
 }) {
   if (isCurrentSemesterInitialized || kind == AcademicImportKind.timetable) {
+    return null;
+  }
+  if (kind == AcademicImportKind.grade) {
     return null;
   }
   return '请先导入课程以自动初始化学期起始日期，再导入考试。';

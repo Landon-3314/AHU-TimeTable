@@ -6,10 +6,11 @@ import '../../providers/course_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../screens/exam_overview_page.dart';
 import 'course_overview_panel.dart';
+import 'grade_overview_panel.dart';
 import 'pill_tab_switcher.dart';
 import 'timetable_empty_state_actions.dart';
 
-enum TimetableOverviewPage { courses, exams }
+enum TimetableOverviewPage { courses, exams, grades }
 
 class TimetableOverviewSheet extends StatefulWidget {
   const TimetableOverviewSheet({
@@ -93,6 +94,7 @@ class TimetableOverviewSheetState extends State<TimetableOverviewSheet> {
                 onCourseGroupTap: widget.onCourseGroupTap,
               ),
               ExamOverviewPanel(onImport: widget.onImportCourses),
+              GradeOverviewPanel(onImport: widget.onImportCourses),
             ],
           ),
         ),
@@ -116,7 +118,7 @@ class _TimetableOverviewTabs extends StatelessWidget {
       key: const ValueKey('overview-tabs'),
       indicatorKey: const ValueKey('overview-tabs-indicator'),
       selectedValue: selectedPage,
-      itemWidth: 76,
+      itemWidth: 72,
       items: const [
         PillTabItem<TimetableOverviewPage>(
           key: ValueKey('overview-tab-courses'),
@@ -127,6 +129,11 @@ class _TimetableOverviewTabs extends StatelessWidget {
           key: ValueKey('overview-tab-exams'),
           value: TimetableOverviewPage.exams,
           label: Text('考试'),
+        ),
+        PillTabItem<TimetableOverviewPage>(
+          key: ValueKey('overview-tab-grades'),
+          value: TimetableOverviewPage.grades,
+          label: Text('成绩'),
         ),
       ],
       onSelected: onSelected,

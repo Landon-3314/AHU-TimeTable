@@ -9,6 +9,7 @@ enum AcademicPageKind {
   studentHome,
   timetable,
   exam,
+  grade,
   other,
 }
 
@@ -54,6 +55,10 @@ class AcademicAutoLoginService {
     if (host == 'jw.ahu.edu.cn' &&
         path.startsWith('/student/for-std/exam-arrange')) {
       return AcademicPageKind.exam;
+    }
+    if (host == 'jw.ahu.edu.cn' &&
+        path.startsWith('/student/for-std/grade/sheet')) {
+      return AcademicPageKind.grade;
     }
     return AcademicPageKind.other;
   }
@@ -309,6 +314,52 @@ class AcademicAutoLoginService {
     }
     refresh.click();
     return 'REFRESH_CLICKED';
+  } catch (error) {
+    return 'JS_ERROR: ' + (error && error.message ? error.message : String(error));
+  }
+})();
+''';
+
+  static const String gradeReadyScript = r'''
+(function() {
+  try {
+    const visited = [];
+    function collect(targetWindow, bucket) {
+      if (!targetWindow || visited.indexOf(targetWindow) !== -1) {
+        return;
+      }
+      visited.push(targetWindow);
+      bucket.push(targetWindow);
+      let frameCount = 0;
+      try {
+        frameCount = targetWindow.frames ? targetWindow.frames.length : 0;
+      } catch (_) {
+        frameCount = 0;
+      }
+      for (let index = 0; index < frameCount; index += 1) {
+        try {
+          collect(targetWindow.frames[index], bucket);
+        } catch (_) {}
+      }
+    }
+
+    const windows = [];
+    collect(window, windows);
+    for (const currentWindow of windows) {
+      try {
+        const doc = currentWindow.document;
+        const hasSemesterControl = doc && doc.querySelector('#semester');
+        const hasGradeContent = doc && (
+          doc.querySelector('.student-grade-table') ||
+          doc.querySelector('.all-gpa') ||
+          doc.querySelector('h3.semesterName')
+        );
+        if (hasSemesterControl && hasGradeContent) {
+          return 'READY';
+        }
+      } catch (_) {}
+    }
+    return 'NOT_READY';
   } catch (error) {
     return 'JS_ERROR: ' + (error && error.message ? error.message : String(error));
   }

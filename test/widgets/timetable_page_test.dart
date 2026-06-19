@@ -9,7 +9,9 @@ import 'package:AnKe/core/app_routes.dart';
 import 'package:AnKe/core/app_theme.dart';
 import 'package:AnKe/models/course.dart';
 import 'package:AnKe/models/event.dart';
+import 'package:AnKe/models/grade.dart';
 import 'package:AnKe/providers/course_provider.dart';
+import 'package:AnKe/providers/grade_provider.dart';
 import 'package:AnKe/providers/settings_provider.dart';
 import 'package:AnKe/providers/timetable_view_provider.dart';
 import 'package:AnKe/screens/academic_account_page.dart';
@@ -634,6 +636,54 @@ void main() {
     expect(find.text('线性代数考试'), findsOneWidget);
     semantics.dispose();
   });
+
+  testWidgets('overview sheet shows cached grades by semester', (tester) async {
+    final bundle = await _createProviderBundle();
+    await bundle.grades.replaceWithFetched(
+      GradeBook(
+        fetchedAt: DateTime(2026, 6, 18, 23, 53),
+        statistics: const GradeStatistics(
+          gpa: 3.86,
+          rank: 37,
+          rankTotal: 314,
+          totalCredits: 114,
+        ),
+        terms: const [
+          GradeTerm(
+            remoteSemesterId: '202520261',
+            semesterName: '2025-2026-1',
+            statistics: GradeStatistics(gpa: 4.2, rank: 6, totalCredits: 21),
+            records: [
+              GradeRecord(
+                courseCode: 'MATH001',
+                courseName: '高等数学',
+                credits: 4,
+                grade: '95',
+                gp: 4.5,
+                courseType: '通识必修',
+                courseProperty: '理论课',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(_buildPage(bundle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('总览'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('overview-tab-grades')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('全程 GPA'), findsOneWidget);
+    expect(find.text('3.86'), findsOneWidget);
+    expect(find.text('排名 37/314'), findsOneWidget);
+    expect(find.text('2025-2026-1'), findsOneWidget);
+    expect(find.text('高等数学'), findsOneWidget);
+    expect(find.text('95'), findsOneWidget);
+  });
 }
 
 Widget _buildPage(_ProviderBundle bundle) {
@@ -641,6 +691,7 @@ Widget _buildPage(_ProviderBundle bundle) {
     providers: [
       ChangeNotifierProvider<SettingsProvider>.value(value: bundle.settings),
       ChangeNotifierProvider<CourseProvider>.value(value: bundle.courses),
+      ChangeNotifierProvider<GradeProvider>.value(value: bundle.grades),
       ChangeNotifierProvider<TimetableViewProvider>.value(
         value: bundle.timetableView,
       ),
@@ -705,6 +756,7 @@ Future<_ProviderBundle> _createProviderBundle({
   return _ProviderBundle(
     settings: settings,
     courses: CourseProvider(storageService: storage),
+    grades: GradeProvider(storageService: storage),
     timetableView: timetableView,
   );
 }
@@ -713,10 +765,12 @@ class _ProviderBundle {
   const _ProviderBundle({
     required this.settings,
     required this.courses,
+    required this.grades,
     required this.timetableView,
   });
 
   final SettingsProvider settings;
   final CourseProvider courses;
+  final GradeProvider grades;
   final TimetableViewProvider timetableView;
 }

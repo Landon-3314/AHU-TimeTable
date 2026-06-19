@@ -339,13 +339,23 @@ class _GradeRefreshPageState extends State<GradeRefreshPage> {
         if (studentId == null) {
           throw StateError('未能识别学生编号，请确认已登录并停留在成绩页面。');
         }
+        final pageBook = _gradeParser.parseGradeSheetHtml(
+          sheetResponse.body,
+          studentId: studentId,
+          fetchedAt: DateTime.now(),
+          allowEmptyTerms: true,
+        );
         final gradeResponse = await _fetchClient.fetch(
           AcademicApiEndpoints.gradeInfo(studentId),
         );
-        return _gradeParser.parseGradeInfo(
+        final apiBook = _gradeParser.parseGradeInfo(
           gradeResponse.body,
           studentId: studentId,
           fetchedAt: DateTime.now(),
+        );
+        return _gradeParser.mergeGradeBooks(
+          primary: apiBook,
+          metadataFallback: pageBook,
         );
       },
     );

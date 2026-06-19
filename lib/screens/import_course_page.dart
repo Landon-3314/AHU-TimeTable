@@ -13,7 +13,9 @@ import '../models/academic_credential.dart';
 import '../models/academic_import.dart';
 import '../models/course.dart';
 import '../models/event.dart';
+import '../models/grade.dart';
 import '../providers/course_provider.dart';
+import '../providers/grade_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/academic_api_endpoints.dart';
 import '../services/academic_auto_login_service.dart';
@@ -23,6 +25,7 @@ import '../services/academic_exam_diagnostics.dart';
 import '../services/academic_exam_api_parser.dart';
 import '../services/academic_webview_fetch_client.dart';
 import '../services/academic_week_sync_service.dart';
+import '../services/grade_parser_service.dart';
 import '../services/schedule_html_extractor.dart';
 import '../services/schedule_parser_service.dart';
 import '../widgets/academic_import/academic_credential_panel.dart';
@@ -30,7 +33,7 @@ import '../widgets/academic_import/academic_import_conflict_confirmation.dart';
 import '../widgets/common/app_ui.dart';
 import '../widgets/common/guided_tour_overlay.dart';
 
-enum _ImportAction { timetable, exam }
+enum _ImportAction { timetable, exam, grade }
 
 class AcademicImportPopGuard extends StatelessWidget {
   const AcademicImportPopGuard({
@@ -83,6 +86,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   static const AcademicCourseApiParser _courseApiParser =
       AcademicCourseApiParser();
   static const AcademicExamApiParser _examApiParser = AcademicExamApiParser();
+  static const GradeParserService _gradeParser = GradeParserService();
   static const AcademicWeekSyncService _weekSyncService =
       AcademicWeekSyncService();
   static const AcademicCredentialService _credentialService =
@@ -93,6 +97,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   static const Duration _autoRetryDelay = Duration(seconds: 1);
   static const Duration _autoImportTimeout = Duration(seconds: 30);
   static const Duration _autoExamImportTimeout = Duration(seconds: 70);
+  static const Duration _autoGradeImportTimeout = Duration(seconds: 50);
   static const Duration _teachWeekSyncTimeout = Duration(seconds: 3);
   static const int _maxAutoImportRecoverableRetries = 1;
   static const int _maxPortalLoginSubmissions = 2;
@@ -375,6 +380,8 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         await _runAutoTimetableImport();
       case AcademicAutoAction.exam:
         await _runAutoExamImport();
+      case AcademicAutoAction.grade:
+        await _runAutoGradeImport();
     }
   }
 
@@ -472,6 +479,19 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       extractingMessageKey: 'auto_exam_import_extracting',
       refreshBeforeWaitingScript: AcademicAutoLoginService.examRefreshScript,
       extract: _runExamExtractScript,
+    );
+  }
+
+  Future<void> _runAutoGradeImport() async {
+    await _runAutoAcademicImport(
+      kind: _ImportAction.grade,
+      targetUrl: ScheduleHtmlExtractor.academicGradeUrl,
+      readyScript: AcademicAutoLoginService.gradeReadyScript,
+      timeout: _autoGradeImportTimeout,
+      openingMessageKey: 'auto_grade_import_opening',
+      waitingMessageKey: 'auto_grade_import_waiting_table',
+      extractingMessageKey: 'auto_grade_import_extracting',
+      extract: _runGradeExtractScript,
     );
   }
 
@@ -669,6 +689,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
           }
         case AcademicPageKind.timetable:
         case AcademicPageKind.exam:
+        case AcademicPageKind.grade:
           _setAutoImportStatus(settingsProvider.t(waitingMessageKey));
         case AcademicPageKind.other:
           _setAutoImportStatus(settingsProvider.t('auto_import_waiting_page'));
@@ -771,6 +792,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       kind: switch (action) {
         _ImportAction.timetable => AcademicImportKind.timetable,
         _ImportAction.exam => AcademicImportKind.exam,
+        _ImportAction.grade => AcademicImportKind.grade,
       },
       isCurrentSemesterInitialized:
           settingsProvider.isCurrentSemesterInitialized,
@@ -834,6 +856,33 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       await _handleExamHtml(rawHtml);
     } catch (error) {
       _finishImportWithMessage('考试提取失败：$error');
+    }
+  }
+
+  Future<void> _runGradeExtractScript() async {
+    if (!await _ensureSemesterInitializedForImport(_ImportAction.grade)) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _activeAction = _ImportAction.grade;
+    });
+
+    try {
+      if (await _tryImportGradesViaApi()) {
+        return;
+      }
+      final rawHtml = await _runJavaScriptExtraction(
+        'document.documentElement.outerHTML',
+        settleDelay: Duration.zero,
+      );
+      await _handleGradeHtml(rawHtml);
+    } catch (error) {
+      _finishImportWithMessage('成绩提取失败：$error');
     }
   }
 
@@ -978,6 +1027,85 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
           _activeAction = null;
         });
       }
+    }
+  }
+
+  Future<bool> _tryImportGradesViaApi() async {
+    var handled = false;
+    try {
+      await _ensureCurrentPageCanBeExtracted();
+      final currentUrl = await _controller.currentUrl();
+      final pageHtml = await _runJavaScriptExtraction(
+        'document.documentElement.outerHTML',
+        settleDelay: Duration.zero,
+      );
+      final studentId = _gradeParser.extractStudentIdFromGradeSheetUrl(
+        currentUrl ?? '',
+      );
+      if (studentId == null) {
+        _logAcademicAutoImport(
+          'grade api skipped: student id missing url=$currentUrl',
+        );
+        return false;
+      }
+      _logAcademicAutoImport('grade api id=$studentId pageUrl=$currentUrl');
+
+      final pageBook = _tryParseGradeSheetHtml(pageHtml, studentId: studentId);
+      final response = await _requireFetchClient().fetch(
+        AcademicApiEndpoints.gradeInfo(studentId),
+      );
+      final apiBook = _gradeParser.parseGradeInfo(
+        response.body,
+        studentId: studentId,
+        fetchedAt: DateTime.now(),
+      );
+      final book = _gradeParser.mergeGradeBooks(
+        primary: apiBook,
+        metadataFallback: pageBook,
+      );
+      final statsState = book.statistics == null ? 'none' : 'found';
+      _logAcademicAutoImport(
+        'grade api parsed terms=${book.terms.length} records=${book.recordCount} '
+        'source=json-fetch stats=$statsState',
+      );
+      if (book.recordCount == 0) {
+        _logAcademicAutoImport(
+          'grade api returned empty bodyLength=${response.body.length}',
+        );
+        return false;
+      }
+      await _saveGradeBook(book);
+      handled = true;
+      return true;
+    } catch (error) {
+      if (_shouldSurfaceApiError(error)) {
+        rethrow;
+      }
+      _logAcademicAutoImport('grade api fallback to html: $error');
+      return false;
+    } finally {
+      if (handled && mounted) {
+        setState(() {
+          _activeAction = null;
+        });
+      }
+    }
+  }
+
+  GradeBook? _tryParseGradeSheetHtml(
+    String rawHtml, {
+    required String? studentId,
+  }) {
+    try {
+      return _gradeParser.parseGradeSheetHtml(
+        rawHtml,
+        studentId: studentId,
+        fetchedAt: DateTime.now(),
+        allowEmptyTerms: true,
+      );
+    } catch (error) {
+      _logAcademicAutoImport('grade html metadata parse skipped: $error');
+      return null;
     }
   }
 
@@ -1267,6 +1395,46 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     }
   }
 
+  Future<void> _handleGradeHtml(String rawMessage) async {
+    try {
+      if (rawMessage.startsWith('JS_ERROR:')) {
+        throw ScheduleParseException('教务系统连接失败，请检查网络或重新登录后重试。');
+      }
+
+      if (rawMessage.startsWith('ERROR:')) {
+        throw ScheduleParseException(
+          rawMessage.replaceFirst('ERROR:', '').trim(),
+        );
+      }
+
+      final currentUrl = await _controller.currentUrl();
+      final studentId = _gradeParser.extractStudentIdFromGradeSheetUrl(
+        currentUrl ?? '',
+      );
+      final book = _gradeParser.parseGradeSheetHtml(
+        rawMessage,
+        studentId: studentId,
+        fetchedAt: DateTime.now(),
+      );
+      final statsState = book.statistics == null ? 'none' : 'found';
+      _logAcademicAutoImport(
+        'grade api parsed terms=${book.terms.length} records=${book.recordCount} '
+        'source=html-dom stats=$statsState',
+      );
+      await _saveGradeBook(book);
+    } on ScheduleParseException catch (error) {
+      _finishImportWithMessage('成绩提取失败：${error.message}');
+    } catch (error) {
+      _finishImportWithMessage('成绩提取失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _activeAction = null;
+        });
+      }
+    }
+  }
+
   Future<void> _importExamEvents(List<Event> importedEvents) async {
     final settingsProvider = context.read<SettingsProvider>();
     final courseProvider = context.read<CourseProvider>();
@@ -1292,6 +1460,19 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     }
 
     _completeImport(result);
+  }
+
+  Future<void> _saveGradeBook(GradeBook book) async {
+    await context.read<GradeProvider>().replaceWithFetched(book);
+    if (!mounted) {
+      return;
+    }
+    _completeImport(
+      AcademicImportResult(
+        kind: AcademicImportKind.grade,
+        importedCount: book.recordCount,
+      ),
+    );
   }
 
   void _completeImport(AcademicImportResult result) {

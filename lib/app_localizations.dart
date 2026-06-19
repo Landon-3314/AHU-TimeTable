@@ -301,6 +301,12 @@ class AppStrings {
       'zh': '考试页会等待更久，并尝试点击考试信息查询旁的刷新按钮',
       'en': 'Wait longer on the exam page and try the refresh button',
     },
+    'auto_extract_grade': {'zh': '自动提取成绩', 'en': 'Auto Import Grades'},
+    'auto_extract_grade_subtitle': {
+      'zh': '后台打开教务成绩单，提取各学期课程成绩、GPA 和排名',
+      'en':
+          'Open the grade sheet in the background and import semester grades, GPA, and ranking',
+    },
     'manual_academic_import': {
       'zh': '手动打开教务页面',
       'en': 'Open Academic Page Manually',
@@ -384,6 +390,18 @@ class AppStrings {
       'zh': '已进入考试页面，正在提取...',
       'en': 'Exam page ready. Extracting...',
     },
+    'auto_grade_import_opening': {
+      'zh': '正在打开成绩单页面...',
+      'en': 'Opening grade sheet...',
+    },
+    'auto_grade_import_waiting_table': {
+      'zh': '正在等待成绩单加载...',
+      'en': 'Waiting for grade sheet...',
+    },
+    'auto_grade_import_extracting': {
+      'zh': '已进入成绩单，正在提取...',
+      'en': 'Grade sheet ready. Extracting...',
+    },
     'auto_import_failed': {
       'zh': '教务导入失败：{reason}。你可以继续手动操作后点击一键提取课表。',
       'en':
@@ -418,6 +436,10 @@ class AppStrings {
     'exam_import_success_format': {
       'zh': '已导入 {count} 条考试信息',
       'en': 'Imported {count} exam item(s)',
+    },
+    'grade_import_success_format': {
+      'zh': '已提取 {count} 门成绩',
+      'en': 'Imported {count} grade record(s)',
     },
     'timetable_import_success_format': {
       'zh': '已导入 {count} 门课程',

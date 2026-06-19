@@ -183,6 +183,15 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
                       onTap: () => _runAutoImport(AcademicAutoAction.exam),
                     ),
                     AppActionTile(
+                      icon: Icons.grade_outlined,
+                      title: settingsProvider.t('auto_extract_grade'),
+                      subtitle: settingsProvider.t(
+                        'auto_extract_grade_subtitle',
+                      ),
+                      enabled: !_isBusy && !_isLoading,
+                      onTap: () => _runAutoImport(AcademicAutoAction.grade),
+                    ),
+                    AppActionTile(
                       icon: Icons.open_in_browser_outlined,
                       title: settingsProvider.t('manual_academic_import'),
                       subtitle: settingsProvider.t(
@@ -294,7 +303,8 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
       return;
     }
 
-    if (!await ensureCurrentSemesterInitialized(context)) {
+    if (action != AcademicAutoAction.grade &&
+        !(await ensureCurrentSemesterInitialized(context))) {
       return;
     }
     if (!mounted) {
@@ -354,11 +364,11 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
       _silentAutoImportRetryCount = 0;
     });
     _showSnackBar(
-      settingsProvider.t(
-        action == AcademicAutoAction.exam
-            ? 'auto_exam_import_opening'
-            : 'auto_import_opening',
-      ),
+      settingsProvider.t(switch (action) {
+        AcademicAutoAction.exam => 'auto_exam_import_opening',
+        AcademicAutoAction.grade => 'auto_grade_import_opening',
+        AcademicAutoAction.timetable => 'auto_import_opening',
+      }),
     );
   }
 
@@ -434,6 +444,11 @@ class _AcademicAccountPageState extends State<AcademicAccountPage> {
       }
       return settingsProvider
           .t('exam_import_success_format')
+          .replaceAll('{count}', result.importedCount.toString());
+    }
+    if (result.kind == AcademicImportKind.grade) {
+      return settingsProvider
+          .t('grade_import_success_format')
           .replaceAll('{count}', result.importedCount.toString());
     }
 

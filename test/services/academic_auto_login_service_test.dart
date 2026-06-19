@@ -91,6 +91,15 @@ void main() {
     expect(AcademicAutoLoginService.examRefreshScript, contains('刷新'));
   });
 
+  test('provides grade ready script for grade extraction', () {
+    expect(AcademicAutoLoginService.gradeReadyScript, contains('#semester'));
+    expect(
+      AcademicAutoLoginService.gradeReadyScript,
+      contains('.student-grade-table'),
+    );
+    expect(AcademicAutoLoginService.gradeReadyScript, contains('.all-gpa'));
+  });
+
   test('classifies academic urls for the auto import state machine', () {
     expect(
       AcademicAutoLoginService.classifyUrl(
@@ -135,6 +144,20 @@ void main() {
         Uri.parse('${ScheduleHtmlExtractor.academicExamUrl}/info/99358'),
       ),
       AcademicPageKind.exam,
+    );
+    expect(
+      AcademicAutoLoginService.classifyUrl(
+        Uri.parse('https://jw.ahu.edu.cn/student/for-std/grade/sheet'),
+      ),
+      AcademicPageKind.grade,
+    );
+    expect(
+      AcademicAutoLoginService.classifyUrl(
+        Uri.parse(
+          'https://jw.ahu.edu.cn/student/for-std/grade/sheet/semester-index/99358',
+        ),
+      ),
+      AcademicPageKind.grade,
     );
     expect(
       AcademicAutoLoginService.classifyUrl(Uri.parse('https://example.com')),
