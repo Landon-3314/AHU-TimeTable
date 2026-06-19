@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../core/app_constants.dart';
+import '../core/app_routes.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_update_platform.dart';
@@ -143,17 +144,30 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildAccountSection(BuildContext context) {
     final provider = context.watch<SettingsProvider>();
     return AppSurface(
-      child: AppActionTile(
-        icon: Icons.account_circle_outlined,
-        title: provider.t('academic_account_title'),
-        subtitle: provider.t('academic_account_subtitle'),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const AcademicAccountPage(),
-            ),
-          );
-        },
+      child: Column(
+        children: [
+          AppActionTile(
+            icon: Icons.account_circle_outlined,
+            title: provider.t('academic_account_title'),
+            subtitle: provider.t('academic_account_subtitle'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AcademicAccountPage(),
+                ),
+              );
+            },
+          ),
+          const Divider(height: 1),
+          AppActionTile(
+            icon: Icons.school_outlined,
+            title: '教务成绩',
+            subtitle: '查看缓存成绩，或登录教务刷新成绩单。',
+            onTap: () {
+              Navigator.of(context).pushNamed(AppRoutes.grades);
+            },
+          ),
+        ],
       ),
     );
   }

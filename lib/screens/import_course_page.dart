@@ -11,10 +11,18 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import '../core/app_colors.dart';
 import '../models/academic_credential.dart';
 import '../models/academic_import.dart';
+import '../models/course.dart';
+import '../models/event.dart';
 import '../providers/course_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/academic_api_endpoints.dart';
 import '../services/academic_auto_login_service.dart';
+import '../services/academic_course_api_parser.dart';
 import '../services/academic_credential_service.dart';
+import '../services/academic_exam_diagnostics.dart';
+import '../services/academic_exam_api_parser.dart';
+import '../services/academic_webview_fetch_client.dart';
+import '../services/academic_week_sync_service.dart';
 import '../services/schedule_html_extractor.dart';
 import '../services/schedule_parser_service.dart';
 import '../widgets/academic_import/academic_credential_panel.dart';
@@ -72,6 +80,11 @@ class ImportCoursePage extends StatefulWidget {
 
 class _ImportCoursePageState extends State<ImportCoursePage> {
   static const ScheduleParserService _parserService = ScheduleParserService();
+  static const AcademicCourseApiParser _courseApiParser =
+      AcademicCourseApiParser();
+  static const AcademicExamApiParser _examApiParser = AcademicExamApiParser();
+  static const AcademicWeekSyncService _weekSyncService =
+      AcademicWeekSyncService();
   static const AcademicCredentialService _credentialService =
       AcademicCredentialService();
   static const Duration _extractScriptSettleDelay = Duration(milliseconds: 350);
@@ -80,8 +93,30 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   static const Duration _autoRetryDelay = Duration(seconds: 1);
   static const Duration _autoImportTimeout = Duration(seconds: 30);
   static const Duration _autoExamImportTimeout = Duration(seconds: 70);
+  static const Duration _teachWeekSyncTimeout = Duration(seconds: 3);
   static const int _maxAutoImportRecoverableRetries = 1;
   static const int _maxPortalLoginSubmissions = 2;
+  static const String _extractExamInfoVmsScript = '''
+(function() {
+  const readFrom = function(targetWindow) {
+    try {
+      if (typeof targetWindow.studentExamInfoVms !== 'undefined') {
+        return JSON.stringify(targetWindow.studentExamInfoVms);
+      }
+      for (let i = 0; i < targetWindow.frames.length; i += 1) {
+        const nested = readFrom(targetWindow.frames[i]);
+        if (nested) {
+          return nested;
+        }
+      }
+    } catch (error) {
+      return '';
+    }
+    return '';
+  };
+  return readFrom(window);
+})();
+''';
   static final Set<Factory<OneSequenceGestureRecognizer>>
   _webViewGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
     Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
@@ -89,6 +124,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
   late final WebViewController _controller;
   late final Future<void> _controllerReady;
+  AcademicWebViewFetchClient? _fetchClient;
   final TextEditingController _studentIdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   _ImportAction? _activeAction;
@@ -118,6 +154,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
   @override
   void dispose() {
+    _fetchClient?.dispose();
     _studentIdController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -280,6 +317,13 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     }
 
     await _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    _fetchClient = AcademicWebViewFetchClient(controller: _controller);
+    await _controller.addJavaScriptChannel(
+      AcademicWebViewFetchClient.channelName,
+      onMessageReceived: (message) {
+        _fetchClient?.handleMessage(message.message);
+      },
+    );
     await _controller.setNavigationDelegate(
       NavigationDelegate(
         onProgress: (progress) {
@@ -753,6 +797,9 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     });
 
     try {
+      if (await _tryImportTimetableViaApi()) {
+        return;
+      }
       final rawHtml = await _runJavaScriptExtraction(
         ScheduleHtmlExtractor.extractTimetableHtmlScript,
       );
@@ -777,6 +824,9 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
     try {
       await _prepareExamPageForExtraction();
+      if (await _tryImportExamViaApi()) {
+        return;
+      }
       final rawHtml = await _runJavaScriptExtraction(
         ScheduleHtmlExtractor.extractExamHtmlScript,
         settleDelay: Duration.zero,
@@ -798,8 +848,234 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   }
 
   Future<void> _prepareExamPageForExtraction() async {
+    await _installExamDiagnosticProbe();
+    await _logExamDiagnosticSnapshot('before-refresh');
     await _runOptionalRefreshScript(AcademicAutoLoginService.examRefreshScript);
     await Future<void>.delayed(_examExtractScriptSettleDelay);
+    await _logExamDiagnosticSnapshot('after-refresh');
+  }
+
+  Future<bool> _tryImportTimetableViaApi() async {
+    var handled = false;
+    try {
+      await _ensureCurrentPageCanBeExtracted();
+      final pageHtml = await _runJavaScriptExtraction(
+        'document.documentElement.outerHTML',
+      );
+      final semesterId = _courseApiParser.extractCurrentSemesterId(pageHtml);
+      if (semesterId == null) {
+        _logAcademicAutoImport(
+          'course api skipped: currentSemester.id not found',
+        );
+        return false;
+      }
+      _logAcademicAutoImport('course api semesterId=$semesterId');
+
+      final response = await _requireFetchClient().fetch(
+        AcademicApiEndpoints.timetablePrintData(semesterId),
+      );
+      final report = _courseApiParser.parsePrintData(response.body);
+      _logAcademicAutoImport(
+        'course api parsed courses=${report.items.length} skipped=${report.skippedReasons.length}',
+      );
+      if (report.items.isEmpty) {
+        _logAcademicAutoImport(
+          'course api returned empty activities bodyLength=${response.body.length}',
+        );
+        return false;
+      }
+      await _initializeSemesterFromTimetablePageIfNeeded();
+      if (!mounted) {
+        handled = true;
+        return true;
+      }
+      await _importTimetableReport(report);
+      handled = true;
+      return true;
+    } catch (error) {
+      if (_shouldSurfaceApiError(error)) {
+        rethrow;
+      }
+      _logAcademicAutoImport('course api fallback to html: $error');
+      return false;
+    } finally {
+      if (handled && mounted) {
+        setState(() {
+          _activeAction = null;
+        });
+      }
+    }
+  }
+
+  Future<bool> _tryImportExamViaApi() async {
+    var handled = false;
+    try {
+      await _ensureCurrentPageCanBeExtracted();
+      var rawExamInfo = await _runJavaScriptExtraction(
+        _extractExamInfoVmsScript,
+        settleDelay: Duration.zero,
+      );
+      if (rawExamInfo.isNotEmpty && rawExamInfo != 'null') {
+        _logAcademicAutoImport('exam api studentExamInfoVms found in page');
+      }
+      if (rawExamInfo.isEmpty || rawExamInfo == 'null') {
+        final urls = <Uri>[];
+        final currentUrl = await _controller.currentUrl();
+        final currentUri = currentUrl == null ? null : Uri.tryParse(currentUrl);
+        if (currentUri != null && _isAllowedAcademicUri(currentUri)) {
+          urls.add(currentUri);
+        }
+        final examArrangeUri = AcademicApiEndpoints.examArrange();
+        if (!urls.any((uri) => uri.toString() == examArrangeUri.toString())) {
+          urls.add(examArrangeUri);
+        }
+        for (final url in urls) {
+          final response = await _requireFetchClient().fetch(
+            url,
+            accept: 'text/html,application/xhtml+xml,*/*',
+          );
+          _logExamHtmlFetchDiagnostic(url, response);
+          rawExamInfo =
+              _examApiParser.extractStudentExamInfoVms(response.body) ?? '';
+          if (rawExamInfo.isNotEmpty && rawExamInfo != 'null') {
+            _logAcademicAutoImport(
+              'exam api studentExamInfoVms extracted from html url=$url',
+            );
+            break;
+          }
+          if (_containsExamTableHtml(response.body)) {
+            final importedEvents = _parserService.parseExams(response.body);
+            _logAcademicAutoImport(
+              'exam api parsed events=${importedEvents.length} source=html-fetch url=$url',
+            );
+            await _importExamEvents(importedEvents);
+            handled = true;
+            return true;
+          }
+        }
+      }
+      if (rawExamInfo.isEmpty || rawExamInfo == 'null') {
+        _logAcademicAutoImport('exam api skipped: studentExamInfoVms missing');
+        return false;
+      }
+
+      final importedEvents = _examApiParser.parseStudentExamInfoVms(
+        rawExamInfo,
+      );
+      _logAcademicAutoImport('exam api parsed events=${importedEvents.length}');
+      await _importExamEvents(importedEvents);
+      handled = true;
+      return true;
+    } catch (error) {
+      if (_shouldSurfaceApiError(error)) {
+        rethrow;
+      }
+      _logAcademicAutoImport('exam api fallback to html: $error');
+      return false;
+    } finally {
+      if (handled && mounted) {
+        setState(() {
+          _activeAction = null;
+        });
+      }
+    }
+  }
+
+  bool _containsExamTableHtml(String html) {
+    final lowerHtml = html.toLowerCase();
+    return lowerHtml.contains('id="exams"') ||
+        lowerHtml.contains("id='exams'") ||
+        lowerHtml.contains('exam-table');
+  }
+
+  Future<void> _installExamDiagnosticProbe() async {
+    if (!kDebugMode) {
+      return;
+    }
+    try {
+      await _ensureCurrentPageCanBeExtracted();
+      final rawResult = await _controller.runJavaScriptReturningResult(
+        AcademicExamDiagnostics.installNetworkProbeScript,
+      );
+      _logAcademicAutoImport(
+        'exam diag probe ${_normalizeJavaScriptResult(rawResult)}',
+      );
+    } catch (error) {
+      _logAcademicAutoImport('exam diag probe failed: $error');
+    }
+  }
+
+  Future<void> _logExamDiagnosticSnapshot(String stage) async {
+    if (!kDebugMode) {
+      return;
+    }
+    try {
+      final rawSnapshot = await _runJavaScriptExtraction(
+        AcademicExamDiagnostics.collectSnapshotScript,
+        settleDelay: Duration.zero,
+      );
+      final decoded = jsonDecode(rawSnapshot);
+      if (decoded is! Map) {
+        _logAcademicAutoImport('exam diag $stage malformed snapshot');
+        return;
+      }
+      final lines = AcademicExamDiagnostics.summarizeSnapshot(
+        Map<String, dynamic>.from(decoded),
+        stage: stage,
+      );
+      for (final line in lines) {
+        _logAcademicAutoImport(line);
+      }
+    } catch (error) {
+      _logAcademicAutoImport('exam diag $stage failed: $error');
+    }
+  }
+
+  void _logExamHtmlFetchDiagnostic(
+    Uri requestedUrl,
+    AcademicFetchResponse response,
+  ) {
+    if (!kDebugMode) {
+      return;
+    }
+    final body = response.body;
+    final lowerBody = body.toLowerCase();
+    _logAcademicAutoImport(
+      'exam html fetch requested=$requestedUrl '
+      'status=${response.status} finalUrl=${response.url} '
+      'contentType=${response.contentType} bodyLength=${body.length} '
+      'containsStudentExamInfoVms=${body.contains('studentExamInfoVms')} '
+      'containsExam=${lowerBody.contains('exam') || body.contains('考试')} '
+      'containsArrange=${lowerBody.contains('arrange')} '
+      'containsRefresh=${body.contains('刷新')} '
+      'containsTable=${lowerBody.contains('<table')} '
+      'head=${_logSnippet(body)} tail=${_logSnippet(body, tail: true)}',
+    );
+  }
+
+  String _logSnippet(String value, {bool tail = false}) {
+    const limit = 240;
+    final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= limit) {
+      return jsonEncode(normalized);
+    }
+    final snippet = tail
+        ? normalized.substring(normalized.length - limit)
+        : normalized.substring(0, limit);
+    return jsonEncode(snippet);
+  }
+
+  AcademicWebViewFetchClient _requireFetchClient() {
+    final client = _fetchClient;
+    if (client == null) {
+      throw ScheduleParseException('教务 WebView 同源请求通道尚未初始化。');
+    }
+    return client;
+  }
+
+  bool _shouldSurfaceApiError(Object error) {
+    return error is AcademicFetchException &&
+        error.code == AcademicFetchErrorCode.loginExpired;
   }
 
   Future<void> _ensureCurrentPageCanBeExtracted() async {
@@ -840,30 +1116,9 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         );
       }
 
-      final courseProvider = context.read<CourseProvider>();
       final parseReport = _parserService.parseTimetableReport(rawMessage);
       await _initializeSemesterFromTimetablePageIfNeeded();
-      if (!mounted) {
-        return;
-      }
-      final importedCount =
-          await importTimetableCoursesWithConflictConfirmation(
-            context: context,
-            courseProvider: courseProvider,
-            courses: parseReport.items,
-            confirmConflicts: widget.confirmTimetableConflicts,
-          );
-
-      if (!mounted || importedCount == null) {
-        return;
-      }
-      _completeImport(
-        AcademicImportResult(
-          kind: AcademicImportKind.timetable,
-          importedCount: importedCount,
-          skippedReasons: parseReport.skippedReasons,
-        ),
-      );
+      await _importTimetableReport(parseReport);
     } on ScheduleParseException catch (error) {
       _finishImportWithMessage('课表导入失败：${error.message}');
     } catch (error) {
@@ -877,9 +1132,45 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     }
   }
 
+  Future<void> _importTimetableReport(
+    ScheduleParseReport<Course> parseReport,
+  ) async {
+    if (!mounted) {
+      return;
+    }
+
+    final courseProvider = context.read<CourseProvider>();
+    final importedCount = await importTimetableCoursesWithConflictConfirmation(
+      context: context,
+      courseProvider: courseProvider,
+      courses: parseReport.items,
+      confirmConflicts: widget.confirmTimetableConflicts,
+    );
+
+    if (!mounted || importedCount == null) {
+      return;
+    }
+    _completeImport(
+      AcademicImportResult(
+        kind: AcademicImportKind.timetable,
+        importedCount: importedCount,
+        skippedReasons: parseReport.skippedReasons,
+      ),
+    );
+  }
+
   Future<void> _initializeSemesterFromTimetablePageIfNeeded() async {
     final settingsProvider = context.read<SettingsProvider>();
     if (settingsProvider.isCurrentSemesterInitialized) {
+      _logAcademicAutoImport(
+        'teach week sync skipped: semester already initialized',
+      );
+      return;
+    }
+
+    await _syncTeachWeekForTimetableImportIfPossible();
+    if (!mounted ||
+        context.read<SettingsProvider>().isCurrentSemesterInitialized) {
       return;
     }
 
@@ -904,6 +1195,51 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     );
   }
 
+  Future<bool> _syncTeachWeekForTimetableImportIfPossible() async {
+    final client = _fetchClient;
+    if (client == null || !mounted) {
+      return false;
+    }
+    try {
+      final settingsProvider = context.read<SettingsProvider>();
+      final response = await client.fetch(
+        AcademicApiEndpoints.teachWeek(),
+        timeout: _teachWeekSyncTimeout,
+      );
+      final snapshot = _weekSyncService.parseSnapshot(response.body);
+      final result = _weekSyncService.buildCalibration(
+        snapshot: snapshot,
+        now: DateTime.now(),
+        localSemesterStartDate: settingsProvider.semesterStartDate,
+        totalWeeks: settingsProvider.totalWeeks,
+        isCurrentSemesterInitialized:
+            settingsProvider.isCurrentSemesterInitialized,
+      );
+      if (result.shouldInitializeCurrentSemester &&
+          result.remoteSemesterStartDate != null) {
+        if (!mounted) {
+          return false;
+        }
+        await settingsProvider.initializeCurrentSemesterFromAcademicImport(
+          result.remoteSemesterStartDate!,
+        );
+        _logAcademicAutoImport(
+          'teach week initialized semester start=${result.remoteSemesterStartDate}',
+        );
+        return true;
+      }
+      if (result.requiresUserConfirmation) {
+        _logAcademicAutoImport(
+          'teach week calibration suggested remoteWeek=${result.remoteWeekIndex} '
+          'localWeek=${result.localWeekIndex} start=${result.remoteSemesterStartDate}',
+        );
+      }
+    } catch (error) {
+      _logAcademicAutoImport('teach week sync skipped: $error');
+    }
+    return false;
+  }
+
   Future<void> _handleExamHtml(String rawMessage) async {
     try {
       if (rawMessage.startsWith('JS_ERROR:')) {
@@ -917,30 +1253,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       }
 
       final importedEvents = _parserService.parseExams(rawMessage);
-      final settingsProvider = context.read<SettingsProvider>();
-      final courseProvider = context.read<CourseProvider>();
-      final emptyMessage = settingsProvider.t('exam_import_empty');
-      final duplicatedMessage = settingsProvider.t('exam_import_duplicated');
-      final importedCount = await courseProvider.mergeImportedEvents(
-        importedEvents,
-      );
-      if (!mounted) {
-        return;
-      }
-      final result = buildExamImportResult(
-        hasParsedEvents: importedEvents.isNotEmpty,
-        importedCount: importedCount,
-        emptyMessage: emptyMessage,
-        duplicatedMessage: duplicatedMessage,
-      );
-      if (result.importedCount == 0 &&
-          widget.onImportResult == null &&
-          widget.showWebView) {
-        _finishImportWithNeutralMessage(result.skippedReasons.first);
-        return;
-      }
-
-      _completeImport(result);
+      await _importExamEvents(importedEvents);
     } on ScheduleParseException catch (error) {
       _finishImportWithMessage('考试导入失败：${error.message}');
     } catch (error) {
@@ -952,6 +1265,33 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         });
       }
     }
+  }
+
+  Future<void> _importExamEvents(List<Event> importedEvents) async {
+    final settingsProvider = context.read<SettingsProvider>();
+    final courseProvider = context.read<CourseProvider>();
+    final emptyMessage = settingsProvider.t('exam_import_empty');
+    final duplicatedMessage = settingsProvider.t('exam_import_duplicated');
+    final importedCount = await courseProvider.mergeImportedEvents(
+      importedEvents,
+    );
+    if (!mounted) {
+      return;
+    }
+    final result = buildExamImportResult(
+      hasParsedEvents: importedEvents.isNotEmpty,
+      importedCount: importedCount,
+      emptyMessage: emptyMessage,
+      duplicatedMessage: duplicatedMessage,
+    );
+    if (result.importedCount == 0 &&
+        widget.onImportResult == null &&
+        widget.showWebView) {
+      _finishImportWithNeutralMessage(result.skippedReasons.first);
+      return;
+    }
+
+    _completeImport(result);
   }
 
   void _completeImport(AcademicImportResult result) {

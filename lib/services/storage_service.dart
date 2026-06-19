@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/course.dart';
 import '../models/event.dart';
+import '../models/grade.dart';
 import '../models/semester.dart';
 import 'corrupt_row_diagnostic_store.dart';
 import 'external_data_backup_store.dart';
@@ -492,6 +493,27 @@ class StorageService {
       sync: false,
     );
     await syncExternalBackup();
+  }
+
+  GradeBook? loadGradeBook() {
+    final raw = _sharedPreferences.getString(_academicGradesKey);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    try {
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return GradeBook.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveGradeBook(GradeBook book) {
+    return _setString(_academicGradesKey, jsonEncode(book.toJson()));
+  }
+
+  Future<void> clearGradeBook() {
+    return _remove(_academicGradesKey);
   }
 
   double readPixelsPerMinute({required double fallback}) {

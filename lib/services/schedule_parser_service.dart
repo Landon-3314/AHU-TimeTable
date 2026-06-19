@@ -180,7 +180,7 @@ class ScheduleParserService {
 
     try {
       final document = parser.parse(normalizedHtml);
-      final rows = document.querySelectorAll('tr.unfinished');
+      final rows = _findExamRows(document);
       if (rows.isEmpty) {
         return const <Event>[];
       }
@@ -227,6 +227,47 @@ class ScheduleParserService {
     } catch (error) {
       throw ScheduleParseException('考试DOM解析失败: ${error.toString()}');
     }
+  }
+
+  List<Element> _findExamRows(Document document) {
+    final table =
+        document.querySelector('#exams') ??
+        document.querySelector('table.exam-table');
+    final candidates = table == null
+        ? document.querySelectorAll('tr')
+        : table.querySelectorAll('tr');
+    return candidates.where(_isImportableExamRow).toList(growable: false);
+  }
+
+  bool _isImportableExamRow(Element row) {
+    final rowText = _normalizeText(row.text);
+    if (!RegExp(r'\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2}').hasMatch(rowText)) {
+      return false;
+    }
+
+    final dataFinished = (row.attributes['data-finished'] ?? '').toLowerCase();
+    if (dataFinished == 'false') {
+      return true;
+    }
+    if (dataFinished == 'true') {
+      return false;
+    }
+
+    final classes = row.classes.map((value) => value.toLowerCase()).toSet();
+    if (classes.contains('unfinished')) {
+      return true;
+    }
+    if (classes.contains('finished') || classes.contains('hide')) {
+      return false;
+    }
+
+    if (rowText.contains('已结束')) {
+      return false;
+    }
+    if (rowText.contains('未结束')) {
+      return true;
+    }
+    return true;
   }
 
   Element? _findTimetableTable(Document document) {

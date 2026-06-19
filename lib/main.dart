@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'core/app_theme.dart';
 import 'providers/course_provider.dart';
+import 'providers/grade_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/timetable_view_provider.dart';
 import 'services/app_services.dart';
@@ -23,7 +24,9 @@ Future<_AppInitBundle> _initAppSafely() async {
 
     final settingsProvider = SettingsProvider(storageService: storageService);
     final courseProvider = CourseProvider(storageService: storageService);
+    final gradeProvider = GradeProvider(storageService: storageService);
     final timetableViewProvider = TimetableViewProvider();
+    await gradeProvider.loadCached();
 
     Future<void> refreshReminders() {
       final courses = courseProvider.courses.toList();
@@ -57,6 +60,7 @@ Future<_AppInitBundle> _initAppSafely() async {
     return _AppInitBundle(
       settingsProvider: settingsProvider,
       courseProvider: courseProvider,
+      gradeProvider: gradeProvider,
       timetableViewProvider: timetableViewProvider,
     );
   } catch (e) {
@@ -162,6 +166,9 @@ class _MainAppState extends State<_MainApp> {
             ChangeNotifierProvider<CourseProvider>.value(
               value: bundle.courseProvider,
             ),
+            ChangeNotifierProvider<GradeProvider>.value(
+              value: bundle.gradeProvider,
+            ),
             ChangeNotifierProvider<TimetableViewProvider>.value(
               value: bundle.timetableViewProvider,
             ),
@@ -234,16 +241,19 @@ class _AppInitBundle {
   const _AppInitBundle({
     required this.settingsProvider,
     required this.courseProvider,
+    required this.gradeProvider,
     required this.timetableViewProvider,
   });
 
   final SettingsProvider settingsProvider;
   final CourseProvider courseProvider;
+  final GradeProvider gradeProvider;
   final TimetableViewProvider timetableViewProvider;
 
   void dispose() {
     settingsProvider.dispose();
     courseProvider.dispose();
+    gradeProvider.dispose();
     timetableViewProvider.dispose();
   }
 }

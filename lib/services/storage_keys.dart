@@ -2,6 +2,7 @@ part of 'storage_service.dart';
 
 const String _coursesKey = 'courses.items';
 const String _eventsKey = 'events.items';
+const String _academicGradesKey = 'academic.grades.v1';
 const String _semestersKey = 'semesters.items';
 const String _currentSemesterIdKey = 'semesters.currentId';
 const String _semesterMigrationVersionKey = 'semesters.migrationVersion';

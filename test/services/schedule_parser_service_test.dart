@@ -126,6 +126,44 @@ void main() {
     expect(parser.parseExams(examHtml), isEmpty);
   });
 
+  test('parses unfinished exam rows without unfinished class', () {
+    const examHtml = r'''
+<table class="exam-table" id="exams">
+  <tbody>
+    <tr data-finished="false">
+      <td>
+        <div class="time ">2026-06-25 14:30~16:30</div>
+        <div>
+          <span>磬苑校区</span>
+          <span>博学南楼</span>
+          <span>博学南楼B302</span>
+          <span id="seat-3001">座位号(18)</span>
+        </div>
+      </td>
+      <td>
+        <div><span style="font-weight: bold;">概率论 </span></div>
+        <div><span class="tag-span type2">期末</span></div>
+      </td>
+      <td class="text-center">未结束</td>
+    </tr>
+    <tr data-finished="true">
+      <td><div class="time ">2026-01-21 08:00~10:00</div></td>
+      <td><span>历史考试 </span><span class="tag-span type2">期末</span></td>
+      <td class="text-center">已结束</td>
+    </tr>
+  </tbody>
+</table>
+''';
+
+    final exams = parser.parseExams(examHtml);
+
+    expect(exams, hasLength(1));
+    expect(exams.single.name, '概率论（期末）');
+    expect(exams.single.location, '博学南楼B302');
+    expect(exams.single.note, '座位号(18)');
+    expect(exams.single.dateTime, DateTime(2026, 6, 25, 14, 30));
+  });
+
   test('reports and skips unknown weeks and invalid periods', () {
     const timetableHtml = r'''
 <table class="courseTable">
