@@ -81,11 +81,26 @@ void main() {
     );
   });
 
+  test('provides timetable ready script for api import metadata', () {
+    expect(
+      AcademicAutoLoginService.timetableReadyScript,
+      contains('currentSemester'),
+    );
+    expect(
+      AcademicAutoLoginService.timetableReadyScript,
+      contains('table.Wjkc'),
+    );
+  });
+
   test('provides exam ready and refresh scripts for exam extraction', () {
     expect(AcademicAutoLoginService.examReadyScript, contains('#exams'));
     expect(
       AcademicAutoLoginService.examReadyScript,
       contains('table.exam-table'),
+    );
+    expect(
+      AcademicAutoLoginService.examReadyScript,
+      contains('/student/for-std/exam-arrange/info/'),
     );
     expect(AcademicAutoLoginService.examRefreshScript, contains('考试信息查询'));
     expect(AcademicAutoLoginService.examRefreshScript, contains('刷新'));

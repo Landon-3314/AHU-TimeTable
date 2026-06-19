@@ -38,7 +38,7 @@ void main() {
             'snippet': '[{"course":{"nameZh":"离散数学"}}]',
           },
         ],
-        'windowKeys': ['studentExamInfoVms', 'examStore'],
+        'windowKeys': ['studentExamList', 'examStore'],
         'storageKeys': {
           'local': ['exam-cache'],
           'session': ['student-id'],
@@ -75,7 +75,7 @@ void main() {
     expect(
       lines,
       contains(
-        'exam diag after-refresh keys window=studentExamInfoVms,examStore localStorage=exam-cache sessionStorage=student-id',
+        'exam diag after-refresh keys window=studentExamList,examStore localStorage=exam-cache sessionStorage=student-id',
       ),
     );
     expect(

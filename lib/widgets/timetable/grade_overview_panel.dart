@@ -27,6 +27,7 @@ class GradeOverviewPanel extends StatelessWidget {
         ),
       );
     }
+    final terms = book.terms.toList()..sort(_compareGradeTermsDescending);
 
     return SafeArea(
       child: ListView(
@@ -34,7 +35,7 @@ class GradeOverviewPanel extends StatelessWidget {
         children: [
           _GradeSummaryCard(statistics: book.statistics),
           const SizedBox(height: AppSpacing.md),
-          for (final term in book.terms) ...[
+          for (final term in terms) ...[
             _GradeTermCard(term: term),
             const SizedBox(height: AppSpacing.md),
           ],
@@ -77,7 +78,6 @@ class _GradeSummaryCard extends StatelessWidget {
                 _MetricChip(
                   label: '排名',
                   value: _formatRank(statistics) ?? '--',
-                  mergedLabelAndValue: true,
                 ),
                 if (statistics?.totalCredits != null)
                   _MetricChip(
@@ -199,15 +199,10 @@ class _GradeRecordTile extends StatelessWidget {
 }
 
 class _MetricChip extends StatelessWidget {
-  const _MetricChip({
-    required this.label,
-    required this.value,
-    this.mergedLabelAndValue = false,
-  });
+  const _MetricChip({required this.label, required this.value});
 
   final String label;
   final String value;
-  final bool mergedLabelAndValue;
 
   @override
   Widget build(BuildContext context) {
@@ -222,32 +217,96 @@ class _MetricChip extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
-      child: mergedLabelAndValue
-          ? Center(
-              child: Text(
-                '$label $value',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            )
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: Theme.of(context).textTheme.labelSmall),
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
+      child: Center(
+        child: Text(
+          '$label $value',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
     );
   }
+}
+
+int _compareGradeTermsDescending(GradeTerm a, GradeTerm b) {
+  final aKey = _gradeTermSortKey(a);
+  final bKey = _gradeTermSortKey(b);
+  if (aKey != null && bKey != null) {
+    return bKey.compareTo(aKey);
+  }
+  if (aKey != null) {
+    return -1;
+  }
+  if (bKey != null) {
+    return 1;
+  }
+  return _gradeTermTitle(b).compareTo(_gradeTermTitle(a));
+}
+
+int? _gradeTermSortKey(GradeTerm term) {
+  return _sortKeyFromSemesterText(term.semesterName) ??
+      _sortKeyFromSemesterText(
+        [term.schoolYear, term.term].whereType<String>().join('-'),
+      ) ??
+      _sortKeyFromSemesterText(term.remoteSemesterId);
+}
+
+String _gradeTermTitle(GradeTerm term) {
+  return term.semesterName.isEmpty
+      ? '学期 ${term.remoteSemesterId}'
+      : term.semesterName;
+}
+
+int? _sortKeyFromSemesterText(String text) {
+  final normalized = text.trim();
+  if (normalized.isEmpty) {
+    return null;
+  }
+
+  final separated = RegExp(
+    r'((?:19|20)\d{2})\D+(?:19|20)\d{2}\D+([12])',
+  ).firstMatch(normalized);
+  if (separated != null) {
+    return _semesterSortKey(separated.group(1), separated.group(2));
+  }
+
+  final compactText = normalized.replaceAll(RegExp(r'\D'), '');
+  final compact = RegExp(
+    r'((?:19|20)\d{2})(?:19|20)\d{2}([12])',
+  ).firstMatch(compactText);
+  if (compact != null) {
+    return _semesterSortKey(compact.group(1), compact.group(2));
+  }
+
+  final yearOnly = RegExp(
+    r'((?:19|20)\d{2})\D+(?:19|20)\d{2}',
+  ).firstMatch(normalized);
+  final termHint = _termNumberHint(normalized);
+  if (yearOnly != null && termHint != null) {
+    return _semesterSortKey(yearOnly.group(1), '$termHint');
+  }
+  return null;
+}
+
+int? _semesterSortKey(String? startYearText, String? termText) {
+  final startYear = int.tryParse(startYearText ?? '');
+  final term = int.tryParse(termText ?? '');
+  if (startYear == null || term == null) {
+    return null;
+  }
+  return startYear * 10 + term;
+}
+
+int? _termNumberHint(String text) {
+  if (text.contains('春') || text.contains('第二') || text.contains('下')) {
+    return 2;
+  }
+  if (text.contains('秋') || text.contains('第一') || text.contains('上')) {
+    return 1;
+  }
+  return null;
 }
 
 String? _formatDouble(double? value) {

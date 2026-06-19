@@ -5,7 +5,6 @@ import '../models/course.dart';
 import '../screens/add_course_page.dart';
 import '../screens/developer_diagnostics_page.dart';
 import '../screens/exam_overview_page.dart';
-import '../screens/grade_overview_page.dart';
 import '../screens/import_course_page.dart';
 import '../screens/main_scaffold.dart';
 import '../screens/reschedule_course_page.dart';
@@ -19,7 +18,6 @@ class AppRoutes {
   static const String rescheduleCourse = '/reschedule-course';
   static const String importCourses = '/import-courses';
   static const String exams = '/exams';
-  static const String grades = '/grades';
   static const String scheduleSettings = '/schedule-settings';
   static const String developerDiagnostics = '/developer-diagnostics';
 
@@ -71,11 +69,6 @@ class AppRoutes {
       case exams:
         return MaterialPageRoute<void>(
           builder: (_) => const ExamOverviewPage(),
-          settings: settings,
-        );
-      case grades:
-        return MaterialPageRoute<void>(
-          builder: (_) => const GradeOverviewPage(),
           settings: settings,
         );
       case scheduleSettings:

@@ -329,9 +329,9 @@ class AcademicExamDiagnostics {
               textOf(node.innerText || node.textContent).slice(0, 300)
             );
           }).length,
-          studentExamInfoVmsType: typeof window.studentExamInfoVms,
-          studentExamInfoVmsLength: Array.isArray(window.studentExamInfoVms)
-            ? window.studentExamInfoVms.length
+          studentExamListType: typeof window.studentExamList,
+          studentExamListLength: Array.isArray(window.studentExamList)
+            ? window.studentExamList.length
             : 0
         };
       } catch (error) {

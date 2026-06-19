@@ -226,7 +226,19 @@ class AcademicAutoLoginService {
     for (const currentWindow of windows) {
       try {
         const doc = currentWindow.document;
-        if (doc && doc.querySelector('table.courseTable, table.Wjkc')) {
+        const semester =
+          currentWindow.currentSemester ||
+          (currentWindow.window && currentWindow.window.currentSemester);
+        const hasCurrentSemester =
+          !!(semester && semester.id) ||
+          /currentSemester\s*=|currentSemesterId\s*[:=]/i.test(
+            doc.documentElement ? doc.documentElement.innerHTML : ''
+          );
+        if (
+          doc &&
+          (hasCurrentSemester ||
+            doc.querySelector('table.courseTable, table.Wjkc'))
+        ) {
           return 'READY';
         }
       } catch (_) {
@@ -271,6 +283,19 @@ class AcademicAutoLoginService {
     for (const currentWindow of windows) {
       try {
         const doc = currentWindow.document;
+        const location = currentWindow.location;
+        const isExamInfoPage =
+          location &&
+          location.hostname === 'jw.ahu.edu.cn' &&
+          location.pathname.indexOf('/student/for-std/exam-arrange/info/') === 0;
+        if (
+          doc &&
+          isExamInfoPage &&
+          doc.documentElement &&
+          doc.documentElement.innerHTML.length > 512
+        ) {
+          return 'READY';
+        }
         if (doc && doc.querySelector('#exams, table.exam-table')) {
           return 'READY';
         }

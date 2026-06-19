@@ -31,6 +31,7 @@ void main() {
 
       expect(find.text('账号'), findsOneWidget);
       expect(find.text('教务账号'), findsOneWidget);
+      expect(find.text('教务成绩'), findsNothing);
       expect(
         tester.getTopLeft(find.text('账号')).dy,
         lessThan(tester.getTopLeft(find.text('外观')).dy),

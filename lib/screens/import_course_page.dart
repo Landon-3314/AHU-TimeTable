@@ -22,7 +22,6 @@ import '../services/academic_auto_login_service.dart';
 import '../services/academic_course_api_parser.dart';
 import '../services/academic_credential_service.dart';
 import '../services/academic_exam_diagnostics.dart';
-import '../services/academic_exam_api_parser.dart';
 import '../services/academic_webview_fetch_client.dart';
 import '../services/academic_week_sync_service.dart';
 import '../services/grade_parser_service.dart';
@@ -85,14 +84,12 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   static const ScheduleParserService _parserService = ScheduleParserService();
   static const AcademicCourseApiParser _courseApiParser =
       AcademicCourseApiParser();
-  static const AcademicExamApiParser _examApiParser = AcademicExamApiParser();
   static const GradeParserService _gradeParser = GradeParserService();
   static const AcademicWeekSyncService _weekSyncService =
       AcademicWeekSyncService();
   static const AcademicCredentialService _credentialService =
       AcademicCredentialService();
   static const Duration _extractScriptSettleDelay = Duration(milliseconds: 350);
-  static const Duration _examExtractScriptSettleDelay = Duration(seconds: 5);
   static const Duration _autoStepDelay = Duration(milliseconds: 700);
   static const Duration _autoRetryDelay = Duration(seconds: 1);
   static const Duration _autoImportTimeout = Duration(seconds: 30);
@@ -101,27 +98,6 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
   static const Duration _teachWeekSyncTimeout = Duration(seconds: 3);
   static const int _maxAutoImportRecoverableRetries = 1;
   static const int _maxPortalLoginSubmissions = 2;
-  static const String _extractExamInfoVmsScript = '''
-(function() {
-  const readFrom = function(targetWindow) {
-    try {
-      if (typeof targetWindow.studentExamInfoVms !== 'undefined') {
-        return JSON.stringify(targetWindow.studentExamInfoVms);
-      }
-      for (let i = 0; i < targetWindow.frames.length; i += 1) {
-        const nested = readFrom(targetWindow.frames[i]);
-        if (nested) {
-          return nested;
-        }
-      }
-    } catch (error) {
-      return '';
-    }
-    return '';
-  };
-  return readFrom(window);
-})();
-''';
   static final Set<Factory<OneSequenceGestureRecognizer>>
   _webViewGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
     Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
@@ -628,6 +604,10 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         lastLoggedPageKind = pageKind;
         _logAcademicAutoImport('page kind=$pageKind url=$currentUrl');
       }
+      final pageReady = await _isPageReady(readyScript);
+      if (pageReady) {
+        return;
+      }
       if (!refreshAttempted &&
           refreshBeforeWaitingScript != null &&
           pageKind == AcademicPageKind.exam) {
@@ -636,11 +616,6 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         await _runOptionalRefreshScript(refreshBeforeWaitingScript);
         await Future<void>.delayed(const Duration(seconds: 2));
         continue;
-      }
-
-      final pageReady = await _isPageReady(readyScript);
-      if (pageReady) {
-        return;
       }
 
       switch (pageKind) {
@@ -846,7 +821,10 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
     try {
       await _prepareExamPageForExtraction();
-      if (await _tryImportExamViaApi()) {
+      if (await _tryImportExamViaDom()) {
+        return;
+      }
+      if (await _tryImportExamViaHtmlFetch()) {
         return;
       }
       final rawHtml = await _runJavaScriptExtraction(
@@ -898,10 +876,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
   Future<void> _prepareExamPageForExtraction() async {
     await _installExamDiagnosticProbe();
-    await _logExamDiagnosticSnapshot('before-refresh');
-    await _runOptionalRefreshScript(AcademicAutoLoginService.examRefreshScript);
-    await Future<void>.delayed(_examExtractScriptSettleDelay);
-    await _logExamDiagnosticSnapshot('after-refresh');
+    await _logExamDiagnosticSnapshot('before-fetch');
   }
 
   Future<bool> _tryImportTimetableViaApi() async {
@@ -956,70 +931,70 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
     }
   }
 
-  Future<bool> _tryImportExamViaApi() async {
+  Future<bool> _tryImportExamViaDom() async {
     var handled = false;
     try {
-      await _ensureCurrentPageCanBeExtracted();
-      var rawExamInfo = await _runJavaScriptExtraction(
-        _extractExamInfoVmsScript,
+      final rawHtml = await _runJavaScriptExtraction(
+        ScheduleHtmlExtractor.extractExamHtmlScript,
         settleDelay: Duration.zero,
       );
-      if (rawExamInfo.isNotEmpty && rawExamInfo != 'null') {
-        _logAcademicAutoImport('exam api studentExamInfoVms found in page');
-      }
-      if (rawExamInfo.isEmpty || rawExamInfo == 'null') {
-        final urls = <Uri>[];
-        final currentUrl = await _controller.currentUrl();
-        final currentUri = currentUrl == null ? null : Uri.tryParse(currentUrl);
-        if (currentUri != null && _isAllowedAcademicUri(currentUri)) {
-          urls.add(currentUri);
-        }
-        final examArrangeUri = AcademicApiEndpoints.examArrange();
-        if (!urls.any((uri) => uri.toString() == examArrangeUri.toString())) {
-          urls.add(examArrangeUri);
-        }
-        for (final url in urls) {
-          final response = await _requireFetchClient().fetch(
-            url,
-            accept: 'text/html,application/xhtml+xml,*/*',
-          );
-          _logExamHtmlFetchDiagnostic(url, response);
-          rawExamInfo =
-              _examApiParser.extractStudentExamInfoVms(response.body) ?? '';
-          if (rawExamInfo.isNotEmpty && rawExamInfo != 'null') {
-            _logAcademicAutoImport(
-              'exam api studentExamInfoVms extracted from html url=$url',
-            );
-            break;
-          }
-          if (_containsExamTableHtml(response.body)) {
-            final importedEvents = _parserService.parseExams(response.body);
-            _logAcademicAutoImport(
-              'exam api parsed events=${importedEvents.length} source=html-fetch url=$url',
-            );
-            await _importExamEvents(importedEvents);
-            handled = true;
-            return true;
-          }
-        }
-      }
-      if (rawExamInfo.isEmpty || rawExamInfo == 'null') {
-        _logAcademicAutoImport('exam api skipped: studentExamInfoVms missing');
-        return false;
-      }
-
-      final importedEvents = _examApiParser.parseStudentExamInfoVms(
-        rawExamInfo,
-      );
-      _logAcademicAutoImport('exam api parsed events=${importedEvents.length}');
+      final importedEvents = _parseExamHtmlMessage(rawHtml);
+      _logAcademicAutoImport('exam dom parsed events=${importedEvents.length}');
       await _importExamEvents(importedEvents);
       handled = true;
       return true;
     } catch (error) {
+      _logAcademicAutoImport('exam dom fallback to html fetch: $error');
+      return false;
+    } finally {
+      if (handled && mounted) {
+        setState(() {
+          _activeAction = null;
+        });
+      }
+    }
+  }
+
+  Future<bool> _tryImportExamViaHtmlFetch() async {
+    var handled = false;
+    try {
+      await _ensureCurrentPageCanBeExtracted();
+      final urls = <Uri>[];
+      final currentUrl = await _controller.currentUrl();
+      final currentUri = currentUrl == null ? null : Uri.tryParse(currentUrl);
+      if (currentUri != null && _isAllowedAcademicUri(currentUri)) {
+        urls.add(currentUri);
+      }
+      final examArrangeUri = AcademicApiEndpoints.examArrange();
+      if (!urls.any((uri) => uri.toString() == examArrangeUri.toString())) {
+        urls.add(examArrangeUri);
+      }
+
+      for (final url in urls) {
+        final response = await _requireFetchClient().fetch(
+          url,
+          accept: 'text/html,application/xhtml+xml,*/*',
+        );
+        _logExamHtmlFetchDiagnostic(url, response);
+        if (!_containsExamTableHtml(response.body)) {
+          continue;
+        }
+        final importedEvents = _parseExamHtmlMessage(response.body);
+        _logAcademicAutoImport(
+          'exam html fetch parsed events=${importedEvents.length} url=$url',
+        );
+        await _importExamEvents(importedEvents);
+        handled = true;
+        return true;
+      }
+
+      _logAcademicAutoImport('exam html fetch skipped: exam table missing');
+      return false;
+    } catch (error) {
       if (_shouldSurfaceApiError(error)) {
         rethrow;
       }
-      _logAcademicAutoImport('exam api fallback to html: $error');
+      _logAcademicAutoImport('exam html fetch fallback to dom: $error');
       return false;
     } finally {
       if (handled && mounted) {
@@ -1172,7 +1147,8 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
       'exam html fetch requested=$requestedUrl '
       'status=${response.status} finalUrl=${response.url} '
       'contentType=${response.contentType} bodyLength=${body.length} '
-      'containsStudentExamInfoVms=${body.contains('studentExamInfoVms')} '
+      'containsExamTable=${_containsExamTableHtml(body)} '
+      'containsStudentExamList=${body.contains('studentExamList')} '
       'containsExam=${lowerBody.contains('exam') || body.contains('考试')} '
       'containsArrange=${lowerBody.contains('arrange')} '
       'containsRefresh=${body.contains('刷新')} '
@@ -1370,17 +1346,7 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
 
   Future<void> _handleExamHtml(String rawMessage) async {
     try {
-      if (rawMessage.startsWith('JS_ERROR:')) {
-        throw ScheduleParseException('教务系统连接失败，请检查网络或重新登录后重试。');
-      }
-
-      if (rawMessage.startsWith('ERROR:')) {
-        throw ScheduleParseException(
-          rawMessage.replaceFirst('ERROR:', '').trim(),
-        );
-      }
-
-      final importedEvents = _parserService.parseExams(rawMessage);
+      final importedEvents = _parseExamHtmlMessage(rawMessage);
       await _importExamEvents(importedEvents);
     } on ScheduleParseException catch (error) {
       _finishImportWithMessage('考试导入失败：${error.message}');
@@ -1393,6 +1359,20 @@ class _ImportCoursePageState extends State<ImportCoursePage> {
         });
       }
     }
+  }
+
+  List<Event> _parseExamHtmlMessage(String rawMessage) {
+    if (rawMessage.startsWith('JS_ERROR:')) {
+      throw ScheduleParseException('教务系统连接失败，请检查网络或重新登录后重试。');
+    }
+
+    if (rawMessage.startsWith('ERROR:')) {
+      throw ScheduleParseException(
+        rawMessage.replaceFirst('ERROR:', '').trim(),
+      );
+    }
+
+    return _parserService.parseExams(rawMessage);
   }
 
   Future<void> _handleGradeHtml(String rawMessage) async {
