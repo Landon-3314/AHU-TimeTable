@@ -1,36 +1,36 @@
 {
-  "versionName": "0.5.1",
+  "versionName": "0.5.2",
   "versionCode": 4005,
   "baseVersionCode": 5,
-  "releaseNotes": "安课 0.5.1+5 更新。",
+  "releaseNotes": "安课 0.5.2+5 更新。",
   "assets": [
     {
       "abi": "armeabi-v7a",
-      "url": "https://download.277620035.xyz/releases/0.5.1%2B5/timetable-0.5.1%2B5-armeabi-v7a.apk",
+      "url": "https://download.277620035.xyz/releases/0.5.2%2B5/timetable-0.5.2%2B5-armeabi-v7a.apk",
       "mirrorUrls": [
-        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.5.1%2B5/timetable-0.5.1%2B5-armeabi-v7a.apk"
+        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.5.2%2B5/timetable-0.5.2%2B5-armeabi-v7a.apk"
       ],
-      "sha256": "ffb6934aa77fe4b787753bedd4453a76649254452490ddd97cc49f8e0397afb1",
+      "sha256": "d1931944a9fba93e0b5bf32829f723fcff1071c26fafcd47c22038de52c4fc50",
       "size": 20016172,
       "versionCode": 1005
     },
     {
       "abi": "arm64-v8a",
-      "url": "https://download.277620035.xyz/releases/0.5.1%2B5/timetable-0.5.1%2B5-arm64-v8a.apk",
+      "url": "https://download.277620035.xyz/releases/0.5.2%2B5/timetable-0.5.2%2B5-arm64-v8a.apk",
       "mirrorUrls": [
-        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.5.1%2B5/timetable-0.5.1%2B5-arm64-v8a.apk"
+        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.5.2%2B5/timetable-0.5.2%2B5-arm64-v8a.apk"
       ],
-      "sha256": "bc2daa66245c69dae18578847a6ca5a5a0207027b572136a3940b1b031092e5e",
+      "sha256": "4711c2193aba92c6b36e6fcffd660e99eb5af4021f1c4ca3c726d7c344ac72b0",
       "size": 22195236,
       "versionCode": 2005
     },
     {
       "abi": "x86_64",
-      "url": "https://download.277620035.xyz/releases/0.5.1%2B5/timetable-0.5.1%2B5-x86_64.apk",
+      "url": "https://download.277620035.xyz/releases/0.5.2%2B5/timetable-0.5.2%2B5-x86_64.apk",
       "mirrorUrls": [
-        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.5.1%2B5/timetable-0.5.1%2B5-x86_64.apk"
+        "https://github.com/Landon-3314/AHU-TimeTable/releases/download/v0.5.2%2B5/timetable-0.5.2%2B5-x86_64.apk"
       ],
-      "sha256": "e352c4cbcaa6d537a4f0790d71e09c98bfb3195a47afe1bef4cd25dbe76ff8bc",
+      "sha256": "c2336ebbc71757142edaee0d0343bb193895ba6ee96ad3f5820f818a28e60eb8",
       "size": 23718936,
       "versionCode": 4005
     }
