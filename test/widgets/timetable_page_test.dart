@@ -677,8 +677,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('overview-tab-grades')));
     await tester.pumpAndSettle();
 
-    expect(find.text('全程 GPA'), findsOneWidget);
-    expect(find.text('3.86'), findsOneWidget);
+    expect(find.text('全程 GPA 3.86'), findsOneWidget);
     expect(find.text('排名 37/314'), findsOneWidget);
     expect(find.text('2025-2026-1'), findsOneWidget);
     expect(find.text('高等数学'), findsOneWidget);
