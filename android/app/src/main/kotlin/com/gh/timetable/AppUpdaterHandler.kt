@@ -123,32 +123,38 @@ class AppUpdaterHandler(private val activity: FlutterActivity) {
 
     private fun openUnknownAppSourcesSettings(): Boolean {
         val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-            data = Uri.parse("package:$activity.packageName")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            data = Uri.parse(
+                AppUpdaterIntentPolicy.unknownSourcesPackageUri(activity.packageName),
+            )
         }
         return try {
             activity.startActivity(settingsIntent)
             true
         } catch (_: ActivityNotFoundException) {
             false
+        } catch (_: SecurityException) {
+            false
         }
     }
 
     private fun openApkInstaller(apkFile: File): Boolean {
-        val uri = FileProvider.getUriForFile(
-            activity,
-            "$activity.packageName.fileprovider",
-            apkFile,
-        )
-        val installIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
         return try {
+            val uri = FileProvider.getUriForFile(
+                activity,
+                AppUpdaterIntentPolicy.fileProviderAuthority(activity.packageName),
+                apkFile,
+            )
+            val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
             activity.startActivity(installIntent)
             true
         } catch (_: ActivityNotFoundException) {
+            false
+        } catch (_: IllegalArgumentException) {
+            false
+        } catch (_: SecurityException) {
             false
         }
     }
@@ -193,6 +199,8 @@ class AppUpdaterHandler(private val activity: FlutterActivity) {
         val editor = prefs.edit().remove(PENDING_INSTALL_APK_PATH)
         if (installerOpened) {
             editor.putString(LAST_DOWNLOADED_APK_PATH, apkFile.absolutePath)
+        } else {
+            editor.remove(LAST_DOWNLOADED_APK_VERSION_CODE)
         }
         editor.apply()
     }
