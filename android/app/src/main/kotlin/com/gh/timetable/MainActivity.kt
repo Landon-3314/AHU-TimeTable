@@ -58,7 +58,9 @@ private const val PENDING_INSTALL_APK_PATH = "pendingInstallApkPath"
 private const val ENABLE_SCROLL_CAPTURE_OVERLAY_DIAGNOSTICS = false
 
 class MainActivity : FlutterActivity() {
-    private var notificationPermissionResult: MethodChannel.Result? = null
+    companion object {
+        private var notificationPermissionResult: MethodChannel.Result? = null
+    }
     private var scrollCaptureChannel: MethodChannel? = null
     private lateinit var scrollCaptureCoordinator: ScrollCaptureCoordinator
     private lateinit var appUpdaterHandler: AppUpdaterHandler
@@ -67,6 +69,18 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Resolve stale permission result from a previous Activity instance
+        // that was destroyed while the permission dialog was still showing.
+        notificationPermissionResult?.let { stale ->
+            notificationLog("configureFlutterEngine resolving stale permission result")
+            stale.error(
+                "PERMISSION_REQUEST_CANCELLED",
+                "Activity was recreated during permission request",
+                null,
+            )
+            notificationPermissionResult = null
+        }
 
         scrollCaptureChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,

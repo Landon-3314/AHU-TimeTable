@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.os.Build
 import android.util.Log
 
 private const val AUTO_MUTE_PREFS = "auto_mute_prefs"
@@ -45,20 +46,13 @@ object AutoMuteScheduler {
         audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
         Log.d("DND_DEBUG_NATIVE", "Step A done: ringerMode=SILENT")
 
-        val prefs = context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
+        val prefs = storageContext(context).getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
         val currentMusic = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        if (currentMusic > 0) {
-            prefs.edit()
-                .putInt(SAVED_MUSIC_VOLUME_KEY, currentMusic)
-                .putBoolean(HAS_SAVED_VOLUME_KEY, true)
-                .apply()
-            Log.d("DND_DEBUG_NATIVE", "Step B: saved current STREAM_MUSIC volume=$currentMusic")
-        } else {
-            Log.d(
-                "DND_DEBUG_NATIVE",
-                "Step B: current STREAM_MUSIC already 0, skip overwrite saved volume",
-            )
-        }
+        prefs.edit()
+            .putInt(SAVED_MUSIC_VOLUME_KEY, currentMusic)
+            .putBoolean(HAS_SAVED_VOLUME_KEY, true)
+            .apply()
+        Log.d("DND_DEBUG_NATIVE", "Step B: saved current STREAM_MUSIC volume=$currentMusic")
 
         Log.d("DND_DEBUG_NATIVE", "Step B: preparing to set STREAM_MUSIC volume=0")
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
@@ -73,7 +67,7 @@ object AutoMuteScheduler {
         audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
         Log.d("DND_DEBUG_NATIVE", "Restore A done: ringerMode=NORMAL")
 
-        val prefs = context.getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
+        val prefs = storageContext(context).getSharedPreferences(AUTO_MUTE_PREFS, Context.MODE_PRIVATE)
         val hasSavedVolume = prefs.getBoolean(HAS_SAVED_VOLUME_KEY, false)
         val fallbackMusic =
             (audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) * 0.4f).toInt()
@@ -96,5 +90,16 @@ object AutoMuteScheduler {
             .putBoolean(HAS_SAVED_VOLUME_KEY, false)
             .apply()
         Log.d("DND_DEBUG_NATIVE", "Restore cleanup done")
+    }
+
+    private fun storageContext(context: Context): Context {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val deviceContext = context.createDeviceProtectedStorageContext()
+            runCatching {
+                deviceContext.moveSharedPreferencesFrom(context, AUTO_MUTE_PREFS)
+            }
+            return deviceContext
+        }
+        return context
     }
 }

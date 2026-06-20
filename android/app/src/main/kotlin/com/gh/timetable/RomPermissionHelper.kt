@@ -21,6 +21,18 @@ object RomPermissionHelper {
                 "com.coloros.safecenter",
                 "com.coloros.safecenter.permission.startup.StartupAppListActivity",
             ),
+            ComponentName(
+                "com.huawei.systemmanager",
+                "com.huawei.systemmanager.optimize.process.ProtectActivity",
+            ),
+            ComponentName(
+                "com.samsung.android.sm_cn",
+                "com.samsung.android.sm_cn.ui.ram.RamActivity",
+            ),
+            ComponentName(
+                "com.meizu.safe",
+                "com.meizu.safe.security.SecurityMainActivity",
+            ),
         )
 
     fun openBackgroundPermissionSettings(context: Context): Boolean {
